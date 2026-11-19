@@ -8,6 +8,7 @@ const env = { DB: db, DEV: '1', PRICE_UAH: '399', BASE_URL: `http://localhost:${
 const types = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript', '.css': 'text/css' };
 http.createServer(async (req, res) => {
   const url = new URL(req.url, env.BASE_URL);
+  if (url.pathname === '/dev/now') { env.NOW_OVERRIDE = url.searchParams.get('set'); res.writeHead(200); return res.end('ok'); }
   if (url.pathname === '/dev/outbox') { res.writeHead(200, { 'content-type': 'application/json' }); return res.end(JSON.stringify(db._raw.prepare('SELECT * FROM outbox ORDER BY id').all())); }
   if (url.pathname.startsWith('/api/')) {
     const chunks = []; for await (const c of req) chunks.push(c);

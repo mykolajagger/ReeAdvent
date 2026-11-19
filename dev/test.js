@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { makeDb } from './d1.js';
 import { handle } from '../src/api.js';
-import { GIFTS, INTIMATE, ACTIVITIES, sanitizeSurvey, generateSchedule } from '../src/logic.js';
+import { GIFTS, INTIMATE, ACTIVITIES, QUESTIONS, sanitizeSurvey, generateSchedule } from '../src/logic.js';
 import { windowDates, tomorrowStr } from '../src/util.js';
 import path from 'node:path'; import { fileURLToPath } from 'node:url';
 const root = path.join(path.dirname(fileURLToPath(import.meta.url)), '..');
@@ -13,6 +13,11 @@ async function call(who, method, url, body) {
   const res = await handle(new Request('http://x' + url, { method, headers, body: body ? JSON.stringify(body) : undefined }), env);
   const sc = res.headers.get('set-cookie'); if (sc) jar[who] = decodeURIComponent(sc.match(/rs=([^;]*)/)[1]);
   return { status: res.status, loc: res.headers.get('location'), j: res.status === 302 ? null : await res.json() };
+}
+async function day(who, d, text) { // відкрити день повністю (відповівши на питання, якщо треба)
+  let r = (await call(who, 'GET', '/api/day/' + d)).j;
+  if (r.needAnswer) { await call(who, 'POST', '/api/answer', { day: d, text: text || `відповідь ${who}${d}` }); r = (await call(who, 'GET', '/api/day/' + d)).j; }
+  return r;
 }
 const outbox = () => db._raw.prepare('SELECT * FROM outbox ORDER BY id').all();
 const linkTok = body => body.match(/#login=([\w-]+)/)[1];
@@ -58,7 +63,24 @@ assert.equal((await call('A', 'GET', '/api/day/1')).j.error, 'not_yet');
 env.NOW_OVERRIDE = '2026-12-11T03:00:00Z'; // 05:00 за Києвом — ще до 07:00
 assert.equal((await call('A', 'GET', '/api/day/1')).j.error, 'not_yet');
 env.NOW_OVERRIDE = '2026-12-11T05:00:00Z'; // 07:00 за Києвом
-const d1a = (await call('A', 'GET', '/api/day/1')).j, d1b = (await call('B', 'GET', '/api/day/1')).j;
+// питання дня: спершу відповідь; завдань сервер не віддає
+const pre = (await call('A', 'GET', '/api/day/1')).j;
+assert(pre.needAnswer && pre.question.text && !pre.gift && !pre.intim && !pre.act, 'tasks hidden before answering');
+assert.equal((await call('A', 'POST', '/api/answer', { day: 1, text: 'x' })).j.error, 'answer_short');
+assert.equal((await call('A', 'POST', '/api/answer', { day: 2, text: 'вже завтра?' })).j.error, 'bad_day');
+assert.equal((await call('A', 'POST', '/api/mark', { day: 1, key: 'gift', done: true })).status, 200); // mark не відкриває контент
+await call('A', 'POST', '/api/answer', { day: 1, text: 'За твою усмішку <b>і</b> каву' });
+assert.equal((await call('A', 'POST', '/api/answer', { day: 1, text: 'передумав' })).j.error, 'already_answered');
+const mid = (await call('A', 'GET', '/api/day/1')).j;
+assert(mid.gift && mid.question.mine.includes('усмішку'));
+assert(!mid.question.mine.includes('<'), 'html stripped');
+assert.equal(mid.question.partner, null, 'partner has not answered yet');
+const d1b = await day('B', 1, 'За те, що ти поруч');
+assert.equal(d1b.question.partner.includes('усмішку'), true, 'B sees A answer');
+const d1a = (await call('A', 'GET', '/api/day/1')).j;
+assert.equal(d1a.question.partner, 'За те, що ти поруч', 'A now sees B answer');
+assert.equal(d1a.question.text, d1b.question.text, 'same question for both');
+assert(QUESTIONS.find(q => q.text === d1a.question.text).level <= 2, 'question level <= min level');
 assert(d1a.ok); assert.equal(d1a.intim.title, d1b.intim.title); assert.equal(d1a.act.title, d1b.act.title);
 assert.equal(d1a.forName, 'Рита'); assert(d1a.gift.price <= 300 && d1b.gift.price <= 200);
 assert.equal((await call('A', 'GET', '/api/day/2')).j.error, 'not_yet');
@@ -68,9 +90,9 @@ assert.equal((await call('B', 'GET', '/api/day/1')).j.done.gift, false);
 // Львів: жодних zk-активностей, у запитах підставлено місто
 env.NOW_OVERRIDE = '2027-01-30T10:00:00Z';
 const cal = JSON.parse(db._raw.prepare('SELECT schedule_json FROM calendars').get().schedule_json);
-for (let d = 1; d <= 24; d++) { const a = ACTIVITIES[cal.days[d].act]; assert(!a.tags.includes('zk'), a.title); const v = (await call('A', 'GET', `/api/day/${d}`)).j; assert(v.ok, d); if (v.act.link) assert(decodeURIComponent(v.act.link.url).includes('Львів') && !v.act.link.url.includes('%7Bcity%7D')); }
+for (let d = 1; d <= 24; d++) { const a = ACTIVITIES[cal.days[d].act]; assert(!a.tags.includes('zk'), a.title); const v = await day('A', d); assert(v.ok && v.gift, d); if (v.act.link) assert(decodeURIComponent(v.act.link.url).includes('Львів') && !v.act.link.url.includes('%7Bcity%7D')); }
 // спеціальні дати: старт 11.12 => вікно 14 = 24.12, 6.12 не потрапляє
-assert.equal(INTIMATE[cal.days[14].intim].day, 24); assert.equal(ACTIVITIES[cal.days[14].act].day, 24); assert.equal(GIFTS[cal.days[14].gift[0]].day, 24);
+assert.equal(QUESTIONS[cal.days[14].q].day, 24); assert.equal(INTIMATE[cal.days[14].intim].day, 24); assert.equal(ACTIVITIES[cal.days[14].act].day, 24); assert.equal(GIFTS[cal.days[14].gift[0]].day, 24);
 assert(!Object.values(cal.days).some(x => GIFTS[x.gift[0]].day === 6));
 // 6. стрес
 const dates = windowDates('2026-12-01');

@@ -1,4 +1,4 @@
-import { GIFTS, INTIMATE, ACTIVITIES, REGIONS, generateSchedule, sanitizeSurvey, giftView, intimView, actView } from './logic.js';
+import { GIFTS, INTIMATE, ACTIVITIES, QUESTIONS, REGIONS, generateSchedule, sanitizeSurvey, giftView, intimView, actView } from './logic.js';
 import { createInvoice, verifyPaid } from './payments.js';
 import { sendEmail, welcomeEmail, loginEmail } from './email.js';
 import { json, HttpError, randomToken, uid, sha256, parseCookies, sessionCookie, EMAIL_RE, normEmail, cleanText, nowOf, tomorrowStr, fromDateStr, toDateStr, todayIndex, windowDates, DAYS, UNLOCK_HOUR } from './util.js';
@@ -27,6 +27,7 @@ export async function handle(request, env) {
     if (m === 'GET' && path === '/api/state') return json(await stateOf(env, member));
     if (m === 'POST' && path === '/api/survey') return json(await saveSurvey(request, env, member));
     if (m === 'GET' && (r = path.match(/^\/api\/day\/(\d+)$/))) return json(await getDay(env, member, +r[1]));
+    if (m === 'POST' && path === '/api/answer') return json(await saveAnswer(request, env, member));
     if (m === 'POST' && path === '/api/mark') return json(await mark(request, env, member));
     throw new HttpError(404, 'not_found');
   } catch (e) {
@@ -208,13 +209,31 @@ async function getDay(env, mem, d) {
   if (!mem.schedule_json) throw new HttpError(409, 'not_ready');
   const plan = JSON.parse(mem.schedule_json).days[d];
   const partner = await partnerOf(env, mem);
+  const question = QUESTIONS[plan.q];
+  const mine = await q1(env, 'SELECT text FROM answers WHERE member_id = ? AND day = ?', mem.id, d);
+  // Спершу відповідь на питання дня: поки її немає, завдань сервер не віддає
+  if (!mine) return { ok: true, day: d, needAnswer: true, forName: surveyName(partner), question: { text: question.text } };
+  const theirs = await q1(env, 'SELECT text FROM answers WHERE member_id = ? AND day = ?', partner.id, d);
   await run(env, `INSERT INTO progress (member_id, day, opened) VALUES (?,?,1) ON CONFLICT(member_id, day) DO UPDATE SET opened = 1`, mem.id, d);
   const pr = await q1(env, 'SELECT * FROM progress WHERE member_id = ? AND day = ?', mem.id, d);
   return {
     ok: true, day: d, forName: surveyName(partner),
+    question: { text: question.text, mine: mine.text, partner: theirs ? theirs.text : null },
     gift: giftView(GIFTS[plan.gift[mem.slot]], mem.city), intim: intimView(INTIMATE[plan.intim]), act: actView(ACTIVITIES[plan.act], mem.city),
     done: { gift: !!pr.done_gift, intim: !!pr.done_intim, act: !!pr.done_act }
   };
+}
+
+async function saveAnswer(request, env, mem) {
+  const b = await readJson(request);
+  const d = Math.round(Number(b.day));
+  if (!(d >= 1 && d <= DAYS) || d > todayIndex(mem.start_date, nowOf(env))) throw new HttpError(400, 'bad_day');
+  if (!mem.schedule_json) throw new HttpError(409, 'not_ready');
+  const text = String(b.text || '').replace(/[<>]/g, '').replace(/\r/g, '').replace(/\n{3,}/g, '\n\n').trim().slice(0, 600);
+  if (text.length < 2) throw new HttpError(400, 'answer_short');
+  const ins = await run(env, 'INSERT OR IGNORE INTO answers (member_id, day, text, created_at) VALUES (?,?,?,?)', mem.id, d, text, Date.now());
+  if (!ins.meta?.changes) throw new HttpError(409, 'already_answered'); // відповідь не редагується
+  return { ok: true };
 }
 
 async function mark(request, env, mem) {

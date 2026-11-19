@@ -56,6 +56,7 @@ const ICONS = {
   gift: '<svg class="ico" viewBox="0 0 48 48"><rect x="7" y="18" width="34" height="23" rx="2"/><rect x="5" y="12" width="38" height="6" rx="1"/><path d="M24 12v29M24 12c-3-7-11-7-11-3s6 3 11 3zm0 0c3-7 11-7 11-3s-6 3-11 3z"/></svg>',
   intim: '<svg class="ico" viewBox="0 0 48 48"><path d="M24 40S7 29 7 18a9 9 0 0 1 17-4 9 9 0 0 1 17 4c0 11-17 22-17 22z"/></svg>',
   act: '<svg class="ico" viewBox="0 0 48 48"><path d="M24 5l3.5 10.5H38l-8.5 6.2 3.3 10.3L24 25.8l-8.8 6.2 3.3-10.3L10 15.5h10.5z"/><path d="M24 33v10"/></svg>',
+  q: '<svg class="ico" viewBox="0 0 48 48"><path d="M8 10h32a2 2 0 0 1 2 2v20a2 2 0 0 1-2 2H22l-9 8v-8H8a2 2 0 0 1-2-2V12a2 2 0 0 1 2-2z"/><path d="M17 19h14M17 25h8"/></svg>',
   star: '<svg class="ico" viewBox="0 0 48 48"><path d="M24 4v40M4 24h40M10 10l28 28M38 10L10 38"/></svg>'
 };
 const ACT_BUDGETS = [['Безкоштовно', 'Лише те, що не коштує грошей'], ['До ~300 ₴ на двох', 'Кава, кіно, невеличкі розваги'], ['До ~800 ₴', 'Ресторан, майстер-клас, концерт'], ['Без обмежень', 'Термальні води, подорожі, свята']];
@@ -176,10 +177,33 @@ async function openDay(day) {
   document.addEventListener('keydown', onKey);
   ov.addEventListener('click', e => { if (e.target === ov) close(); });
   let d;
-  try { d = await api('GET', '/api/day/' + day); } catch (e) { ov.remove(); document.removeEventListener('keydown', onKey); return handleErr(e); }
+  const fail = e => { ov.remove(); document.removeEventListener('keydown', onKey); handleErr(e); };
+  try { d = await api('GET', '/api/day/' + day); } catch (e) { return fail(e); }
   const revealed = {};
+  const head = `<header><h2>Вікно <span>№${day}</span></h2><button class="x" aria-label="Закрити">✕</button></header>`;
+  const renderQuestion = () => {
+    ov.firstElementChild.innerHTML = `${head}
+      <div class="reveal qcard"><div class="tag">Питання дня · для ${esc(d.forName)}</div><h3>${esc(d.question.text)}</h3>
+        <p class="muted" style="font-size:14px">Напишіть відповідь для ${esc(d.forName)}: вона її прочитає. Після відповіді відкриються завдання на день. Змінити відповідь потім не можна.</p>
+        <textarea id="ans" maxlength="600" rows="5" placeholder="Ваша відповідь…"></textarea>
+        <div class="meta"><span id="cnt">0 / 600</span></div>
+        <button class="btn" id="send" disabled>Надіслати й відкрити день</button></div>`;
+    ov.querySelector('.x').onclick = close;
+    const ta = ov.querySelector('#ans'), btn = ov.querySelector('#send');
+    ta.oninput = () => { ov.querySelector('#cnt').textContent = ta.value.length + ' / 600'; btn.disabled = ta.value.trim().length < 2; };
+    ta.focus({ preventScroll: true });
+    btn.onclick = async () => {
+      btn.disabled = true;
+      try { await api('POST', '/api/answer', { day, text: ta.value }); d = await api('GET', '/api/day/' + day); confetti(innerWidth / 2, 200, 50); render(); }
+      catch (er) { toast(er.code === 'already_answered' ? 'Ви вже відповіли на це питання' : errText(er)); btn.disabled = false; if (er.code === 'already_answered') { try { d = await api('GET', '/api/day/' + day); render(); } catch {} } }
+    };
+  };
+  const qTile = () => `<div class="reveal"><div class="tag">Питання дня</div><h3>${esc(d.question.text)}</h3>
+      <div class="ans"><span class="who">Ви</span><p>${esc(d.question.mine)}</p></div>
+      ${d.question.partner ? `<div class="ans them"><span class="who">${esc(d.forName)}</span><p>${esc(d.question.partner)}</p></div>` : `<div class="hint">${esc(d.forName)} ще не відповів(ла). Зазирніть сюди пізніше: відповідь з’явиться тут.</div>`}</div>`;
   const render = () => {
-    ov.firstElementChild.innerHTML = `<header><h2>Вікно <span>№${day}</span></h2><button class="x" aria-label="Закрити">✕</button></header>
+    if (d.needAnswer) return renderQuestion();
+    ov.firstElementChild.innerHTML = `${head}${qTile()}
       ${TILES.map(t => `<div class="tile" data-k="${t.k}">${revealed[t.k] ? tileBody(t, d) : `<button class="wrap" data-rev="${t.k}">${ICONS[t.k].replace('class="ico"','class="ico sm"')}<b>${t.t}</b><small>торкнись, щоб відкрити</small></button>`}</div>`).join('')}
       <div class="row"><button class="btn ghost sm" id="all">Відкрити все</button></div>`;
     ov.querySelector('.x').onclick = close;
@@ -192,7 +216,7 @@ async function openDay(day) {
     const c = e.target.closest('[data-mark]');
     if (c) { try { await api('POST', '/api/mark', { day, key: c.dataset.mark, done: c.checked }); d.done[c.dataset.mark] = c.checked; if (c.checked) { confetti(e.clientX, e.clientY, 30); toast('Чудово'); } } catch (er) { c.checked = !c.checked; toast(errText(er)); } }
   });
-  if (day === st.today) confetti(innerWidth / 2, 160, 80);
+  if (day === st.today && !d.needAnswer) confetti(innerWidth / 2, 160, 80);
 }
 function tileBody(t, d) {
   const x = d[t.k]; let meta = '', hint = '', tag = t.t;
@@ -206,7 +230,7 @@ function tileBody(t, d) {
 
 /* ---------- Маршрутизація ---------- */
 function errText(e) {
-  return ({ auth: 'Сесія закінчилась — увійдіть знову', not_yet: 'Ще зарано', locked: 'Анкету вже не можна змінити', bad_name: 'Вкажіть ім’я', bad_email: 'Перевірте адресу пошти', bad_token: 'Посилання недійсне — запросіть нове', too_many: 'Забагато спроб. Спробуйте пізніше.' })[e.code] || 'Щось пішло не так. Спробуйте ще раз.';
+  return ({ auth: 'Сесія закінчилась — увійдіть знову', not_yet: 'Ще зарано', locked: 'Анкету вже не можна змінити', bad_name: 'Вкажіть ім’я', bad_email: 'Перевірте адресу пошти', bad_token: 'Посилання недійсне — запросіть нове', too_many: 'Забагато спроб. Спробуйте пізніше.', answer_short: 'Напишіть хоча б кілька слів', bad_day: 'Це вікно ще не відкрите' })[e.code] || 'Щось пішло не так. Спробуйте ще раз.';
 }
 function handleErr(e) {
   if (e.code === 'auth') return showLogin('Сесія закінчилась — увійдіть знову.');

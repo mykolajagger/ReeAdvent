@@ -117,3 +117,11 @@ a.link:hover{background:var(--gold);color:#14110a}
 #toast{position:fixed;left:50%;bottom:26px;transform:translate(-50%,120px);background:#f3efe6;color:#14110a;padding:12px 22px;border-radius:99px;font:500 14px var(--body);z-index:60;transition:transform .45s cubic-bezier(.2,1.2,.4,1);max-width:90vw;text-align:center}
 #toast.show{transform:translate(-50%,0)}
 @media (prefers-reduced-motion:reduce){*{animation-duration:.01ms!important;transition-duration:.01ms!important}}
+
+textarea{width:100%;padding:14px 16px;border-radius:12px;border:1px solid var(--line);background:#ffffff08;color:var(--ink);font:500 16px/1.5 var(--body);resize:vertical;min-height:120px}
+textarea:focus{outline:none;border-color:var(--gold)}
+.qcard h3{font-size:34px}
+.ans{border-left:2px solid var(--gold);padding:4px 0 4px 14px}
+.ans p{margin:2px 0 0;white-space:pre-wrap;word-break:break-word}
+.ans.them{border-left-color:#e59a9f}
+.ans .who{font:600 11px var(--body);letter-spacing:.2em;text-transform:uppercase;color:var(--muted)}

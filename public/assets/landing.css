@@ -20,7 +20,8 @@ main.land{max-width:1040px;padding-top:0}
 .demo{display:grid;gap:12px;max-width:560px;margin:0 auto}
 .demo .tile{min-height:0}
 .cats{display:grid;gap:14px;margin-top:36px}
-@media(min-width:760px){.cats{grid-template-columns:repeat(3,1fr)}}
+@media(min-width:760px){.cats{grid-template-columns:repeat(2,1fr)}}
+@media(min-width:1000px){.cats{grid-template-columns:repeat(4,1fr)}}
 .cats .step-c .ico{margin-bottom:10px}
 .priv{display:grid;gap:12px;max-width:640px;margin:0 auto}
 .priv li{list-style:none;padding:14px 18px;border:1px solid var(--line);border-radius:14px;color:#d9d6cc}

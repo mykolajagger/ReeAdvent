@@ -1,4 +1,4 @@
-import { GIFTS_RAW, INTIMATE_RAW, ACTIVITIES_RAW } from './content.js';
+import { GIFTS_RAW, INTIMATE_RAW, ACTIVITIES_RAW, QUESTIONS_RAW } from './content.js';
 import { DAYS } from './util.js';
 
 export const REGIONS = ['Вінницька', 'Волинська', 'Дніпропетровська', 'Донецька', 'Житомирська', 'Закарпатська', 'Запорізька', 'Івано-Франківська', 'Київська', 'Кіровоградська', 'Луганська', 'Львівська', 'Миколаївська', 'Одеська', 'Полтавська', 'Рівненська', 'Сумська', 'Тернопільська', 'Харківська', 'Херсонська', 'Хмельницька', 'Черкаська', 'Чернівецька', 'Чернігівська', 'м. Київ', 'Автономна Республіка Крим'];
@@ -9,6 +9,8 @@ const splitTags = s => (s ? String(s).split(',').filter(Boolean) : []);
 export const GIFTS = GIFTS_RAW.map((r, i) => ({ id: i, title: r[0], desc: r[1], price: r[2], tags: splitTags(r[3]), store: r[4], q: r[5], day: r[6] || 0 }));
 export const INTIMATE = INTIMATE_RAW.map((r, i) => ({ id: i, title: r[0], desc: r[1], level: r[2], tags: splitTags(r[3]), day: r[4] || 0 }));
 export const ACTIVITIES = ACTIVITIES_RAW.map((r, i) => ({ id: i, title: r[0], desc: r[1], cost: r[2], tags: splitTags(r[3]), q: r[4], day: r[5] || 0 }));
+
+export const QUESTIONS = QUESTIONS_RAW.map((r, i) => ({ id: i, text: r[0], level: r[1], day: r[2] || 0 }));
 
 export function mulberry32(a) {
   return () => { a |= 0; a = (a + 0x6D2B79F5) | 0; let t = Math.imul(a ^ (a >>> 15), 1 | a); t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t; return ((t ^ (t >>> 14)) >>> 0) / 4294967296; };
@@ -86,6 +88,12 @@ export function generateSchedule(answers, seed, dates, region) {
     const pick = takeWeighted(local, rnd);
     days[d].act = pick.id;
     aCands = aCands.filter(c => c.item.id !== pick.id);
+  }
+  // Питання дня: спільне для обох, рівень = мінімум з двох, без повторів
+  let qCands = QUESTIONS.filter(x => !x.day && x.level <= maxLevel).map(x => ({ item: x, w: 1 }));
+  for (let d = 1; d <= DAYS; d++) {
+    const sp = QUESTIONS.find(x => specialFor(x, d));
+    days[d].q = sp ? sp.id : takeWeighted(qCands, rnd).id;
   }
   return { seed, days, stretched };
 }
