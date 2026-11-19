@@ -41,6 +41,6 @@ $('#of').addEventListener('submit', async e => {
     const j = await r.json();
     if (!j.ok) throw new Error(j.error);
     location.href = j.payUrl;
-  } catch (er) { $('#oerr').textContent = ERR[er.message] || 'Не вдалося створити замовлення. Спробуйте ще раз.'; btn.disabled = false; }
+  } catch (er) { $('#oerr').textContent = ERR[er.message] || `Не вдалося створити замовлення. Спробуйте ще раз. (код: ${String(er.message).slice(0, 60)})`; btn.disabled = false; }
 });
 })();
