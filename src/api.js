@@ -35,7 +35,8 @@ export async function handle(request, env) {
     if (e instanceof HttpError) return json({ ok: false, error: e.code }, e.status);
     if (e && e.status && e.code) return json({ ok: false, error: e.code }, e.status);
     console.error(e);
-    return json({ ok: false, error: 'server_error' }, 500);
+    // Діагностика: лише коли явно ввімкнено змінну DEBUG=1 (вимкніть після налагодження!)
+    return json({ ok: false, error: 'server_error', ...(env.DEBUG === '1' ? { detail: String(e && e.message || e).slice(0, 300) } : {}) }, 500);
   }
 }
 

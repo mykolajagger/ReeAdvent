@@ -39,7 +39,7 @@ $('#of').addEventListener('submit', async e => {
   try {
     const r = await fetch('/api/orders', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
     const j = await r.json();
-    if (!j.ok) throw new Error(j.error);
+    if (!j.ok) { if (j.detail) console.error('order error:', j.detail); throw new Error(j.error); }
     location.href = j.payUrl;
   } catch (er) { $('#oerr').textContent = ERR[er.message] || `Не вдалося створити замовлення. Спробуйте ще раз. (код: ${String(er.message).slice(0, 60)})`; btn.disabled = false; }
 });
