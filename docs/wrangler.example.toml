@@ -1,3 +1,4 @@
+# Приклад для налаштування через CLI. Щоб Pages брав конфіг з дашборда, файл НЕ має лежати в корені як wrangler.toml.
 name = "reeadvent"
 compatibility_date = "2025-01-01"
 pages_build_output_dir = "public"

@@ -25,7 +25,7 @@ npm run dev                   # http://localhost:8788 — SQLite у пам'ят�
 5. Усю Україну покриває `{city}` у пошукових запитах; елементи з тегом `zk` показуються лише для Закарпатської області.
 
 ## Запуск у продакшн (чекліст)
-1. `npx wrangler d1 create reeadvent-db` → вписати `database_id` у `wrangler.toml`; `npm run db:migrate`.
+1. Створити D1 `reeadvent-db` і виконати SQL з `docs/d1-console.sql` у консолі D1 (або `npx wrangler d1 create …` + міграції; приклад конфігу в `docs/wrangler.example.toml`). Файл `wrangler.toml` у корені не тримаємо: тоді Pages бере біндінги й змінні з дашборда.
 2. Cloudflare Pages → підключити цей репозиторій, build output `public`, прив'язати D1 (binding `DB`) у налаштуваннях Pages. Змінні: `PRICE_UAH`, `BASE_URL`, `PAYMENT_MODE=monobank`, `EMAIL_MODE=resend`, `EMAIL_FROM`. Секрети: `MONOBANK_TOKEN`, `RESEND_API_KEY`.
 3. Resend: підтвердити домен відправника (SPF/DKIM), інакше листи потраплятимуть у спам.
 4. Monobank acquiring: отримати токен мерчанта; webhook встановлюється самим запитом створення інвойсу (`webHookUrl`).
