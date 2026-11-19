@@ -1,0 +1,101 @@
+<!doctype html>
+<html lang="uk">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#08090d">
+<title>ReeAdvent — адвент-календар для двох</title>
+<meta name="description" content="Приватний адвент-календар для пари: щодня подарунок, романтична пригода і спільна активність у вашому місті. 24 вікна-сюрпризи.">
+<meta property="og:title" content="ReeAdvent — адвент-календар для двох">
+<meta property="og:description" content="24 дні сюрпризів для вас двох: подарунок, пригода, спільна активність — підібрані під ваші вподобання.">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext y='.9em' font-size='90'%3E✦%3C/text%3E%3C/svg%3E">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,400;0,500;0,600;1,400;1,500&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/assets/base.css">
+<link rel="stylesheet" href="/assets/landing.css">
+</head>
+<body>
+<canvas id="fx" aria-hidden="true"></canvas>
+<main class="land">
+  <nav class="nav"><a class="logo" href="/">Ree<em>Advent</em></a><a class="btn ghost" href="/app/">Увійти</a></nav>
+
+  <section class="lhero">
+    <div class="eyebrow">Адвент-календар для двох</div>
+    <h1>24 дні <em>лише</em> для вас</h1>
+    <p>Щоранку нове вікно: подарунок, романтична пригода і спільна активність у вашому місті. Підібрано під ваші вподобання, а що чекає — ви не знаєте.</p>
+    <div class="cta"><a class="btn" href="#order">Замовити календар</a><a class="btn ghost" href="#how">Як це працює</a></div>
+  </section>
+
+  <section class="sec" id="how">
+    <span class="eyebrow">Як це працює</span><h2>Три кроки до сюрпризів</h2>
+    <div class="steps">
+      <div class="step-c"><div class="n">1</div><h3>Замовляєте</h3><p>Вказуєте імена, пошти обох і місто. Оплачуєте — і вже за кілька хвилин вам обом приходить лист.</p></div>
+      <div class="step-c"><div class="n">2</div><h3>Заповнюєте анкети</h3><p>Кожен окремо: бюджет подарунка, смаки, рівень пікантності. Ваші відповіді не бачить навіть партнер.</p></div>
+      <div class="step-c"><div class="n">3</div><h3>Відкриваєте щоранку</h3><p>Кожного дня о 07:00 нове вікно. Подарунок — для вашої половинки, пригода й активність — для вас двох.</p></div>
+    </div>
+  </section>
+
+  <section class="sec">
+    <span class="eyebrow">Що всередині</span><h2>Спробуйте відкрити</h2>
+    <div class="demo" id="demo"></div>
+    <div class="cats">
+      <div class="step-c"><svg class="ico sm" viewBox="0 0 48 48"><rect x="7" y="18" width="34" height="23" rx="2"/><rect x="5" y="12" width="38" height="6" rx="1"/><path d="M24 12v29M24 12c-3-7-11-7-11-3s6 3 11 3zm0 0c3-7 11-7 11-3s-6 3-11 3z"/></svg><h3>Подарунок</h3><p>Ідея до вашого бюджету (від 100 до 500 ₴) з посиланням, де шукати. Ви обираєте суму самі.</p></div>
+      <div class="step-c"><svg class="ico sm" viewBox="0 0 48 48"><path d="M24 40S7 29 7 18a9 9 0 0 1 17-4 9 9 0 0 1 17 4c0 11-17 22-17 22z"/></svg><h3>Пригода для двох</h3><p>Від ніжних вечорів при свічках до сміливих ігор. Рівень задаєте ви: береться комфортний для обох.</p></div>
+      <div class="step-c"><svg class="ico sm" viewBox="0 0 48 48"><path d="M24 5l3.5 10.5H38l-8.5 6.2 3.3 10.3L24 25.8l-8.8 6.2 3.3-10.3L10 15.5h10.5z"/><path d="M24 33v10"/></svg><h3>Спільна активність</h3><p>Кав’ярні, прогулянки, майстер-класи, вечори вдома. Пошук на мапі у вашому місті, без прив’язки до столиці.</p></div>
+    </div>
+  </section>
+
+  <section class="sec">
+    <span class="eyebrow">Приватність</span><h2>Тільки ви двоє</h2>
+    <ul class="priv">
+      <li>Доступ лише з двох пошт, які ви вкажете. Вхід за одноразовим посиланням, без паролів.</li>
+      <li>Подарунок «від тебе до неї» бачите тільки ви. Сюрприз зберігається.</li>
+      <li>Відкриті вікна тільки в свій день: наперед підглянути неможливо.</li>
+      <li>Ми не продаємо та не передаємо ваші дані.</li>
+    </ul>
+  </section>
+
+  <section class="sec" id="order">
+    <span class="eyebrow">Замовлення</span><h2>Подаруйте собі різдвяний настрій</h2>
+    <div class="card order">
+      <div class="price"><b id="price">—</b><span>за календар для двох · 24 вікна</span></div>
+      <form id="of" novalidate>
+        <div class="f2">
+          <div class="fld"><label for="nameA">Ваше ім’я</label><input id="nameA" maxlength="30" required autocomplete="given-name"></div>
+          <div class="fld"><label for="nameB">Ім’я партнера(ки)</label><input id="nameB" maxlength="30" required></div>
+          <div class="fld"><label for="emailA">Ваша пошта</label><input id="emailA" type="email" required autocomplete="email"></div>
+          <div class="fld"><label for="emailB">Пошта партнера(ки)</label><input id="emailB" type="email" required></div>
+        </div>
+        <div class="f2">
+          <div class="fld"><label for="city">Місто</label><input id="city" maxlength="60" required placeholder="Львів"><small>Від нього залежать заклади та активності.</small></div>
+          <div class="fld"><label for="region">Область</label><select id="region" required><option value="">Оберіть…</option></select></div>
+        </div>
+        <div class="fld"><label for="startDate">Дата старту</label><input id="startDate" type="date" required><small>Перше вікно відкриється цього дня о 07:00, далі 24 дні поспіль. Можна обрати будь-який день від завтра, наприклад 1 грудня.</small></div>
+        <label class="chk"><input type="checkbox" id="age18"> Нам обом виповнилося 18 років.</label>
+        <label class="chk"><input type="checkbox" id="terms"> Погоджуюсь з <a href="/legal/offer.html" target="_blank">офертою</a> та <a href="/legal/privacy.html" target="_blank">політикою конфіденційності</a>.</label>
+        <p class="err" id="oerr"></p>
+        <button class="btn" id="ob" style="width:100%">Перейти до оплати</button>
+        <p class="muted" style="font-size:12px;text-align:center;margin:0">Оплатити можна заздалегідь: календар відкриється в обрану вами дату.</p>
+      </form>
+    </div>
+  </section>
+
+  <section class="sec">
+    <span class="eyebrow">Питання</span><h2>Відповіді</h2>
+    <div class="faq">
+      <details><summary>Коли почнеться календар?</summary><p>Ви самі обираєте дату старту при замовленні: перше вікно відкривається цього дня о 07:00 за київським часом, далі щодня протягом 24 днів. Якщо до оплати обрана дата вже мине, календар стартує наступного дня. Різдвяні й святкові вікна (6 і 24 грудня) спрацюють, якщо ці дати потраплять у ваш період.</p></details>
+      <details><summary>А якщо ми не в Україні чи в іншому місті?</summary><p>Зараз ми підбираємо активності й заклади по місту в Україні: пошук на мапі залежить від міста, яке ви вкажете. Для регіонів, де ми ще не маємо власних добірок, пропонуємо універсальні ідеї.</p></details>
+      <details><summary>Що з інтимними завданнями?</summary><p>Вони м’які, романтичні й з відтінком гри. Три рівні: «Романтика», «Гра» та «Смілива ніч». Береться менший рівень із двох, тож ніхто нікого не змушує. Сервіс лише для повнолітніх.</p></details>
+      <details><summary>Чи можна повернути кошти?</summary><p>Умови повернення описані в публічній оферті. Якщо виникли проблеми з доступом, напишіть нам, і ми допоможемо.</p></details>
+      <details><summary>Чи бачить партнер мої відповіді?</summary><p>Ні. Анкети бачить лише система для підбору. Подарунок, який ви даруєте, бачите тільки ви.</p></details>
+    </div>
+  </section>
+
+  <footer><div>© ReeAdvent</div><div style="margin-top:8px"><a href="/legal/offer.html">Публічна оферта</a><a href="/legal/privacy.html">Політика конфіденційності</a></div></footer>
+</main>
+<div id="toast" role="status"></div>
+<script src="/assets/fx.js"></script>
+<script src="/assets/landing.js"></script>
+</body>
+</html>

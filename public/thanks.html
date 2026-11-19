@@ -1,0 +1,20 @@
+<!doctype html>
+<html lang="uk"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="robots" content="noindex">
+<title>Дякуємо — ReeAdvent</title>
+<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,400;0,500;1,400&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/assets/base.css"></head>
+<body><canvas id="fx"></canvas><main><div class="center" id="c"><div class="spinner"></div><p class="muted">Перевіряємо оплату…</p></div></main>
+<script src="/assets/fx.js"></script>
+<script>
+(async () => {
+  const id = new URLSearchParams(location.search).get('order'), c = document.getElementById('c');
+  if (!id) { location.href = '/'; return; }
+  for (let i = 0; i < 40; i++) {
+    try { const j = await (await fetch(`/api/orders/${encodeURIComponent(id)}/status`)).json();
+      if (j.status === 'paid') { c.innerHTML = '<div class="eyebrow">Оплату отримано</div><h2>Дякуємо!</h2><p class="muted" style="max-width:420px">Обом із вас на пошту надіслано лист із посиланням для входу. Якщо його немає, перевірте «Спам». Дату першого вікна ви знайдете в листі.</p><a class="btn" href="/app/" style="text-decoration:none">Перейти до календаря</a>'; window.confetti && window.confetti(innerWidth/2, 200, 120); return; }
+    } catch {}
+    await new Promise(r => setTimeout(r, 3000));
+  }
+  c.innerHTML = '<h2>Чекаємо на підтвердження</h2><p class="muted" style="max-width:420px">Банк ще не підтвердив оплату. Якщо кошти списано, лист із доступом прийде протягом кількох хвилин.</p>';
+})();
+</script></body></html>

@@ -1,0 +1,12 @@
+{
+  "name": "reeadvent",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test": "node dev/test.js",
+    "dev": "node dev/devserver.js",
+    "deploy": "wrangler pages deploy public --project-name reeadvent",
+    "db:migrate": "wrangler d1 migrations apply reeadvent-db --remote"
+  },
+  "devDependencies": { "wrangler": "^4" }
+}

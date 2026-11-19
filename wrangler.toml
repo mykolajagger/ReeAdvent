@@ -1,0 +1,17 @@
+name = "reeadvent"
+compatibility_date = "2025-01-01"
+pages_build_output_dir = "public"
+
+[[d1_databases]]
+binding = "DB"
+database_name = "reeadvent-db"
+database_id = "ЗАМІНИТИ_ПІСЛЯ_wrangler_d1_create"
+migrations_dir = "migrations"
+
+[vars]
+PRICE_UAH = "399"
+BASE_URL = "https://reeadvent.pages.dev"
+PAYMENT_MODE = "stub"      # stub | monobank
+EMAIL_MODE = "stub"        # stub | resend
+EMAIL_FROM = "ReeAdvent <hello@example.com>"
+# Секрети (НЕ тут, а через `wrangler pages secret put`): MONOBANK_TOKEN, RESEND_API_KEY
