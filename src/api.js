@@ -17,6 +17,7 @@ export async function handle(request, env) {
     let r;
     if (m === 'GET' && (r = path.match(/^\/api\/orders\/([\w-]+)\/status$/))) return await orderStatus(env, r[1]);
     if (m === 'GET' && (r = path.match(/^\/api\/dev\/pay\/([\w-]+)$/))) return await devPay(env, r[1]);
+    if (m === 'GET' && path === '/api/admin/outbox') return await adminOutbox(request, env);
     if (m === 'POST' && path === '/api/payments/monobank/webhook') return await monoWebhook(request, env);
     if (m === 'POST' && path === '/api/auth/request') return await authRequest(request, env);
     if (m === 'POST' && path === '/api/auth/verify') return await authVerify(request, env);
@@ -76,6 +77,15 @@ async function orderStatus(env, id) {
   const o = await q1(env, 'SELECT status FROM orders WHERE id = ?', id);
   if (!o) throw new HttpError(404, 'not_found');
   return json({ ok: true, status: o.status });
+}
+
+/** Лише для тестового стенду (EMAIL_MODE=stub): читати «надіслані» листи, щоб дістати посилання входу. Потрібен ADMIN_KEY. */
+async function adminOutbox(request, env) {
+  if (env.EMAIL_MODE !== 'stub' || !env.ADMIN_KEY || env.ADMIN_KEY.length < 16) throw new HttpError(404, 'not_found');
+  const a = await sha256(request.headers.get('x-admin-key') || ''), b = await sha256(env.ADMIN_KEY);
+  if (a !== b) throw new HttpError(404, 'not_found');
+  const rows = (await env.DB.prepare('SELECT id, created_at, to_email, subject, body FROM outbox ORDER BY id DESC LIMIT 20').all()).results;
+  return json({ ok: true, rows });
 }
 
 async function devPay(env, id) {

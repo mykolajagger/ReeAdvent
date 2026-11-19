@@ -112,6 +112,12 @@ for (let i = 0; i < 300; i++) {
   assert.equal(db._raw.prepare("SELECT start_date FROM calendars WHERE order_id = ?").get(o3.orderId).start_date, '2026-12-06');
   env.NOW_OVERRIDE = saved;
 }
+// 6c. адмін-outbox: закритий без ключа / у проді
+assert.equal((await call('x', 'GET', '/api/admin/outbox')).status, 404);
+env.ADMIN_KEY = 'k'.repeat(20);
+{ const r = await handle(new Request('http://x/api/admin/outbox', { headers: { 'x-admin-key': 'wrong' } }), env); assert.equal(r.status, 404);
+  const ok = await handle(new Request('http://x/api/admin/outbox', { headers: { 'x-admin-key': env.ADMIN_KEY } }), env); assert.equal(ok.status, 200); assert((await ok.json()).rows.length > 0);
+  env.EMAIL_MODE = 'resend'; const off = await handle(new Request('http://x/api/admin/outbox', { headers: { 'x-admin-key': env.ADMIN_KEY } }), env); assert.equal(off.status, 404); env.EMAIL_MODE = 'stub'; }
 // 7. вихід
 await call('A', 'POST', '/api/auth/logout'); assert.equal((await call('A', 'GET', '/api/state')).status, 401);
 console.log('ALL OK');
