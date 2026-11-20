@@ -123,6 +123,21 @@ assert.equal((await call('x', 'GET', '/api/health')).status, 404);
 env.DEBUG = '1'; env.RESEND_API_KEY = 'secret-should-not-leak';
 { const r = await handle(new Request('http://x/api/health'), env); const txt = await r.text(); assert.equal(r.status, 200); assert(!txt.includes('secret-should-not-leak')); assert(JSON.parse(txt).orders_columns.includes('start_date')); }
 delete env.DEBUG;
+// 6e. Turnstile: з секретом токен обов'язковий; без секрета форма працює
+{
+  const realFetch = globalThis.fetch, savedNow = env.NOW_OVERRIDE; let calls = 0; env.NOW_OVERRIDE = '2026-11-20T10:00:00Z';
+  globalThis.fetch = async (url, init) => { calls++; assert(String(url).includes('turnstile/v0/siteverify')); const tok = new URLSearchParams(init.body).get('response'); return new Response(JSON.stringify({ success: tok === 'good' }), { status: 200 }); };
+  env.TURNSTILE_SECRET = 'sec'; const g2 = { ...good, emailA: 'ts1@test.com', emailB: 'ts2@test.com', startDate: '2026-12-15' };
+  assert.equal((await call('x', 'POST', '/api/orders', g2)).j.error, 'captcha', 'missing token');
+  assert.equal((await call('x', 'POST', '/api/orders', { ...g2, turnstileToken: 'bad' })).j.error, 'captcha', 'bad token');
+  assert.equal((await call('x', 'POST', '/api/orders', { ...g2, turnstileToken: 'good' })).j.ok, true, 'good token');
+  assert.equal(calls, 2, 'no provider call without token');
+  delete env.TURNSTILE_SECRET; env.TURNSTILE_SITE_KEY = '1x00000000000000000000AA';
+  assert.equal((await call('x', 'GET', '/api/config')).j.turnstileSiteKey, '1x00000000000000000000AA');
+  delete env.TURNSTILE_SITE_KEY; globalThis.fetch = realFetch;
+  assert.equal((await call('x', 'POST', '/api/orders', { ...g2, emailA: 'ts3@test.com', emailB: 'ts4@test.com' })).j.ok, true, 'works without secret');
+  env.NOW_OVERRIDE = savedNow;
+}
 // 7. вихід
 await call('A', 'POST', '/api/auth/logout'); assert.equal((await call('A', 'GET', '/api/state')).status, 401);
 console.log('ALL OK');

@@ -19,7 +19,16 @@ demo.addEventListener('click', e => {
 });
 
 // Конфіг: ціна, області
+let tsToken = '', tsWidget = null, tsOn = false;
+function initTurnstile(siteKey) {
+  tsOn = true;
+  const s = document.createElement('script'); s.src = 'https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit'; s.async = true; s.defer = true;
+  s.onload = () => { tsWidget = window.turnstile.render('#ts', { sitekey: siteKey, theme: 'dark', language: 'uk', callback: t => { tsToken = t; }, 'expired-callback': () => { tsToken = ''; }, 'error-callback': () => { tsToken = ''; } }); };
+  document.head.appendChild(s);
+}
+
 fetch('/api/config').then(r => r.json()).then(c => {
+  if (c.turnstileSiteKey) initTurnstile(c.turnstileSiteKey);
   $('#price').textContent = c.price + ' ₴';
   $('#region').innerHTML += c.regions.map(r => `<option>${r}</option>`).join('');
 }).catch(() => { $('#price').textContent = '—'; });
@@ -30,17 +39,18 @@ const t0 = new Date(); t0.setDate(t0.getDate() + 1);
 const t1 = new Date(t0); t1.setDate(t1.getDate() + 90);
 $('#startDate').min = iso(t0); $('#startDate').max = iso(t1); $('#startDate').value = iso(t0);
 
-const ERR = { bad_date: 'Оберіть дату старту: від завтра і не пізніше ніж за 90 днів.', bad_names: 'Вкажіть обидва імені.', bad_email: 'Перевірте адреси пошти.', same_email: 'Пошти мають бути різні: у кожного своя.', bad_city: 'Вкажіть місто.', bad_region: 'Оберіть область.', consent_required: 'Підтвердіть вік і погодьтеся з умовами.', too_many: 'Забагато спроб. Спробуйте за годину.' };
+const ERR = { captcha: 'Не вдалося підтвердити, що ви не бот. Спробуйте ще раз.', bad_date: 'Оберіть дату старту: від завтра і не пізніше ніж за 90 днів.', bad_names: 'Вкажіть обидва імені.', bad_email: 'Перевірте адреси пошти.', same_email: 'Пошти мають бути різні: у кожного своя.', bad_city: 'Вкажіть місто.', bad_region: 'Оберіть область.', consent_required: 'Підтвердіть вік і погодьтеся з умовами.', too_many: 'Забагато спроб. Спробуйте за годину.' };
 $('#of').addEventListener('submit', async e => {
   e.preventDefault();
   const v = id => $('#' + id).value.trim();
-  const body = { nameA: v('nameA'), nameB: v('nameB'), emailA: v('emailA'), emailB: v('emailB'), city: v('city'), region: $('#region').value, startDate: $('#startDate').value, age18: $('#age18').checked, terms: $('#terms').checked };
+  const body = { nameA: v('nameA'), nameB: v('nameB'), emailA: v('emailA'), emailB: v('emailB'), city: v('city'), region: $('#region').value, startDate: $('#startDate').value, age18: $('#age18').checked, terms: $('#terms').checked, turnstileToken: tsToken };
+  if (tsOn && !tsToken) { $('#oerr').textContent = 'Підтвердіть, що ви не бот (віджет вище).'; return; }
   const btn = $('#ob'); btn.disabled = true; $('#oerr').textContent = '';
   try {
     const r = await fetch('/api/orders', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
     const j = await r.json();
     if (!j.ok) { if (j.detail) console.error('order error:', j.detail); throw new Error(j.error); }
     location.href = j.payUrl;
-  } catch (er) { $('#oerr').textContent = ERR[er.message] || `Не вдалося створити замовлення. Спробуйте ще раз. (код: ${String(er.message).slice(0, 60)})`; btn.disabled = false; }
+  } catch (er) { $('#oerr').textContent = ERR[er.message] || `Не вдалося створити замовлення. Спробуйте ще раз. (код: ${String(er.message).slice(0, 60)})`; btn.disabled = false; if (tsWidget !== null && window.turnstile) { tsToken = ''; window.turnstile.reset(tsWidget); } }
 });
 })();

@@ -1,5 +1,6 @@
 import { GIFTS, INTIMATE, ACTIVITIES, QUESTIONS, REGIONS, generateSchedule, sanitizeSurvey, giftView, intimView, actView } from './logic.js';
 import { createInvoice, verifyPaid } from './payments.js';
+import { verifyTurnstile } from './turnstile.js';
 import { sendEmail, welcomeEmail, loginEmail } from './email.js';
 import { json, HttpError, randomToken, uid, sha256, parseCookies, sessionCookie, EMAIL_RE, normEmail, cleanText, nowOf, tomorrowStr, fromDateStr, toDateStr, todayIndex, windowDates, DAYS, UNLOCK_HOUR } from './util.js';
 
@@ -12,7 +13,7 @@ export async function handle(request, env) {
     const url = new URL(request.url);
     const path = url.pathname.replace(/\/+$/, '');
     const m = request.method;
-    if (m === 'GET' && path === '/api/config') return json({ price: Number(env.PRICE_UAH), currency: 'UAH', regions: REGIONS });
+    if (m === 'GET' && path === '/api/config') return json({ price: Number(env.PRICE_UAH), currency: 'UAH', regions: REGIONS, turnstileSiteKey: env.TURNSTILE_SITE_KEY || null });
     if (m === 'POST' && path === '/api/orders') return await createOrder(request, env);
     let r;
     if (m === 'GET' && (r = path.match(/^\/api\/orders\/([\w-]+)\/status$/))) return await orderStatus(env, r[1]);
@@ -48,6 +49,8 @@ const run = (env, sql, ...a) => env.DB.prepare(sql).bind(...a).run();
 // ---------- Замовлення та оплата ----------
 async function createOrder(request, env) {
   const b = await readJson(request);
+  // Антибот: якщо налаштовано секрет Turnstile, токен обов'язковий
+  if (env.TURNSTILE_SECRET && !(await verifyTurnstile(env, b.turnstileToken, request.headers.get('CF-Connecting-IP')))) throw new HttpError(400, 'captcha');
   const o = {
     name_a: cleanText(b.nameA, 30), name_b: cleanText(b.nameB, 30),
     email_a: normEmail(b.emailA), email_b: normEmail(b.emailB),
