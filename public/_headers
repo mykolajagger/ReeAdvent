@@ -5,3 +5,11 @@
   X-Robots-Tag: noindex, nofollow
 /api/*
   Cache-Control: no-store
+/assets/*
+  Cache-Control: no-cache
+/app/*
+  Cache-Control: no-cache
+/index.html
+  Cache-Control: no-cache
+/
+  Cache-Control: no-cache
