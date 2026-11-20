@@ -1,0 +1,17 @@
+name = "reeadvent"
+compatibility_date = "2025-01-01"
+pages_build_output_dir = "public"
+
+[[d1_databases]]
+binding = "DB"
+database_name = "reeadvent-db"
+database_id = "8dd4d746-1746-4168-b724-1643f99925e6"
+
+[vars]
+PRICE_UAH = "899"
+BASE_URL = "https://reeadvent.fun"
+PAYMENT_MODE = "stub"      # stub | monobank. УВАГА: stub на публічному сайті дає календарі безкоштовно!
+EMAIL_MODE = "resend"      # stub | resend
+EMAIL_FROM = "ReeAdvent <hello@mail.reeadvent.fun>"
+DEBUG = "1"                # ТИМЧАСОВО для діагностики. Видалити після налагодження!
+# Секрети (НЕ тут, а в дашборді Cloudflare): RESEND_API_KEY, ADMIN_KEY, MONOBANK_TOKEN
