@@ -13,4 +13,5 @@ BASE_URL = "https://reeadvent.fun"
 PAYMENT_MODE = "monobank"  # stub | monobank
 EMAIL_MODE = "resend"      # stub | resend
 EMAIL_FROM = "ReeAdvent <hello@mail.reeadvent.fun>"
-# Секрети (НЕ тут, а в дашборді Cloudflare): RESEND_API_KEY, ADMIN_KEY, MONOBANK_TOKEN
+TURNSTILE_SITE_KEY = "0x4AAAAAAGKl5K-FMADGWk21"   # публічний ключ; секрет TURNSTILE_SECRET додається в дашборді
+# Секрети (НЕ тут, а в дашборді Cloudflare): RESEND_API_KEY, ADMIN_KEY, MONOBANK_TOKEN, TURNSTILE_SECRET
