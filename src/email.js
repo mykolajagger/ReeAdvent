@@ -1,12 +1,12 @@
 // Листи. EMAIL_MODE=stub — запис в таблицю outbox (розробка); EMAIL_MODE=resend — реальна відправка через Resend.
-export async function sendEmail(env, to, subject, html, text) {
+export async function sendEmail(env, to, subject, html, text, opts = {}) {
   if (env.EMAIL_MODE !== 'resend') {
     await env.DB.prepare('INSERT INTO outbox (created_at, to_email, subject, body) VALUES (?,?,?,?)').bind(Date.now(), to, subject, text).run();
     return;
   }
   const res = await fetch('https://api.resend.com/emails', {
     method: 'POST', headers: { Authorization: `Bearer ${env.RESEND_API_KEY}`, 'Content-Type': 'application/json' },
-    body: JSON.stringify({ from: env.EMAIL_FROM, to: [to], subject, html, text })
+    body: JSON.stringify({ from: opts.from || env.EMAIL_FROM, to: [to], subject, html, text, ...(opts.replyTo ? { reply_to: opts.replyTo } : {}), ...(opts.headers ? { headers: opts.headers } : {}) })
   });
   if (!res.ok) throw new Error('email_error');
 }
@@ -28,4 +28,10 @@ export function welcomeEmail(env, name, partnerName, startDate, link) {
 export function loginEmail(env, name, link) {
   const text = `Привіт, ${name}!\nВаше посилання для входу в ReeAdvent (діє 30 хвилин, одноразове):\n${link}`;
   return { subject: 'Вхід у ReeAdvent', text, html: layout('Вхід у календар', '<p>Натисніть кнопку, щоб увійти. Посилання одноразове і діє 30 хвилин.</p>', link, 'Увійти') };
+}
+
+export function supportReplyEmail(env, body, inReplyTo) {
+  const html = `<div style="font:15px/1.6 sans-serif;color:#1d1a14;max-width:560px">${esc(body).replace(/\n/g, '<br>')}<p style="color:#6b6a72;font-size:13px;margin-top:24px">З повагою, підтримка ReeAdvent · <a href="${esc(env.BASE_URL)}">${esc(env.BASE_URL)}</a></p></div>`;
+  const text = `${body}\n\n--\nПідтримка ReeAdvent · ${env.BASE_URL}`;
+  return { html, text, headers: inReplyTo ? { 'In-Reply-To': inReplyTo, References: inReplyTo } : undefined };
 }

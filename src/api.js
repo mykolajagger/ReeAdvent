@@ -1,6 +1,7 @@
 import { GIFTS, INTIMATE, ACTIVITIES, QUESTIONS, REGIONS, generateSchedule, sanitizeSurvey, giftView, intimView, actView } from './logic.js';
 import { createInvoice, verifyPaid } from './payments.js';
 import { verifyTurnstile } from './turnstile.js';
+import { handleAdmin } from './admin.js';
 import { findPromo, priceWith, rateLimit, normCode } from './promo.js';
 import { sendEmail, welcomeEmail, loginEmail } from './email.js';
 import { json, HttpError, randomToken, uid, sha256, parseCookies, sessionCookie, EMAIL_RE, normEmail, cleanText, nowOf, tomorrowStr, fromDateStr, toDateStr, todayIndex, windowDates, DAYS, UNLOCK_HOUR } from './util.js';
@@ -8,6 +9,7 @@ import { json, HttpError, randomToken, uid, sha256, parseCookies, sessionCookie,
 const MAX_START_DAYS = 90; // найдальша дата старту від завтрашнього дня
 
 const LOGIN_TTL = 30 * 60e3, WELCOME_TTL = 7 * 24 * 3600e3, SESSION_TTL = 60 * 24 * 3600e3;
+export const WELCOME_TTL_MS = WELCOME_TTL;
 
 export async function handle(request, env) {
   try {
@@ -20,6 +22,7 @@ export async function handle(request, env) {
     let r;
     if (m === 'GET' && (r = path.match(/^\/api\/orders\/([\w-]+)\/status$/))) return await orderStatus(env, r[1]);
     if (m === 'GET' && (r = path.match(/^\/api\/dev\/pay\/([\w-]+)$/))) return await devPay(env, r[1]);
+    if (path.startsWith('/api/admin/') && path !== '/api/admin/outbox') return await handleAdmin(request, env, path, m);
     if (m === 'GET' && path === '/api/health') return await health(env);
     if (m === 'GET' && path === '/api/admin/outbox') return await adminOutbox(request, env);
     if (m === 'POST' && path === '/api/payments/monobank/webhook') return await monoWebhook(request, env);
@@ -174,7 +177,7 @@ export async function markPaid(env, orderId) {
 }
 
 // ---------- Авторизація (посилання на пошту) ----------
-async function issueLoginLink(env, memberId, ttl) {
+export async function issueLoginLink(env, memberId, ttl) {
   const token = randomToken(32);
   await run(env, 'INSERT INTO login_tokens (token_hash, member_id, created_at, expires_at) VALUES (?,?,?,?)', await sha256(token), memberId, Date.now(), Date.now() + ttl);
   return `${env.BASE_URL}/app/#login=${token}`;
@@ -185,7 +188,7 @@ async function authRequest(request, env) {
   const email = normEmail(b.email);
   if (!EMAIL_RE.test(email)) throw new HttpError(400, 'bad_email');
   // найновіший календар, де ця пошта — учасник
-  const mem = await q1(env, `SELECT m.id, m.suggested_name, m.survey_json FROM members m JOIN calendars c ON c.id = m.calendar_id WHERE m.email = ? ORDER BY c.created_at DESC LIMIT 1`, email);
+  const mem = await q1(env, `SELECT m.id, m.suggested_name, m.survey_json FROM members m JOIN calendars c ON c.id = m.calendar_id JOIN orders o ON o.id = c.order_id WHERE m.email = ? AND o.refunded_at IS NULL ORDER BY c.created_at DESC LIMIT 1`, email);
   if (mem) {
     const recent = await q1(env, 'SELECT COUNT(*) AS n FROM login_tokens WHERE member_id = ? AND created_at > ?', mem.id, Date.now() - 3600e3);
     if (recent.n < 5) {
@@ -219,8 +222,8 @@ async function requireMember(request, env) {
   if (!t) throw new HttpError(401, 'auth');
   const s = await q1(env, 'SELECT member_id, expires_at FROM sessions WHERE token_hash = ?', await sha256(t));
   if (!s || s.expires_at < Date.now()) throw new HttpError(401, 'auth');
-  const mem = await q1(env, `SELECT m.*, c.city, c.region, c.start_date, c.schedule_json FROM members m JOIN calendars c ON c.id = m.calendar_id WHERE m.id = ?`, s.member_id);
-  if (!mem) throw new HttpError(401, 'auth');
+  const mem = await q1(env, `SELECT m.*, c.city, c.region, c.start_date, c.schedule_json, o.refunded_at FROM members m JOIN calendars c ON c.id = m.calendar_id JOIN orders o ON o.id = c.order_id WHERE m.id = ?`, s.member_id);
+  if (!mem || mem.refunded_at) throw new HttpError(401, 'auth');
   return mem;
 }
 

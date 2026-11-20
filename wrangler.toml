@@ -13,5 +13,9 @@ BASE_URL = "https://reeadvent.fun"
 PAYMENT_MODE = "monobank"  # stub | monobank
 EMAIL_MODE = "resend"      # stub | resend
 EMAIL_FROM = "ReeAdvent <hello@mail.reeadvent.fun>"
+EMAIL_SUPPORT_FROM = "ReeAdvent Підтримка <support@mail.reeadvent.fun>"   # відправник відповідей із адмінки
+SUPPORT_EMAIL = "support@reeadvent.fun"                                          # куди клієнти пишуть у відповідь (Reply-To)
+ACQUIRING_FEE_PERCENT = "1.3"   # комісія еквайрингу, %: ПЕРЕВІРТЕ за договором з Monobank (лише для дашборда)
+TAX_PERCENT = "6"               # орієнтовно 5% єдиний податок + 1% військовий збір: УТОЧНІТЬ у бухгалтера (лише для дашборда)
 TURNSTILE_SITE_KEY = "0x4AAAAAAGKl5K-FMADGWk21"   # публічний ключ; секрет TURNSTILE_SECRET додається в дашборді
-# Секрети (НЕ тут, а в дашборді Cloudflare): RESEND_API_KEY, ADMIN_KEY, MONOBANK_TOKEN, TURNSTILE_SECRET
+# Секрети (НЕ тут, а в дашборді Cloudflare): RESEND_API_KEY, ADMIN_KEY, MONOBANK_TOKEN, TURNSTILE_SECRET, ADMIN_EMAILS (пошти адміністраторів через кому; тип Secret)

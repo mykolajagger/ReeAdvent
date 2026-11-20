@@ -1,13 +1,14 @@
 // Локальний сервер: статика public/ + /api (через той самий handle() і SQLite у пам'яті).
 // PORT=8788 node dev/devserver.js ; NOW_OVERRIDE=2026-12-12T08:00:00Z — «підмінити» поточний час.
 import http from 'node:http'; import fs from 'node:fs'; import path from 'node:path'; import { fileURLToPath } from 'node:url';
-import { makeDb } from './d1.js'; import { handle } from '../src/api.js';
+import { makeDb } from './d1.js'; import { seed } from './seed.js'; import { handle } from '../src/api.js';
 const root = path.join(path.dirname(fileURLToPath(import.meta.url)), '..'), pub = path.join(root, 'public');
 const db = makeDb(root), port = +process.env.PORT || 8788;
-const env = { DB: db, DEV: '1', PRICE_UAH: '399', BASE_URL: `http://localhost:${port}`, PAYMENT_MODE: 'stub', EMAIL_MODE: 'stub', NOW_OVERRIDE: process.env.NOW_OVERRIDE };
+const env = { DB: db, DEV: '1', PRICE_UAH: '399', BASE_URL: `http://localhost:${port}`, PAYMENT_MODE: 'stub', EMAIL_MODE: 'stub', NOW_OVERRIDE: process.env.NOW_OVERRIDE, ADMIN_EMAILS: 'admin@test.com', ACQUIRING_FEE_PERCENT: '1.3', TAX_PERCENT: '6' };
+if (process.env.SEED === '1') seed(db._raw);
 // тестові промокоди (лише в пам'яті dev-сервера)
-db._raw.prepare('INSERT INTO promo_codes (id, code, type, value, max_uses, active, label, created_at) VALUES (?,?,?,?,?,?,?,?)').run('d1', 'WELCOME', 'percent', 20, null, 1, 'dev', Date.now());
-db._raw.prepare('INSERT INTO promo_codes (id, code, type, value, max_uses, active, label, created_at) VALUES (?,?,?,?,?,?,?,?)').run('d2', 'FREE', 'percent', 100, null, 1, 'dev', Date.now());
+db._raw.prepare('INSERT OR IGNORE INTO promo_codes (id, code, type, value, max_uses, active, label, created_at) VALUES (?,?,?,?,?,?,?,?)').run('d1', 'WELCOME', 'percent', 20, null, 1, 'dev', Date.now());
+db._raw.prepare('INSERT OR IGNORE INTO promo_codes (id, code, type, value, max_uses, active, label, created_at) VALUES (?,?,?,?,?,?,?,?)').run('d2', 'FREE', 'percent', 100, null, 1, 'dev', Date.now());
 const types = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript', '.css': 'text/css' };
 http.createServer(async (req, res) => {
   const url = new URL(req.url, env.BASE_URL);

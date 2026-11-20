@@ -1,0 +1,8 @@
+{
+  "name": "reeadvent-mail",
+  "private": true,
+  "type": "module",
+  "dependencies": { "postal-mime": "^4.2.1" },
+  "devDependencies": { "wrangler": "^4" },
+  "scripts": { "deploy": "wrangler deploy" }
+}

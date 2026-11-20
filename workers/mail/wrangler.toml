@@ -1,0 +1,11 @@
+name = "reeadvent-mail"
+main = "src/index.js"
+compatibility_date = "2025-01-01"
+
+[[d1_databases]]
+binding = "DB"
+database_name = "reeadvent-db"
+database_id = "8dd4d746-1746-4168-b724-1643f99925e6"
+
+# Необов'язково: резервна копія кожного листа на вашу пошту (адреса має бути підтверджена в Email Routing → Destination addresses).
+# Задається змінною FORWARD_TO у налаштуваннях Worker (Settings → Variables), не тут.
