@@ -118,6 +118,11 @@ env.ADMIN_KEY = 'k'.repeat(20);
 { const r = await handle(new Request('http://x/api/admin/outbox', { headers: { 'x-admin-key': 'wrong' } }), env); assert.equal(r.status, 404);
   const ok = await handle(new Request('http://x/api/admin/outbox', { headers: { 'x-admin-key': env.ADMIN_KEY } }), env); assert.equal(ok.status, 200); assert((await ok.json()).rows.length > 0);
   env.EMAIL_MODE = 'resend'; const off = await handle(new Request('http://x/api/admin/outbox', { headers: { 'x-admin-key': env.ADMIN_KEY } }), env); assert.equal(off.status, 404); env.EMAIL_MODE = 'stub'; }
+// 6d. /api/health закритий без DEBUG і не світить секрети
+assert.equal((await call('x', 'GET', '/api/health')).status, 404);
+env.DEBUG = '1'; env.RESEND_API_KEY = 'secret-should-not-leak';
+{ const r = await handle(new Request('http://x/api/health'), env); const txt = await r.text(); assert.equal(r.status, 200); assert(!txt.includes('secret-should-not-leak')); assert(JSON.parse(txt).orders_columns.includes('start_date')); }
+delete env.DEBUG;
 // 7. вихід
 await call('A', 'POST', '/api/auth/logout'); assert.equal((await call('A', 'GET', '/api/state')).status, 401);
 console.log('ALL OK');

@@ -17,6 +17,7 @@ export async function handle(request, env) {
     let r;
     if (m === 'GET' && (r = path.match(/^\/api\/orders\/([\w-]+)\/status$/))) return await orderStatus(env, r[1]);
     if (m === 'GET' && (r = path.match(/^\/api\/dev\/pay\/([\w-]+)$/))) return await devPay(env, r[1]);
+    if (m === 'GET' && path === '/api/health') return await health(env);
     if (m === 'GET' && path === '/api/admin/outbox') return await adminOutbox(request, env);
     if (m === 'POST' && path === '/api/payments/monobank/webhook') return await monoWebhook(request, env);
     if (m === 'POST' && path === '/api/auth/request') return await authRequest(request, env);
@@ -78,6 +79,22 @@ async function orderStatus(env, id) {
   const o = await q1(env, 'SELECT status FROM orders WHERE id = ?', id);
   if (!o) throw new HttpError(404, 'not_found');
   return json({ ok: true, status: o.status });
+}
+
+/** Діагностика налаштувань. Працює лише коли ввімкнено DEBUG=1; секрети не показує. */
+async function health(env) {
+  if (env.DEBUG !== '1') throw new HttpError(404, 'not_found');
+  const out = { db_binding: !!env.DB, price: env.PRICE_UAH ?? null, base_url: env.BASE_URL ?? null, payment_mode: env.PAYMENT_MODE ?? null, email_mode: env.EMAIL_MODE ?? null,
+    has_monobank_token: !!env.MONOBANK_TOKEN, has_resend_key: !!env.RESEND_API_KEY, has_email_from: !!env.EMAIL_FROM, has_admin_key: !!env.ADMIN_KEY };
+  if (env.DB) {
+    try {
+      const t = await env.DB.prepare("SELECT name FROM sqlite_master WHERE type = 'table' ORDER BY name").all();
+      out.tables = t.results.map(r => r.name);
+      const c = await env.DB.prepare('PRAGMA table_info(orders)').all();
+      out.orders_columns = c.results.map(r => r.name);
+    } catch (e) { out.db_error = String(e && e.message || e).slice(0, 300); }
+  }
+  return json({ ok: true, ...out });
 }
 
 /** Лише для тестового стенду (EMAIL_MODE=stub): читати «надіслані» листи, щоб дістати посилання входу. Потрібен ADMIN_KEY. */
