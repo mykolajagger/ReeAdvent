@@ -13,5 +13,4 @@ BASE_URL = "https://reeadvent.fun"
 PAYMENT_MODE = "stub"      # stub | monobank. УВАГА: stub на публічному сайті дає календарі безкоштовно!
 EMAIL_MODE = "resend"      # stub | resend
 EMAIL_FROM = "ReeAdvent <hello@mail.reeadvent.fun>"
-DEBUG = "1"                # ТИМЧАСОВО для діагностики. Видалити після налагодження!
 # Секрети (НЕ тут, а в дашборді Cloudflare): RESEND_API_KEY, ADMIN_KEY, MONOBANK_TOKEN
