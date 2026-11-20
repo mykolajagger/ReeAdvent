@@ -27,9 +27,37 @@ function initTurnstile(siteKey) {
   document.head.appendChild(s);
 }
 
+let basePrice = null, promoOk = null; // promoOk = { code, finalKop } після успішної перевірки
+const fmt = kop => (kop % 100 ? (kop / 100).toFixed(2) : String(kop / 100)).replace('.', ',') + ' ₴';
+const PERR = { not_found: 'Такого промокоду немає.', inactive: 'Цей промокод більше не діє.', not_started: 'Цей промокод ще не діє.', expired: 'Термін дії промокоду минув.', exhausted: 'Промокод уже використано максимальну кількість разів.' };
+function showPrice(finalKop) {
+  if (basePrice === null) return;
+  const base = basePrice * 100;
+  $('#old').textContent = finalKop < base ? fmt(base) : '';
+  $('#price').textContent = fmt(finalKop);
+  $('#ob').textContent = finalKop === 0 ? 'Отримати безкоштовно' : 'Перейти до оплати';
+}
+async function applyPromo() {
+  const code = $('#promo').value.trim();
+  promoOk = null; $('#pmsg').style.color = '';
+  if (!code) { $('#pmsg').textContent = ''; showPrice(basePrice * 100); return; }
+  $('#pbtn').disabled = true;
+  try {
+    const j = await (await fetch('/api/promo/check', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ code }) })).json();
+    if (j.error === 'too_many') { $('#pmsg').textContent = 'Забагато спроб. Спробуйте за кілька хвилин.'; $('#pmsg').style.color = 'var(--err)'; showPrice(basePrice * 100); }
+    else if (!j.valid) { $('#pmsg').textContent = PERR[j.reason] || 'Промокод не підходить.'; $('#pmsg').style.color = 'var(--err)'; showPrice(basePrice * 100); }
+    else { promoOk = { code: j.code, finalKop: j.finalKop }; $('#pmsg').textContent = `Промокод застосовано: знижка ${fmt(j.discountKop)}.`; $('#pmsg').style.color = 'var(--gold2)'; showPrice(j.finalKop); }
+  } catch { $('#pmsg').textContent = 'Не вдалося перевірити промокод.'; }
+  $('#pbtn').disabled = false;
+}
+$('#pbtn').addEventListener('click', applyPromo);
+$('#promo').addEventListener('input', () => { if (promoOk) { promoOk = null; $('#pmsg').textContent = ''; showPrice(basePrice * 100); } });
+$('#promo').addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); applyPromo(); } });
+
 fetch('/api/config').then(r => r.json()).then(c => {
+  basePrice = c.price;
   if (c.turnstileSiteKey) initTurnstile(c.turnstileSiteKey);
-  $('#price').textContent = c.price + ' ₴';
+  showPrice(c.price * 100);
   $('#region').innerHTML += c.regions.map(r => `<option>${r}</option>`).join('');
 }).catch(() => { $('#price').textContent = '—'; });
 
@@ -39,11 +67,11 @@ const t0 = new Date(); t0.setDate(t0.getDate() + 1);
 const t1 = new Date(t0); t1.setDate(t1.getDate() + 90);
 $('#startDate').min = iso(t0); $('#startDate').max = iso(t1); $('#startDate').value = iso(t0);
 
-const ERR = { captcha: 'Не вдалося підтвердити, що ви не бот. Спробуйте ще раз.', bad_date: 'Оберіть дату старту: від завтра і не пізніше ніж за 90 днів.', bad_names: 'Вкажіть обидва імені.', bad_email: 'Перевірте адреси пошти.', same_email: 'Пошти мають бути різні: у кожного своя.', bad_city: 'Вкажіть місто.', bad_region: 'Оберіть область.', consent_required: 'Підтвердіть вік і погодьтеся з умовами.', too_many: 'Забагато спроб. Спробуйте за годину.' };
+const ERR = { promo_not_found: 'Такого промокоду немає.', promo_inactive: 'Цей промокод більше не діє.', promo_not_started: 'Цей промокод ще не діє.', promo_expired: 'Термін дії промокоду минув.', promo_exhausted: 'Промокод уже використано максимальну кількість разів.', captcha: 'Не вдалося підтвердити, що ви не бот. Спробуйте ще раз.', bad_date: 'Оберіть дату старту: від завтра і не пізніше ніж за 90 днів.', bad_names: 'Вкажіть обидва імені.', bad_email: 'Перевірте адреси пошти.', same_email: 'Пошти мають бути різні: у кожного своя.', bad_city: 'Вкажіть місто.', bad_region: 'Оберіть область.', consent_required: 'Підтвердіть вік і погодьтеся з умовами.', too_many: 'Забагато спроб. Спробуйте за годину.' };
 $('#of').addEventListener('submit', async e => {
   e.preventDefault();
   const v = id => $('#' + id).value.trim();
-  const body = { nameA: v('nameA'), nameB: v('nameB'), emailA: v('emailA'), emailB: v('emailB'), city: v('city'), region: $('#region').value, startDate: $('#startDate').value, age18: $('#age18').checked, terms: $('#terms').checked, turnstileToken: tsToken };
+  const body = { nameA: v('nameA'), nameB: v('nameB'), emailA: v('emailA'), emailB: v('emailB'), city: v('city'), region: $('#region').value, startDate: $('#startDate').value, age18: $('#age18').checked, terms: $('#terms').checked, turnstileToken: tsToken, promo: $('#promo').value.trim() };
   if (tsOn && !tsToken) { $('#oerr').textContent = 'Підтвердіть, що ви не бот (віджет вище).'; return; }
   const btn = $('#ob'); btn.disabled = true; $('#oerr').textContent = '';
   try {

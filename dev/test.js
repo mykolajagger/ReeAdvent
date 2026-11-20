@@ -138,6 +138,47 @@ delete env.DEBUG;
   assert.equal((await call('x', 'POST', '/api/orders', { ...g2, emailA: 'ts3@test.com', emailB: 'ts4@test.com' })).j.ok, true, 'works without secret');
   env.NOW_OVERRIDE = savedNow;
 }
+// 6f. Промокоди
+{
+  const savedNow = env.NOW_OVERRIDE; env.NOW_OVERRIDE = '2026-11-20T10:00:00Z';
+  const raw = db._raw, ins = raw.prepare('INSERT INTO promo_codes (id, code, type, value, max_uses, used_count, starts_at, expires_at, active, label, created_at) VALUES (?,?,?,?,?,?,?,?,?,?,?)');
+  const T = Date.now();
+  ins.run('p1', 'MINUS20', 'percent', 20, 2, 0, null, null, 1, 'test', T);
+  ins.run('p2', 'FIX100', 'fixed', 10000, null, 0, null, null, 1, null, T);
+  ins.run('p3', 'FREE', 'percent', 100, 1, 0, null, null, 1, null, T);
+  ins.run('p4', 'OLD', 'percent', 10, null, 0, null, 1000, 1, null, T);
+  ins.run('p5', 'OFF', 'percent', 10, null, 0, null, null, 0, null, T);
+  ins.run('p6', 'ALMOST', 'fixed', 39850, null, 0, null, null, 1, null, T); // лишилось би 0,50 грн -> мінімум 1 грн
+  const chk = async code => (await call('x', 'POST', '/api/promo/check', { code })).j;
+  let r = await chk('minus20'); assert(r.valid && r.discountKop === 7980 && r.finalKop === 31920, JSON.stringify(r)); // 399 грн -> 319,20 (у тестовому середовищі PRICE_UAH=399)
+  r = await chk('FIX100'); assert(r.valid && r.finalKop === 29900 && r.discountKop === 10000);
+  r = await chk('NOPE'); assert(!r.valid && r.reason === 'not_found');
+  r = await chk('OLD'); assert(!r.valid && r.reason === 'expired');
+  r = await chk('OFF'); assert(!r.valid && r.reason === 'inactive');
+  r = await chk('ALMOST'); assert(r.valid && r.finalKop === 100, 'min 1 UAH: ' + r.finalKop);
+  const ord = async (promo, n) => (await call('x', 'POST', '/api/orders', { ...good, emailA: `pr${n}a@test.com`, emailB: `pr${n}b@test.com`, startDate: '2026-12-01', promo, turnstileToken: undefined })).j;
+  let o1 = await ord('MINUS20', 1); assert(o1.ok && o1.amountKop === 31920 && !o1.free);
+  let row = raw.prepare('SELECT * FROM orders WHERE id = ?').get(o1.orderId); assert.equal(row.list_kop, 39900); assert.equal(row.discount_kop, 7980); assert.equal(row.promo_code, 'MINUS20');
+  assert.equal(raw.prepare("SELECT used_count FROM promo_codes WHERE code = 'MINUS20'").get().used_count, 0, 'not counted until paid');
+  await call('x', 'GET', `/api/dev/pay/${o1.orderId}`);
+  assert.equal(raw.prepare("SELECT used_count FROM promo_codes WHERE code = 'MINUS20'").get().used_count, 1, 'counted when paid');
+  await call('x', 'GET', `/api/dev/pay/${o1.orderId}`); // повторна оплата не рахується двічі
+  assert.equal(raw.prepare("SELECT used_count FROM promo_codes WHERE code = 'MINUS20'").get().used_count, 1);
+  let o2 = await ord('MINUS20', 2); await call('x', 'GET', `/api/dev/pay/${o2.orderId}`);
+  assert.equal((await ord('MINUS20', 3)).error, 'promo_exhausted', 'max uses reached');
+  assert.equal((await ord('NOPE', 4)).error, 'promo_not_found');
+  assert.equal((await ord('', 5)).amountKop, 39900, 'no promo = list price');
+  // безкоштовний календар: без оплати, одразу створюється
+  const before = raw.prepare('SELECT COUNT(*) AS n FROM outbox').get().n;
+  const fr = await ord('FREE', 6); assert(fr.ok && fr.free && fr.amountKop === 0);
+  assert.equal(raw.prepare('SELECT status FROM orders WHERE id = ?').get(fr.orderId).status, 'paid');
+  assert.equal(raw.prepare('SELECT COUNT(*) AS n FROM calendars WHERE order_id = ?').get(fr.orderId).n, 1);
+  assert.equal(raw.prepare('SELECT COUNT(*) AS n FROM outbox').get().n, before + 2, 'welcome emails sent');
+  assert.equal((await ord('FREE', 7)).error, 'promo_exhausted');
+  // перебір кодів обмежується
+  let lim = false; for (let i = 0; i < 25; i++) if ((await chk('GUESS' + i)).error === 'too_many') lim = true; assert(lim, 'rate limit works');
+  env.NOW_OVERRIDE = savedNow;
+}
 // 7. вихід
 await call('A', 'POST', '/api/auth/logout'); assert.equal((await call('A', 'GET', '/api/state')).status, 401);
 console.log('ALL OK');

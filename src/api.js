@@ -1,6 +1,7 @@
 import { GIFTS, INTIMATE, ACTIVITIES, QUESTIONS, REGIONS, generateSchedule, sanitizeSurvey, giftView, intimView, actView } from './logic.js';
 import { createInvoice, verifyPaid } from './payments.js';
 import { verifyTurnstile } from './turnstile.js';
+import { findPromo, priceWith, rateLimit, normCode } from './promo.js';
 import { sendEmail, welcomeEmail, loginEmail } from './email.js';
 import { json, HttpError, randomToken, uid, sha256, parseCookies, sessionCookie, EMAIL_RE, normEmail, cleanText, nowOf, tomorrowStr, fromDateStr, toDateStr, todayIndex, windowDates, DAYS, UNLOCK_HOUR } from './util.js';
 
@@ -15,6 +16,7 @@ export async function handle(request, env) {
     const m = request.method;
     if (m === 'GET' && path === '/api/config') return json({ price: Number(env.PRICE_UAH), currency: 'UAH', regions: REGIONS, turnstileSiteKey: env.TURNSTILE_SITE_KEY || null });
     if (m === 'POST' && path === '/api/orders') return await createOrder(request, env);
+    if (m === 'POST' && path === '/api/promo/check') return await promoCheck(request, env);
     let r;
     if (m === 'GET' && (r = path.match(/^\/api\/orders\/([\w-]+)\/status$/))) return await orderStatus(env, r[1]);
     if (m === 'GET' && (r = path.match(/^\/api\/dev\/pay\/([\w-]+)$/))) return await devPay(env, r[1]);
@@ -71,11 +73,33 @@ async function createOrder(request, env) {
   const recent = await q1(env, "SELECT COUNT(*) AS n FROM orders WHERE email_a = ? AND status = 'pending' AND created_at > ?", o.email_a, Date.now() - 3600e3);
   if (recent.n >= 5) throw new HttpError(429, 'too_many');
 
-  const order = { id: uid(), amount_kop: Math.round(Number(env.PRICE_UAH) * 100), ...o };
-  const inv = await createInvoice(env, order);
-  await run(env, `INSERT INTO orders (id, created_at, status, amount_kop, name_a, email_a, name_b, email_b, city, region, start_date, payer_email, invoice_id, consent_at)
-    VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)`, order.id, Date.now(), 'pending', order.amount_kop, o.name_a, o.email_a, o.name_b, o.email_b, o.city, o.region, o.start_date, o.payer_email, inv.invoiceId, Date.now());
-  return json({ ok: true, orderId: order.id, payUrl: inv.pageUrl });
+  // Промокод (необов'язковий): ціну завжди рахує сервер
+  let promo = null;
+  if (String(b.promo || '').trim()) {
+    const r = await findPromo(env, b.promo);
+    if (r.error) throw new HttpError(400, 'promo_' + r.error);
+    promo = r.promo;
+  }
+  const price = priceWith(env, promo);
+  const order = { id: uid(), amount_kop: price.final, ...o };
+  const free = price.final === 0;
+  const inv = free ? { invoiceId: 'free_' + order.id, pageUrl: `${env.BASE_URL}/thanks.html?order=${order.id}` } : await createInvoice(env, order);
+  await run(env, `INSERT INTO orders (id, created_at, status, amount_kop, list_kop, discount_kop, promo_code, promo_id, name_a, email_a, name_b, email_b, city, region, start_date, payer_email, invoice_id, consent_at)
+    VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`, order.id, Date.now(), 'pending', price.final, price.list, price.discount, promo ? promo.code : null, promo ? promo.id : null,
+    o.name_a, o.email_a, o.name_b, o.email_b, o.city, o.region, o.start_date, o.payer_email, inv.invoiceId, Date.now());
+  if (free) await markPaid(env, order.id); // 100% знижка: календар створюється одразу, без оплати
+  return json({ ok: true, orderId: order.id, payUrl: inv.pageUrl, free, amountKop: price.final });
+}
+
+async function promoCheck(request, env) {
+  const ip = request.headers.get('CF-Connecting-IP') || 'local';
+  if (!(await rateLimit(env, 'promo:' + ip, 20, 600))) throw new HttpError(429, 'too_many');
+  const b = await readJson(request);
+  const r = await findPromo(env, b.code);
+  const list = priceWith(env, null);
+  if (r.error) return json({ ok: true, valid: false, reason: r.error, listKop: list.list });
+  const price = priceWith(env, r.promo);
+  return json({ ok: true, valid: true, code: r.promo.code, listKop: price.list, discountKop: price.discount, finalKop: price.final, type: r.promo.type, value: r.promo.value });
 }
 
 async function orderStatus(env, id) {
@@ -131,6 +155,7 @@ export async function markPaid(env, orderId) {
   if (!o) throw new HttpError(404, 'not_found');
   const upd = await run(env, "UPDATE orders SET status = 'paid', paid_at = ? WHERE id = ? AND status = 'pending'", Date.now(), orderId);
   if (!upd.meta?.changes) return; // уже оплачено (повторний вебхук)
+  if (o.promo_id) await run(env, 'UPDATE promo_codes SET used_count = used_count + 1 WHERE id = ?', o.promo_id);
   // обрана дата; якщо оплатили запізно і вона вже минула — стартуємо завтра
   const tomorrow = tomorrowStr(nowOf(env));
   const startDate = fromDateStr(o.start_date) >= fromDateStr(tomorrow) ? o.start_date : tomorrow;

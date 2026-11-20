@@ -13,7 +13,7 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,400;0,500;0,600;1,400;1,500&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="/assets/base.css?v=2">
-<link rel="stylesheet" href="/assets/landing.css?v=2">
+<link rel="stylesheet" href="/assets/landing.css?v=3">
 </head>
 <body>
 <canvas id="fx" aria-hidden="true"></canvas>
@@ -60,7 +60,7 @@
   <section class="sec" id="order">
     <span class="eyebrow">Замовлення</span><h2>Подаруйте собі різдвяний настрій</h2>
     <div class="card order">
-      <div class="price"><b id="price">—</b><span>за календар для двох · 24 вікна</span></div>
+      <div class="price"><div id="old" class="muted" style="text-decoration:line-through;min-height:1.4em"></div><b id="price">—</b><span>за календар для двох · 24 вікна</span></div>
       <form id="of" novalidate>
         <div class="f2">
           <div class="fld"><label for="nameA">Ваше ім’я</label><input id="nameA" maxlength="30" required autocomplete="given-name"></div>
@@ -73,6 +73,9 @@
           <div class="fld"><label for="region">Область</label><select id="region" required><option value="">Оберіть…</option></select></div>
         </div>
         <div class="fld"><label for="startDate">Дата старту</label><input id="startDate" type="date" required><small>Перше вікно відкриється цього дня о 07:00, далі 24 дні поспіль. Можна обрати будь-який день від завтра, наприклад 1 грудня.</small></div>
+        <div class="fld"><label for="promo">Промокод <span style="text-transform:none;letter-spacing:0">(якщо є)</span></label>
+          <div style="display:flex;gap:8px"><input id="promo" maxlength="32" autocomplete="off" autocapitalize="characters" placeholder="Наприклад, WELCOME"><button class="btn ghost sm" id="pbtn" type="button" style="flex:none">Застосувати</button></div>
+          <small id="pmsg"></small></div>
         <label class="chk"><input type="checkbox" id="age18"> Нам обом виповнилося 18 років.</label>
         <label class="chk"><input type="checkbox" id="terms"> Погоджуюсь з <a href="/legal/offer.html" target="_blank">офертою</a> та <a href="/legal/privacy.html" target="_blank">політикою конфіденційності</a>.</label>
         <div id="ts" style="display:flex;justify-content:center"></div>
@@ -98,6 +101,6 @@
 </main>
 <div id="toast" role="status"></div>
 <script src="/assets/fx.js?v=2"></script>
-<script src="/assets/landing.js?v=2"></script>
+<script src="/assets/landing.js?v=3"></script>
 </body>
 </html>
