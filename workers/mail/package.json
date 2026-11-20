@@ -1,5 +1,5 @@
 {
-  "name": "reeadvent-mail",
+  "name": "reeadvent-inbox",
   "private": true,
   "type": "module",
   "dependencies": { "postal-mime": "^4.2.1" },

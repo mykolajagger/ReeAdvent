@@ -1,4 +1,4 @@
-name = "reeadvent-mail"
+name = "reeadvent-inbox"
 main = "src/index.js"
 compatibility_date = "2025-01-01"
 
