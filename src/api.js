@@ -11,6 +11,9 @@ import { sendEmail, welcomeEmail, partnerInviteEmail, loginEmail } from './email
 import { runDaily, checkUnsub } from './reminders.js';
 import { json, HttpError, localDayNumber, unlockTimes, randomToken, uid, sha256, parseCookies, sessionCookie, EMAIL_RE, normEmail, cleanText, nowOf, tomorrowStr, fromDateStr, toDateStr, todayIndex, windowDates, validTz, DAYS, UNLOCK_HOUR } from './util.js';
 
+// Тимчасово окуповані території України не обслуговуємо: області (Крим, Донеччина, Луганщина) і міста окупованих частин інших областей
+const OCCUPIED_REGIONS = ['Автономна Республіка Крим', 'Донецька', 'Луганська'];
+const OCCUPIED_CITIES = ['севастополь', 'sevastopol', 'сімферополь', 'simferopol', 'донецьк', 'donetsk', 'луганськ', 'luhansk', 'маріуполь', 'mariupol', 'мелітополь', 'melitopol', 'бердянськ', 'berdiansk', 'енергодар', 'enerhodar', 'нова каховка', 'nova kakhovka', 'каховка', 'kakhovka', 'генічеськ', 'henichesk', 'олешки', 'oleshky', 'скадовськ', 'skadovsk', 'алчевськ', 'alchevsk', 'горлівка', 'horlivka', 'макіївка', 'makiivka', 'керч', 'kerch', 'ялта', 'yalta', 'євпаторія', 'yevpatoriya', 'феодосія', 'feodosiya'];
 const BLOCKED_COUNTRIES = ['RU', 'BY']; // не обслуговуємо (умови еквайрингу); змініть тут і в public/assets/countries.js
 const MAX_START_DAYS = 90; // найдальша дата старту від завтрашнього дня
 
@@ -80,6 +83,7 @@ async function createOrder(request, env) {
   };
   if (BLOCKED_COUNTRIES.includes(o.country)) throw new HttpError(400, 'country_blocked'); // оплата з цих країн неможлива
   if (o.country !== 'UA') o.region = cleanText(b.region, 60) || '—';
+  if ((o.country === 'UA' && OCCUPIED_REGIONS.includes(o.region)) || OCCUPIED_CITIES.includes(o.city.trim().toLowerCase())) throw new HttpError(400, 'region_occupied');
   if (!o.name_a || !o.name_b) throw new HttpError(400, 'bad_names');
   if (!EMAIL_RE.test(o.email_a) || !EMAIL_RE.test(o.email_b)) throw new HttpError(400, 'bad_email');
   if (o.email_a === o.email_b) throw new HttpError(400, 'same_email');

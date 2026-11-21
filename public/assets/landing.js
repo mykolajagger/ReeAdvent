@@ -57,10 +57,11 @@ const dnEn = new Intl.DisplayNames(['en'], { type: 'region' }), dnUk = new Intl.
 const countryItems = () => window.COUNTRIES.map(c => ({ code: c, label: dn().of(c) || c, keys: [dnUk.of(c), dnEn.of(c), c] })).sort((a, b) => (a.code === 'UA' ? -1 : b.code === 'UA' ? 1 : a.label.localeCompare(b.label, LG())));
 const isUA = () => countryCode === 'UA';
 const regionLabel = r => (isUA() && LG() === 'uk' && r[2]) ? r[2] : r[1];
-const regionItems = () => geo ? geo.r.map(r => ({ code: r[0], label: regionLabel(r), value: isUA() ? (r[2] || r[1]) : r[1], keys: [r[1], r[2]].filter(Boolean) })) : [];
+const OCC = ['43', '14', '09']; // Крим, Донеччина, Луганщина: не обслуговуємо
+const regionItems = () => geo ? geo.r.filter(r => !(isUA() && OCC.includes(r[0]))).map(r => ({ code: r[0], label: regionLabel(r), value: isUA() ? (r[2] || r[1]) : r[1], keys: [r[1], r[2]].filter(Boolean) })) : [];
 const cityItems = () => {
   if (!geo) return [];
-  const rows = regionItem ? geo.c.filter(c => c[1] === regionItem.code) : geo.c;
+  const rows = (regionItem ? geo.c.filter(c => c[1] === regionItem.code) : geo.c).filter(c => !(isUA() && OCC.includes(c[1])));
   return rows.map(c => ({ label: (isUA() && LG() === 'uk' && c[4]) ? c[4] : c[0], name: c[0], region: c[1], keys: [c[0], c[4]].filter(Boolean), hint: regionItem ? '' : (geo.r.find(r => r[0] === c[1]) ? regionLabel(geo.r.find(r => r[0] === c[1])) : '') }));
 };
 const cCombo = combo(cIn, $('#country-list'), countryItems, { onPick: it => selectCountry(it.code) });
@@ -146,8 +147,8 @@ fetch('/api/config').then(r => r.json()).then(async c => {
 }).catch(() => { $('#price').textContent = '—'; });
 
 /* ---------- Відправка ---------- */
-const ERRC = { country_blocked: 'e_blocked', bad_names: 'e_names', bad_email: 'e_email', same_email: 'e_same', bad_city: 'e_city', bad_region: 'e_region', consent_required: 'e_consent', too_many: 'e_many', bad_date: 'e_date', captcha: 'e_captcha' };
-const ERRUK = { country_blocked: 'На жаль, ми не можемо прийняти замовлення з цієї країни.', bad_names: 'Вкажіть обидва імені.', bad_email: 'Перевірте адреси пошти.', same_email: 'Пошти мають бути різні: у кожного своя.', bad_city: 'Вкажіть місто.', bad_region: 'Оберіть область.', consent_required: 'Підтвердіть вік і погодьтеся з умовами.', too_many: 'Забагато спроб. Спробуйте за годину.', bad_date: 'Оберіть дату старту: від завтра і не пізніше ніж за 90 днів.', captcha: 'Не вдалося підтвердити, що ви не бот. Спробуйте ще раз.', e_country: 'Оберіть країну зі списку.', promo_not_found: 'Такого промокоду немає.', promo_inactive: 'Цей промокод більше не діє.', promo_not_started: 'Цей промокод ще не діє.', promo_expired: 'Термін дії промокоду минув.', promo_exhausted: 'Промокод уже використано максимальну кількість разів.' };
+const ERRC = { region_occupied: 'e_occupied', country_blocked: 'e_blocked', bad_names: 'e_names', bad_email: 'e_email', same_email: 'e_same', bad_city: 'e_city', bad_region: 'e_region', consent_required: 'e_consent', too_many: 'e_many', bad_date: 'e_date', captcha: 'e_captcha' };
+const ERRUK = { region_occupied: 'На жаль, ми не обслуговуємо тимчасово окуповані території України.', country_blocked: 'На жаль, ми не можемо прийняти замовлення з цієї країни.', bad_names: 'Вкажіть обидва імені.', bad_email: 'Перевірте адреси пошти.', same_email: 'Пошти мають бути різні: у кожного своя.', bad_city: 'Вкажіть місто.', bad_region: 'Оберіть область.', consent_required: 'Підтвердіть вік і погодьтеся з умовами.', too_many: 'Забагато спроб. Спробуйте за годину.', bad_date: 'Оберіть дату старту: від завтра і не пізніше ніж за 90 днів.', captcha: 'Не вдалося підтвердити, що ви не бот. Спробуйте ще раз.', e_country: 'Оберіть країну зі списку.', promo_not_found: 'Такого промокоду немає.', promo_inactive: 'Цей промокод більше не діє.', promo_not_started: 'Цей промокод ще не діє.', promo_expired: 'Термін дії промокоду минув.', promo_exhausted: 'Промокод уже використано максимальну кількість разів.' };
 const errMsg = code => LG() === 'en' ? (code === 'e_country' ? t('e_country') : ERRC[code] ? t(ERRC[code]) : code && code.startsWith('promo_') ? t('p_' + code.slice(6)) : t('e_gen')) : (ERRUK[code] || 'Не вдалося створити замовлення. Спробуйте ще раз.') + (ERRUK[code] ? '' : ` (код: ${String(code).slice(0, 60)})`);
 $('#of').addEventListener('submit', async e => {
   e.preventDefault();

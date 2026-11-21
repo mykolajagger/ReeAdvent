@@ -2,7 +2,7 @@
 // Запуск: node tools/build-top-cities.mjs   (місто, якого немає в наборі, пропускається й виводиться у звіті)
 import fs from 'node:fs'; import path from 'node:path';
 const root = path.resolve(path.dirname(new URL(import.meta.url).pathname), '..');
-const LIST = `UA: Kyiv, Donetsk, Luhansk, Simferopol, Kharkiv, Odesa, Dnipro, Lviv, Zaporizhzhia, Kryvyi Rih, Mykolaiv, Vinnytsia, Kherson, Poltava, Chernihiv, Cherkasy, Sumy, Zhytomyr, Khmelnytskyi, Rivne, Ivano-Frankivsk, Ternopil, Lutsk, Chernivtsi, Uzhgorod, Mukacheve, Kropyvnytskyi
+const LIST = `UA: Kyiv, Kharkiv, Odesa, Dnipro, Lviv, Zaporizhzhia, Kryvyi Rih, Mykolaiv, Vinnytsia, Kherson, Poltava, Chernihiv, Cherkasy, Sumy, Zhytomyr, Khmelnytskyi, Rivne, Ivano-Frankivsk, Ternopil, Lutsk, Chernivtsi, Uzhgorod, Mukacheve, Kropyvnytskyi
 GB: London, Manchester, Birmingham, Glasgow, Edinburgh, Liverpool, Leeds, Bristol, Cardiff, Belfast
 IE: Dublin, Cork
 FR: Paris, Lyon, Marseille, Toulouse, Nice, Bordeaux, Strasbourg, Lille, Nantes

@@ -259,6 +259,8 @@ const anon = raw.prepare('SELECT * FROM orders WHERE id = ?').get(o1); assert(an
   // стан календаря: валюта країни календаря
   const stDeR = await call('de1', 'GET', '/api/state'); assert.equal(stDeR.status, 200, JSON.stringify(stDeR.j)); assert.equal(stDeR.j.currency.code, 'EUR');
   assert.equal((await call('x', 'POST', '/api/orders', { ...good, emailA: 'ru1@t.com', emailB: 'ru2@t.com', country: 'RU', region: 'x' })).j.error, 'country_blocked');
+  assert.equal((await call('x', 'POST', '/api/orders', { ...good, emailA: 'oc1@t.com', emailB: 'oc2@t.com', city: 'Донецьк', region: 'Донецька' })).j.error, 'region_occupied');
+  assert.equal((await call('x', 'POST', '/api/orders', { ...good, emailA: 'oc3@t.com', emailB: 'oc4@t.com', city: 'Мелітополь', region: 'Запорізька' })).j.error, 'region_occupied');
   assert.equal((await call('x', 'POST', '/api/orders', { ...good, emailA: 'by1@t.com', emailB: 'by2@t.com', country: 'by', region: 'x' })).j.error, 'country_blocked');
   // cron оновлює курси
   const c1 = (await cron()).j; assert(c1.fx && (c1.fx.ok || c1.fx.error), 'cron reports fx result');
