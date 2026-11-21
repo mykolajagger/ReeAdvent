@@ -81,8 +81,8 @@ async function geocode(name, country, fetchImpl) {
 }
 const flt = f => Object.entries(f).map(([k, v]) => Array.isArray(v) ? `["${k}"~"^(${v.join('|')})$"]` : String(v).startsWith('!') ? `["${k}"!~"^(${v.slice(1)})$"]` : `["${k}"="${v}"]`).join('');
 // Запити діляться на групи (великі міста типу Києва не витримують одного запиту на 33 категорії) і йдуть за прямокутником — це швидше за «around»
-export const CAT_GROUPS = [['cafe', 'restaurant', 'bar', 'pastry'], ['cinema', 'theatre', 'museum', 'park', 'viewpoint', 'garden', 'castle', 'church', 'market'],
-  ['bowling', 'billiards', 'pool', 'spa', 'rink', 'climbing', 'yoga', 'shelter'], ['books', 'florist', 'gift', 'coffee', 'tea', 'wine', 'beer', 'cheese', 'photo', 'jewelry', 'toys', 'beauty']];
+export const CAT_GROUPS = [['cafe'], ['restaurant'], ['bar', 'pastry'], ['cinema', 'theatre', 'museum', 'park', 'viewpoint', 'garden', 'castle', 'church', 'market'],
+  ['bowling', 'billiards', 'pool', 'spa', 'rink', 'climbing', 'yoga', 'shelter'], ['books', 'florist', 'gift', 'coffee', 'tea'], ['wine', 'beer', 'cheese', 'photo', 'jewelry', 'toys', 'beauty']];
 export function overpassQueries(lat, lon, timeoutSec = 30) {
   const dLat = RADIUS / 111200, dLon = RADIUS / (111200 * Math.cos(lat * Math.PI / 180)), bbox = [lat - dLat, lon - dLon, lat + dLat, lon + dLon].map(x => x.toFixed(5)).join(',');
   return CAT_GROUPS.map(g => `[out:json][timeout:${timeoutSec}][maxsize:67108864];${g.map(cat => `(${CATS[cat].map(f => `nwr${flt(f)}["name"](${bbox});`).join('')});out center tags ${PER_SET};`).join('')}`);

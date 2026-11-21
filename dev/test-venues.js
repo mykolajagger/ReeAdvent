@@ -13,7 +13,7 @@ assert.equal(catOfQuery('кав’ярня Львів'), 'cafe'); assert.equal(c
 assert.equal(catOfQuery('майстер-клас кераміка X'), null); assert.equal(catOfQuery('ліс X прогулянка'), 'park'); assert.equal(catOfQuery('жива музика X'), 'bar');
 assert.equal(cityKey('ua', 'Ľviv'), 'UA|lviv'); assert(TOP_CITIES.length > 280 && TOP_CITIES.filter(c => c[0] === 'UA').length >= 24);
 assert(!TOP_CITIES.some(c => ['Donetsk', 'Luhansk', 'Simferopol'].includes(c[1])), 'окуповані міста не в базі');
-const qs = overpassQueries(49.84, 24.03), q = qs.join('\n'); assert.equal(qs.length, 4); assert(q.includes('"amenity"="cafe"') && q.includes('"access"!~') && q.includes('timeout:30') && !q.includes('around'), q.slice(0, 300)); assert.deepEqual([...CAT_GROUPS.flat()].sort(), Object.keys(CATS).sort(), 'кожна категорія входить рівно в одну групу');
+const qs = overpassQueries(49.84, 24.03), q = qs.join('\n'); assert.equal(qs.length, 7); assert(q.includes('"amenity"="cafe"') && q.includes('"access"!~') && q.includes('timeout:30') && !q.includes('around'), q.slice(0, 300)); assert.deepEqual([...CAT_GROUPS.flat()].sort(), Object.keys(CATS).sort(), 'кожна категорія входить рівно в одну групу');
 
 // ----- подарунки: де купити; години роботи
 assert.equal(catOfGift('обсмажка кави {city}'), 'coffee'); assert.equal(catOfGift('винна крамниця {city}'), 'wine'); assert.equal(catOfGift('срібний кулон'), 'jewelry'); assert.equal(catOfGift('кав’ярня {city}'), 'cafe'); assert.equal(catOfGift('плед флісовий'), null);
@@ -75,7 +75,7 @@ const badId = picks.find(p => p.id !== vid).id;
 for (const s of ['a', 'b', 'c', 'd', 'e', 'f']) assert(!(await venuePicks(env, { country: 'UA', city: 'Жовква', cat: 'cafe', seedKey: s })).some(p => p.id === badId), 'погано оцінений прихований');
 
 // ----- помилки: повтор, потім failed; геокодування не знайшло
-failOverpass = 99; await ensureCity(env, 'PL', 'Zakopane'); raw.prepare("UPDATE venue_cities SET lat = 49.3, lon = 19.9 WHERE key = 'PL|zakopane'").run();
+failOverpass = 9999; await ensureCity(env, 'PL', 'Zakopane'); raw.prepare("UPDATE venue_cities SET lat = 49.3, lon = 19.9 WHERE key = 'PL|zakopane'").run();
 let rr = await runVenues(env, { fetchImpl: mockFetch }); assert.equal(rr.city, 'PL|zakopane'); assert.equal(rr.status, 'retry');
 await runVenues(env, { fetchImpl: mockFetch }); rr = await runVenues(env, { fetchImpl: mockFetch }); assert.equal(rr.status, 'failed'); failOverpass = 0;
 await ensureCity(env, 'UA', 'Нікуди'); rr = await runVenues(env, { fetchImpl: mockFetch }); assert.equal(rr.city, 'UA|нікуди'); assert.equal(rr.status, 'failed');
