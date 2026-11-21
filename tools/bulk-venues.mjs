@@ -21,6 +21,7 @@ const DAY = 864e5;
 async function getSkip() { const r = await env.DB.prepare("SELECT value FROM settings WHERE key = 'bulk_skip2'").first(); try { return r ? JSON.parse(r.value) : {}; } catch { return {}; } }
 async function skipCountry(cc, why, days = 1) { const s = await getSkip(); s[cc] = { until: Date.now() + days * DAY, why }; await env.DB.prepare("INSERT INTO settings (key, value, updated_at) VALUES ('bulk_skip2', ?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value, updated_at = excluded.updated_at").bind(JSON.stringify(s), Date.now()).run(); log('пропускаємо', cc, 'на', days, 'дн.:', why); }
 
+async function unskipCountry(cc) { const s = await getSkip(); if (!s[cc]) return; delete s[cc]; await env.DB.prepare("INSERT INTO settings (key, value, updated_at) VALUES ('bulk_skip2', ?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value, updated_at = excluded.updated_at").bind(JSON.stringify(s), Date.now()).run(); }
 async function pickCountry(done) {
   const skip = await getSkip();
   return ((await queueCountries(env)).find(r => !done.has(r.country) && !(skip[r.country] && skip[r.country].until > Date.now())) || {}).country || null;
@@ -59,7 +60,7 @@ async function processCountry(cc) {
     run('curl', ['-L', '--fail', '--retry', '3', '--retry-delay', '10', '-sS', '-o', inPbf, pbf.url]);
     log(`завантажено ${fileGB(inPbf).toFixed(2)} ГБ за ${Math.round((Date.now() - t1) / 1000)} с`);
     run('osmium', ['tags-filter', inPbf, ...osmiumExpressions(), '-o', outPbf, '--overwrite']); fs.rmSync(inPbf);
-    run('osmium', ['export', outPbf, '-f', 'geojsonseq', '--add-unique-id=type_id', '--ignore-errors', '-o', seq, '--overwrite']); fs.rmSync(outPbf);
+    run('osmium', ['export', outPbf, '-f', 'geojsonseq', '--add-unique-id=type_id', '-o', seq, '--overwrite']); fs.rmSync(outPbf);
     log(`експорт ${fileGB(seq).toFixed(2)} ГБ`);
 
     const index = new CityIndex(cities); let lines = 0, kept = 0;
@@ -87,7 +88,7 @@ while (Date.now() - T0 < BUDGET) {
   const cc = forced.length ? forced.shift() : (process.argv.length > 2 ? null : await pickCountry(done));
   if (!cc) { log('черга порожня'); break; }
   done.add(cc);
-  try { await processCountry(cc); await save({ at: Date.now(), out: { bulk: cc, status: 'done' } }); }
-  catch (e) { log('ПОМИЛКА', cc, String(e && e.stack || e).slice(0, 500)); await skipCountry(cc, String(e && e.message || e).slice(0, 120)); await save({ at: Date.now(), error: `bulk ${cc}: ${String(e && e.message || e).slice(0, 200)}` }); }
+  try { await processCountry(cc); await unskipCountry(cc); await save({ at: Date.now(), out: { bulk: cc, status: 'done' } }); }
+  catch (e) { log('ПОМИЛКА', cc, String(e && e.stack || e).slice(0, 500)); await skipCountry(cc, String(e && e.message || e).slice(0, 120), 0.25); await save({ at: Date.now(), error: `bulk ${cc}: ${String(e && e.message || e).slice(0, 200)}` }); }
 }
 log('завершено');
