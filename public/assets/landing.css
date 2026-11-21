@@ -72,3 +72,6 @@ footer a{color:var(--muted);margin:0 10px}
 .cbx li.none{cursor:default;color:var(--muted)}
 .cbx li.none:hover{background:transparent}
 .cbx mark{background:transparent;color:var(--gold2);font-weight:600}
+
+.logo-img{display:block;height:58px;width:auto}.legal .logo{display:inline-block}
+@media(max-width:560px){.logo-img{height:44px}}

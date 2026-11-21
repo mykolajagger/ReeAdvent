@@ -22,7 +22,7 @@ function toast(t) { const el = $('#toast'); el.textContent = t; el.classList.add
 
 /* ---------- Вхід ---------- */
 function showLogin(msg) {
-  root.innerHTML = `<div class="login"><div class="card"><div class="logo">Ree<em>Advent</em></div><div class="muted">Адмінка</div>
+  root.innerHTML = `<div class="login"><div class="card"><div class="logo"><img class="logo-img" src="/assets/logo.png" alt="ReeAdvent" width="150" height="55"></div><div class="muted">Адмінка</div>
     <form id="lf" style="display:grid;gap:10px"><input id="em" type="email" placeholder="пошта адміністратора" autocomplete="email" required><button class="btn" id="sb">Надіслати посилання для входу</button></form>
     <div class="muted" id="lm">${esc(msg || '')}</div></div></div>`;
   $('#lf').onsubmit = async e => {
@@ -40,7 +40,7 @@ async function consumeLogin() {
 /* ---------- Каркас ---------- */
 const NAV = [['dashboard', 'Дашборд'], ['orders', 'Замовлення'], ['customers', 'Клієнти'], ['promos', 'Промокоди'], ['inbox', 'Підтримка'], ['settings', 'Налаштування'], ['audit', 'Журнал дій']];
 async function shell() {
-  root.innerHTML = `<div class="shell"><aside class="side"><div class="logo">Ree<em>Advent</em></div>
+  root.innerHTML = `<div class="shell"><aside class="side"><div class="logo"><img class="logo-img" src="/assets/logo.png" alt="ReeAdvent" width="120" height="44"></div>
     <nav class="nav">${NAV.map(([k, t]) => `<a data-v="${k}" class="${view === k ? 'on' : ''}" href="#/${k}">${t}${k === 'inbox' ? '<span class="badge" id="ib" hidden></span>' : ''}</a>`).join('')}</nav>
     <div class="who">${esc(me.email)}<br><a href="#" id="lo">Вийти</a></div></aside><main id="main"></main></div>`;
   $('#lo').onclick = async e => { e.preventDefault(); try { await api('POST', '/api/admin/auth/logout', {}); } catch {} me = null; showLogin(); };
