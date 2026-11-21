@@ -191,10 +191,18 @@ export async function queueCity(env, country, name) {
   await ensureCity(env, country, name); return true;
 }
 
+/** runVenues із записом результату (або помилки) останнього запуску в settings: видно в адмінці без доступу до журналів Cloudflare. */
+export async function runVenuesLogged(env, opts) {
+  const save = v => env.DB.prepare("INSERT INTO settings (key, value, updated_at) VALUES ('venues_last', ?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value, updated_at = excluded.updated_at").bind(JSON.stringify(v).slice(0, 900), Date.now()).run().catch(() => {});
+  try { const out = await runVenues(env, opts); await save({ at: Date.now(), out }); return out; }
+  catch (e) { await save({ at: Date.now(), error: String(e && e.message || e).slice(0, 300) }); throw e; }
+}
+
 export async function venueStats(env) {
-  const r = await env.DB.prepare("SELECT COUNT(*) AS cities, SUM(status = 'ready') AS ready, SUM(status IN ('pending','working')) AS pending, SUM(status = 'failed') AS failed FROM venue_cities WHERE alias_of IS NULL").first();
+  const r = await env.DB.prepare("SELECT COUNT(*) AS cities, SUM(status = 'ready') AS ready, SUM(status = 'pending') AS pending, SUM(status = 'working') AS working, SUM(status = 'failed') AS failed FROM venue_cities WHERE alias_of IS NULL").first();
   const v = await env.DB.prepare('SELECT COUNT(*) AS n FROM venues').first(), rt = await env.DB.prepare('SELECT COUNT(*) AS n FROM venue_ratings').first();
-  return { cities: r.cities || 0, ready: r.ready || 0, pending: r.pending || 0, failed: r.failed || 0, venues: v.n, ratings: rt.n };
+  const lastRow = await env.DB.prepare("SELECT value FROM settings WHERE key = 'venues_last'").first(); let last = null; try { last = lastRow ? JSON.parse(lastRow.value) : null; } catch {}
+  return { cities: r.cities || 0, ready: r.ready || 0, pending: r.pending || 0, working: r.working || 0, failed: r.failed || 0, venues: v.n, ratings: rt.n, last };
 }
 
 // ---------- Видача рекомендацій і оцінки ----------

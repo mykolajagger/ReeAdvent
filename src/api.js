@@ -1,6 +1,6 @@
 import { GIFTS, INTIMATE, ACTIVITIES, QUESTIONS, REGIONS, generateSchedule, sanitizeSurvey, giftView, intimView, actView, questionText, placesQuery } from './logic.js';
 import { recommend } from './places.js';
-import { ensureCity, runVenues, venuePicks, rateVenue, catOfQuery, catOfGift } from './venues.js';
+import { ensureCity, runVenuesLogged as runVenues, venuePicks, rateVenue, catOfQuery, catOfGift } from './venues.js';
 import { createInvoice, verifyPaid, invoiceStatus } from './payments.js';
 import { verifyTurnstile } from './turnstile.js';
 import { handleAdmin } from './admin.js';

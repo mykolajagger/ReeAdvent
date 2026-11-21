@@ -1,6 +1,6 @@
 import PostalMime from 'postal-mime';
 import { saveInbound } from './ingest.js';
-import { runVenues } from '../../../src/venues.js';
+import { runVenuesLogged } from '../../../src/venues.js';
 
 const MAX_BYTES = 5 * 1024 * 1024;
 
@@ -10,8 +10,8 @@ export default {
     // "*/2 * * * *" — наповнення бази закладів (VENUES_PER_RUN міст за запуск); "1 * * * *" — нагадування, курси, очищення
     if (event.cron !== '1 * * * *') {
       // Наповнення бази закладів іде тут, у Worker: запити до Overpass тривають довше за ліміт HTTP-запиту (100 с), а запуск за розкладом може працювати до 15 хв
-      const out = await runVenues(env, { budgetMs: 100000 });
-      console.log('venues', JSON.stringify(out).slice(0, 600));
+      try { const out = await runVenuesLogged(env, { budgetMs: 100000 }); console.log('venues', JSON.stringify(out).slice(0, 600)); }
+      catch (e) { console.error('venues failed', String(e && e.stack || e).slice(0, 600)); }
       return;
     }
     if (!env.CRON_SECRET || !env.BASE_URL) { console.error('CRON_SECRET/BASE_URL are not set'); return; }
