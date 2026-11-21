@@ -135,19 +135,25 @@ async function fillCity(env, c, fetchImpl) {
     return { city: c.key, status: 'ready', venues: rows.length };
   } catch (e) {
     const failed = c.attempts + 1 >= 3;
-    await env.DB.prepare('UPDATE venue_cities SET attempts = attempts + 1, status = ?, error = ?, fetched_at = ? WHERE id = ?').bind(failed ? 'failed' : (c.status === 'ready' ? 'ready' : 'pending'), String(e.message || e).slice(0, 120), now, c.id).run();
+    await env.DB.prepare('UPDATE venue_cities SET attempts = attempts + 1, status = ?, error = ?, fetched_at = ? WHERE id = ?').bind(failed ? 'failed' : (c.prev === 'ready' ? 'ready' : 'pending'), String(e.message || e).slice(0, 120), now, c.id).run();
     return { city: c.key, status: failed ? 'failed' : 'retry', error: String(e.message || e).slice(0, 80) };
   }
 }
 
 /** Один крок cron (кожні ~10 хв): наповнює одне місто. Спершу нові міста клієнтів, потім найбільші, вночі (UTC 0–4) — тижневе оновлення. */
+/** Бере наступне місто й «захоплює» його (status = 'working'), щоб паралельні запуски не брали те саме. Зависле захоплення (> 10 хв) вважається вільним. */
 async function nextCity(env, now) {
-  let c = await env.DB.prepare("SELECT * FROM venue_cities WHERE status = 'pending' AND alias_of IS NULL ORDER BY priority DESC, requested_at LIMIT 1").first();
-  if (!c) {
-    const h = new Date(now).getUTCHours();
-    if (h >= 0 && h < 4) c = await env.DB.prepare("SELECT * FROM venue_cities WHERE status IN ('ready','failed') AND alias_of IS NULL AND lat IS NOT NULL AND (fetched_at IS NULL OR fetched_at < ?) ORDER BY fetched_at LIMIT 1").bind(now - REFRESH_MS).first();
+  for (let i = 0; i < 5; i++) {
+    let c = await env.DB.prepare("SELECT * FROM venue_cities WHERE alias_of IS NULL AND (status = 'pending' OR (status = 'working' AND fetched_at < ?)) ORDER BY priority DESC, requested_at LIMIT 1").bind(Date.now() - 600000).first();
+    if (!c) {
+      const h = new Date(now).getUTCHours();
+      if (h >= 0 && h < 4) c = await env.DB.prepare("SELECT * FROM venue_cities WHERE status IN ('ready','failed') AND alias_of IS NULL AND lat IS NOT NULL AND (fetched_at IS NULL OR fetched_at < ?) ORDER BY fetched_at LIMIT 1").bind(now - REFRESH_MS).first();
+    }
+    if (!c) return null;
+    const r = await env.DB.prepare("UPDATE venue_cities SET status = 'working', fetched_at = ? WHERE id = ? AND status = ? AND COALESCE(fetched_at, 0) = ?").bind(Date.now(), c.id, c.status, c.fetched_at || 0).run();
+    if (r.meta?.changes) return { ...c, prev: c.status === 'working' ? 'pending' : c.status };
   }
-  return c;
+  return null;
 }
 /** За запуск обробляється VENUES_PER_RUN міст (за замовчуванням 1, максимум 10), але не довше ~40 с. */
 export async function runVenues(env, { fetchImpl = fetch, now = Date.now() } = {}) {
@@ -179,7 +185,7 @@ export async function queueCity(env, country, name) {
 }
 
 export async function venueStats(env) {
-  const r = await env.DB.prepare("SELECT COUNT(*) AS cities, SUM(status = 'ready') AS ready, SUM(status = 'pending') AS pending, SUM(status = 'failed') AS failed FROM venue_cities WHERE alias_of IS NULL").first();
+  const r = await env.DB.prepare("SELECT COUNT(*) AS cities, SUM(status = 'ready') AS ready, SUM(status IN ('pending','working')) AS pending, SUM(status = 'failed') AS failed FROM venue_cities WHERE alias_of IS NULL").first();
   const v = await env.DB.prepare('SELECT COUNT(*) AS n FROM venues').first(), rt = await env.DB.prepare('SELECT COUNT(*) AS n FROM venue_ratings').first();
   return { cities: r.cities || 0, ready: r.ready || 0, pending: r.pending || 0, failed: r.failed || 0, venues: v.n, ratings: rt.n };
 }

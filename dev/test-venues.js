@@ -103,4 +103,10 @@ assert(await queueCity(env, 'pl', 'Zakopane2')); assert(!(await queueCity(env, '
 raw.prepare("UPDATE venue_cities SET status = 'failed', error = 'geocode_not_found' WHERE key = 'UA|нікуди'").run();
 const pr = await venueProblems(env); assert(pr.some(p => p.name === 'Нікуди' && p.status === 'failed'), JSON.stringify(pr));
 assert((await retryCities(env, null)) >= 1); assert.equal(raw.prepare("SELECT status FROM venue_cities WHERE key = 'UA|нікуди'").get().status, 'pending');
+// ----- паралельні запуски не беруть те саме місто
+raw.prepare("UPDATE venue_cities SET status = 'ready', fetched_at = ?").run(Date.now() + 864e5 * 400);
+for (const n of ['Яремче', 'Косів']) { await ensureCity(env, 'UA', n); raw.prepare('UPDATE venue_cities SET lat = 48.4 + ?, lon = 24.5 WHERE key = ?').run(Math.random(), cityKey('UA', n)); }
+const par = await Promise.all([runVenues(env, { fetchImpl: mockFetch }), runVenues(env, { fetchImpl: mockFetch })]);
+assert.deepEqual(par.map(x => x.city).sort(), ['UA|косів', 'UA|яремче'], JSON.stringify(par));
+assert.equal(raw.prepare("SELECT COUNT(*) AS n FROM venue_cities WHERE status = 'working'").get().n, 0, 'захоплення знято');
 console.log('VENUES OK');

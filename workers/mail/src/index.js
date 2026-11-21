@@ -7,8 +7,8 @@ export default {
   // Щогодини (Cron Trigger): нагадування о 09:01 за часом календаря та очищення застарілих даних виконує основний сайт
   async scheduled(event, env, ctx) {
     if (!env.CRON_SECRET || !env.BASE_URL) { console.error('CRON_SECRET/BASE_URL are not set'); return; }
-    // "*/10 * * * *" — наповнення бази закладів (одне місто за запуск); "1 * * * *" — нагадування, курси, очищення
-    const job = event.cron === '*/10 * * * *' ? 'venues' : 'daily';
+    // "*/2 * * * *" — наповнення бази закладів (VENUES_PER_RUN міст за запуск); "1 * * * *" — нагадування, курси, очищення
+    const job = event.cron !== '1 * * * *' ? 'venues' : 'daily';
     const res = await fetch(`${env.BASE_URL}/api/cron/${job}`, { method: 'POST', headers: { 'x-cron-secret': env.CRON_SECRET, 'content-type': 'application/json' }, body: '{}' });
     console.log('cron/' + job, res.status, await res.text());
   },
