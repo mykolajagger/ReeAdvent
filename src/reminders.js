@@ -61,7 +61,7 @@ export async function purgeOld(env) {
   for (const c of cals) {
     const mem = await q(env, 'SELECT id FROM members WHERE calendar_id = ?', c.id);
     const stmts = [];
-    for (const m of mem) for (const t of ['answers', 'progress', 'sessions', 'login_tokens', 'login_codes', 'reminders_sent']) stmts.push(env.DB.prepare(`DELETE FROM ${t} WHERE member_id = ?`).bind(m.id));
+    for (const m of mem) for (const t of ['answers', 'progress', 'sessions', 'login_tokens', 'login_codes', 'reminders_sent', 'venue_ratings']) stmts.push(env.DB.prepare(`DELETE FROM ${t} WHERE member_id = ?`).bind(m.id));
     stmts.push(env.DB.prepare('DELETE FROM members WHERE calendar_id = ?').bind(c.id), env.DB.prepare('DELETE FROM calendars WHERE id = ?').bind(c.id),
       env.DB.prepare("UPDATE orders SET name_a = '—', name_b = '—', email_a = ?, email_b = ?, payer_email = NULL, note = NULL WHERE id = ?").bind(`deleted-a-${c.order_id}@deleted.invalid`, `deleted-b-${c.order_id}@deleted.invalid`, c.order_id));
     await env.DB.batch(stmts);

@@ -1,5 +1,6 @@
 import { GIFTS, INTIMATE, ACTIVITIES, QUESTIONS, REGIONS, generateSchedule, sanitizeSurvey, giftView, intimView, actView, questionText, placesQuery } from './logic.js';
 import { recommend } from './places.js';
+import { ensureCity, runVenues, venuePicks, rateVenue, catOfQuery } from './venues.js';
 import { createInvoice, verifyPaid, invoiceStatus } from './payments.js';
 import { verifyTurnstile } from './turnstile.js';
 import { handleAdmin } from './admin.js';
@@ -37,6 +38,7 @@ export async function handle(request, env) {
     if (m === 'POST' && (r = path.match(/^\/api\/orders\/([\w-]+)\/resend$/))) return await orderResend(env, r[1]);
     if (m === 'GET' && path === '/api/unsub') return await unsub(env, url);
     if (m === 'POST' && path === '/api/cron/daily') return await cronDaily(request, env);
+    if (m === 'POST' && path === '/api/cron/venues') return await cronDaily(request, env, runVenues);
     if (m === 'POST' && path === '/api/payments/monobank/webhook') return await monoWebhook(request, env);
     if (m === 'POST' && path === '/api/auth/request') return await authRequest(request, env);
     if (m === 'POST' && path === '/api/auth/verify') return await authVerify(request, env);
@@ -52,6 +54,7 @@ export async function handle(request, env) {
     if (m === 'GET' && (r = path.match(/^\/api\/day\/(\d+)$/))) return json(await getDay(env, member, +r[1]));
     if (m === 'POST' && path === '/api/answer') return json(await saveAnswer(request, env, member));
     if (m === 'GET' && (r = path.match(/^\/api\/places\/(\d+)$/))) return json(await placesFor(env, member, +r[1]));
+    if (m === 'POST' && (r = path.match(/^\/api\/venues\/(\d+)\/rate$/))) { const b = await readJson(request); const out = await rateVenue(env, { memberId: member.id, country: member.country, city: member.city, venueId: +r[1], stars: Number(b.stars) }); if (!out.ok) throw new HttpError(out.error === 'too_many' ? 429 : out.error === 'not_found' ? 404 : 400, out.error); return json(out); }
     if (m === 'GET' && path === '/api/history') return json(await history(env, member));
     if (m === 'POST' && path === '/api/mark') return json(await mark(request, env, member));
     throw new HttpError(404, 'not_found');
@@ -112,6 +115,7 @@ async function createOrder(request, env) {
   await run(env, `INSERT INTO orders (id, created_at, status, amount_kop, list_kop, discount_kop, promo_code, promo_id, name_a, email_a, name_b, email_b, city, region, start_date, payer_email, invoice_id, consent_at, lang, country, tz)
     VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`, order.id, Date.now(), 'pending', price.final, price.list, price.discount, promo ? promo.code : null, promo ? promo.id : null,
     o.name_a, o.email_a, o.name_b, o.email_b, o.city, o.region, o.start_date, o.payer_email, inv.invoiceId, Date.now(), o.lang, o.country, o.tz);
+  await ensureCity(env, o.country, o.city); // місто ставиться в пріоритетну чергу наповнення бази закладів (якщо його ще немає)
   if (free) await markPaid(env, order.id); // 100% знижка: календар створюється одразу, без оплати
   return json({ ok: true, orderId: order.id, payUrl: inv.pageUrl, free, amountKop: price.final });
 }
@@ -371,12 +375,12 @@ async function unsub(env, url) {
 }
 
 // ---------- Щоденний запуск (Cron Worker) ----------
-async function cronDaily(request, env) {
+async function cronDaily(request, env, job = runDaily) {
   const key = env.CRON_SECRET;
   if (!key || key.length < 16) throw new HttpError(404, 'not_found');
   const a = await sha256(request.headers.get('x-cron-secret') || ''), b = await sha256(key);
   if (a !== b) throw new HttpError(404, 'not_found');
-  return json({ ok: true, ...(await runDaily(env)) });
+  return json({ ok: true, ...(await job(env)) });
 }
 
 // ---------- Вхід через Google ----------
@@ -471,6 +475,7 @@ async function placesFor(env, mem, d) {
   if (!answered) throw new HttpError(403, 'answer_first');
   const plan = JSON.parse(mem.schedule_json).days[d];
   const query = placesQuery(ACTIVITIES[plan.act], mem.city, mem.lang);
-  const places = query ? await recommend(env, { query, lang: mem.lang, country: mem.country, memberId: mem.id, day: d }) : [];
+  let places = query ? await recommend(env, { query, lang: mem.lang, country: mem.country, memberId: mem.id, day: d }) : [];
+  if (!places.length) places = await venuePicks(env, { country: mem.country, city: mem.city, cat: catOfQuery(ACTIVITIES[plan.act].q), seedKey: mem.id + ':' + d }); // власна база (OpenStreetMap + оцінки користувачів)
   return { ok: true, places };
 }

@@ -240,14 +240,20 @@ const ICONS = {
 const placesCache = {};
 function placesHtml(day) {
   const p = placesCache[day]; if (!p || !p.length) return '';
-  return `<div class="muted" style="font-size:12px;letter-spacing:.12em;text-transform:uppercase;margin-top:4px">${L('Рекомендуємо за рейтингом', 'Top rated nearby')}</div><ul class="plist">${p.map(x => `<li><a href="${esc(x.url)}" target="_blank" rel="noopener noreferrer"><b>${esc(x.name)}</b></a><span class="stars">★ ${x.rating} <small>(${x.count})</small></span>${x.address ? `<small class="muted">${esc(x.address)}</small>` : ''}</li>`).join('')}</ul><div class="muted" style="font-size:11px">${L('Рейтинги: Google Maps. Години роботи перевіряйте на мапі.', 'Ratings: Google Maps. Check opening hours on the map.')}</div>`;
+  return `<div class="muted" style="font-size:12px;letter-spacing:.12em;text-transform:uppercase;margin-top:4px">${L('Рекомендуємо за рейтингом', 'Top rated nearby')}</div><ul class="plist">${p.map(x => `<li><a href="${esc(x.url)}" target="_blank" rel="noopener noreferrer"><b>${esc(x.name)}</b></a>${x.rating ? `<span class="stars">★ ${x.rating} <small>(${x.count})</small></span>` : ''}${x.address ? `<small class="muted">${esc(x.address)}</small>` : ''}${x.id ? `<span class="rate" data-v="${x.id}"><small class="muted">${L('Ваша оцінка:', 'Your rating:')}</small>${[1, 2, 3, 4, 5].map(n => `<button type="button" data-s="${n}" aria-label="${n}">★</button>`).join('')}</span>` : ''}</li>`).join('')}</ul><div class="muted" style="font-size:11px">${p.some(x => x.id) ? L('Добірка за даними OpenStreetMap і оцінками користувачів ReeAdvent. Перевіряйте години роботи на мапі. © <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener noreferrer">OpenStreetMap contributors</a>', 'Picked from OpenStreetMap data and ReeAdvent users’ ratings. Check opening hours on the map. © <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener noreferrer">OpenStreetMap contributors</a>') : L('Рейтинги: Google Maps. Години роботи перевіряйте на мапі.', 'Ratings: Google Maps. Check opening hours on the map.')}</div>`;
+}
+function bindRate(box) {
+  box.querySelectorAll('.rate').forEach(r => r.addEventListener('click', async e => {
+    const b = e.target.closest('button[data-s]'); if (!b) return; const s = +b.dataset.s;
+    try { await api('POST', `/api/venues/${r.dataset.v}/rate`, { stars: s }); r.querySelectorAll('button').forEach(x => x.classList.toggle('on', +x.dataset.s <= s)); toast(L('Дякуємо за оцінку!', 'Thanks for rating!')); } catch { toast(L('Не вдалося зберегти оцінку', 'Could not save the rating')); }
+  }));
 }
 async function loadPlaces(day) {
   if (day in placesCache) return;
   placesCache[day] = [];
   try { const key = `pl_${day}_${st.me.name}`; let v = null; try { v = JSON.parse(sessionStorage.getItem(key)); } catch {}
     if (!v) { v = (await api('GET', '/api/places/' + day)).places; try { sessionStorage.setItem(key, JSON.stringify(v)); } catch {} }
-    placesCache[day] = v; const box = $('#places-box'); if (box) box.innerHTML = placesHtml(day);
+    placesCache[day] = v; const box = $('#places-box'); if (box) { box.innerHTML = placesHtml(day); bindRate(box); }
     if (v.length) { const ml = document.querySelector('.maplink .ml'); if (ml) ml.textContent = L('Шукати самим на мапі', 'Search the map yourself'); } // з рекомендаціями пошук стає альтернативою
   } catch { /* рекомендації необов'язкові */ }
 }

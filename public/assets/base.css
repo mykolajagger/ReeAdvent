@@ -154,3 +154,8 @@ textarea:focus{outline:none;border-color:var(--gold)}
 .plist a{color:var(--ink);text-decoration:none}.plist a:hover{color:var(--gold2)}
 .plist .stars{color:var(--gold);font-weight:600;white-space:nowrap}.plist .stars small{color:var(--muted);font-weight:400}
 .plist li>small{grid-column:1/-1}
+
+.plist .rate{grid-column:1/-1;display:flex;align-items:center;gap:2px}
+.plist .rate small{margin-right:6px}
+.plist .rate button{background:none;border:0;padding:2px 3px;font-size:18px;line-height:1;color:var(--line);cursor:pointer}
+.plist .rate button.on,.plist .rate button:hover{color:var(--gold)}

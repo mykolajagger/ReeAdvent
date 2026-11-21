@@ -1,0 +1,5 @@
+CREATE TABLE venue_cities (id INTEGER PRIMARY KEY AUTOINCREMENT, key TEXT NOT NULL UNIQUE, country TEXT NOT NULL, name TEXT NOT NULL, lat REAL, lon REAL, status TEXT NOT NULL DEFAULT 'pending', priority INTEGER NOT NULL DEFAULT 0, alias_of INTEGER, attempts INTEGER NOT NULL DEFAULT 0, venues_count INTEGER NOT NULL DEFAULT 0, requested_at INTEGER NOT NULL, fetched_at INTEGER, error TEXT);
+CREATE INDEX idx_vc_status ON venue_cities (status, priority DESC, requested_at);
+CREATE TABLE venues (id INTEGER PRIMARY KEY AUTOINCREMENT, city_id INTEGER NOT NULL, osm TEXT NOT NULL, cat TEXT NOT NULL, name TEXT NOT NULL, address TEXT, lat REAL, lon REAL, prior REAL NOT NULL DEFAULT 0, r_sum INTEGER NOT NULL DEFAULT 0, r_cnt INTEGER NOT NULL DEFAULT 0, seen_at INTEGER NOT NULL, UNIQUE (city_id, osm, cat));
+CREATE INDEX idx_v_city_cat ON venues (city_id, cat);
+CREATE TABLE venue_ratings (venue_id INTEGER NOT NULL, member_id TEXT NOT NULL, stars INTEGER NOT NULL, created_at INTEGER NOT NULL, PRIMARY KEY (venue_id, member_id));
