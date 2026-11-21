@@ -1,13 +1,13 @@
 // Налаштування, які власник змінює в адмінці: ціна календаря й відсотки для дашборда.
 export const DEFAULTS = { fee_percent: 0, tax_percent: 5, military_percent: 1 };
-const PERCENT_KEYS = Object.keys(DEFAULTS), KEYS = [...PERCENT_KEYS, 'price_uah'];
+const PERCENT_KEYS = Object.keys(DEFAULTS), KEYS = [...PERCENT_KEYS, 'price_uah', 'usd_rate'];
 export { KEYS };
 
 const bad = code => { const e = new Error(code); e.status = 400; e.code = code; return e; };
 
 export async function getSettings(env) {
   const rows = (await env.DB.prepare('SELECT key, value FROM settings').all()).results;
-  const out = { ...DEFAULTS, fee_percent: Number(env.ACQUIRING_FEE_PERCENT ?? DEFAULTS.fee_percent) || 0, price_uah: Number(env.PRICE_UAH) || 0 };
+  const out = { ...DEFAULTS, fee_percent: Number(env.ACQUIRING_FEE_PERCENT ?? DEFAULTS.fee_percent) || 0, price_uah: Number(env.PRICE_UAH) || 0, usd_rate: Number(env.USD_RATE) || 41 };
   for (const r of rows) if (KEYS.includes(r.key) && isFinite(Number(r.value))) out[r.key] = Number(r.value);
   return out;
 }
@@ -22,6 +22,7 @@ export async function saveSettings(env, input) {
     if (input[k] === undefined) continue;
     const v = Number(String(input[k]).replace(',', '.'));
     if (k === 'price_uah') { if (!isFinite(v) || v < 1 || v > 100000) throw bad('bad_price'); }
+    else if (k === 'usd_rate') { if (!isFinite(v) || v < 1 || v > 1000) throw bad('bad_rate'); }
     else if (!isFinite(v) || v < 0 || v > 100) throw bad('bad_percent');
     const r = Math.round(v * 100) / 100; saved[k] = r;
     stmts.push(env.DB.prepare('INSERT INTO settings (key, value, updated_at) VALUES (?,?,?) ON CONFLICT(key) DO UPDATE SET value = excluded.value, updated_at = excluded.updated_at').bind(k, String(r), Date.now()));

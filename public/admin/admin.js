@@ -16,7 +16,7 @@ async function api(method, path, body) {
   if (!r.ok || j.ok === false) { const e = new Error(j.error || 'server_error'); e.code = j.error || 'server_error'; e.detail = j.detail; if (e.code === 'admin_auth') { me = null; showLogin(); } throw e; }
   return j;
 }
-const ERR = { refund_failed: 'Monobank не виконав повернення. Замовлення не змінено', bad_percent: 'Відсоток: число від 0 до 100', bad_price: 'Ціна: від 1 до 100000 грн', admin_auth: 'Сесія закінчилась', code_exists: 'Такий код уже є', bad_code: 'Код: 3–32 символи (літери, цифри, - _)', bad_value: 'Невірне значення знижки', bad_max: 'Ліміт: ціле число від 1', bad_date: 'Невірна дата', already_started: 'Календар уже стартував: дату змінити не можна', same_email: 'Пошти мають бути різні', bad_email: 'Невірна пошта', bad_names: 'Вкажіть імена', not_paid: 'Замовлення не оплачене', already_refunded: 'Повернення вже оформлено', bad_amount: 'Сума більша за оплачену', empty: 'Напишіть текст відповіді', too_many: 'Забагато спроб', csrf: 'Помилка захисту, оновіть сторінку' };
+const ERR = { refund_failed: 'Monobank не виконав повернення. Замовлення не змінено', bad_percent: 'Відсоток: число від 0 до 100', bad_rate: 'Курс: від 1 до 1000', bad_price: 'Ціна: від 1 до 100000 грн', admin_auth: 'Сесія закінчилась', code_exists: 'Такий код уже є', bad_code: 'Код: 3–32 символи (літери, цифри, - _)', bad_value: 'Невірне значення знижки', bad_max: 'Ліміт: ціле число від 1', bad_date: 'Невірна дата', already_started: 'Календар уже стартував: дату змінити не можна', same_email: 'Пошти мають бути різні', bad_email: 'Невірна пошта', bad_names: 'Вкажіть імена', not_paid: 'Замовлення не оплачене', already_refunded: 'Повернення вже оформлено', bad_amount: 'Сума більша за оплачену', empty: 'Напишіть текст відповіді', too_many: 'Забагато спроб', csrf: 'Помилка захисту, оновіть сторінку' };
 const errText = e => (ERR[e.code] || 'Щось пішло не так: ' + (e.code || e.message)) + (e.detail ? ` (${e.detail})` : '');
 function toast(t) { const el = $('#toast'); el.textContent = t; el.classList.add('show'); clearTimeout(toast.t); toast.t = setTimeout(() => el.classList.remove('show'), 2800); }
 
@@ -146,7 +146,7 @@ async function openOrder(id) {
   const started = cal && cal.today > 0;
   ov.innerHTML = `<div class="panel"><header><div><h2>Замовлення</h2><h1 style="font-size:26px">${esc(o.name_a)} і ${esc(o.name_b)}</h1><div class="muted mono">${esc(o.id)}</div></div><div class="row">${pill(o.status)}<button class="btn ghost sm" id="x">Закрити</button></div></header>
   <div class="card sec"><h2>Оплата</h2><dl class="kv"><dt>Створено</dt><dd>${dt(o.created_at)}</dd><dt>Оплачено</dt><dd>${dt(o.paid_at)}</dd><dt>Сума</dt><dd><b>${UAH(o.amount_kop)}</b>${o.discount_kop ? ` · за прайсом ${UAH(o.list_kop)}, знижка ${UAH(o.discount_kop)}${o.promo_code ? ` (<b>${esc(o.promo_code)}</b>)` : ''}` : ''}</dd>
-    ${o.refunded_at ? `<dt>Повернення</dt><dd>${UAH(o.refund_kop)} · ${dt(o.refunded_at)} · ${({ manual: 'вручну', processing: 'Monobank: обробляється', success: 'Monobank: виконано' })[o.refund_status] || ''}</dd>` : ''}<dt>Інвойс</dt><dd class="mono">${esc(o.invoice_id || '—')}</dd></dl></div>
+    ${o.refunded_at ? `<dt>Повернення</dt><dd>${UAH(o.refund_kop)} · ${dt(o.refunded_at)} · ${({ manual: 'вручну', processing: 'Monobank: обробляється', success: 'Monobank: виконано' })[o.refund_status] || ''}</dd>` : ''}<dt>Інвойс</dt><dd class="mono">${esc(o.invoice_id || '—')}</dd><dt>Мова · країна</dt><dd>${esc(o.lang || 'uk')} · ${esc(o.country || 'UA')} · ${esc(o.tz || 'Europe/Kyiv')}</dd></dl></div>
   <div class="card sec"><h2>Контакти й дата старту</h2><div class="form2">
     <label class="f">Ім'я 1<input id="nA" value="${esc(o.name_a)}" maxlength="30"></label><label class="f">Пошта 1<input id="eA" type="email" value="${esc(o.email_a)}"></label>
     <label class="f">Ім'я 2<input id="nB" value="${esc(o.name_b)}" maxlength="30"></label><label class="f">Пошта 2<input id="eB" type="email" value="${esc(o.email_b)}"></label>
@@ -243,7 +243,9 @@ async function settings() {
   <div class="card sec" style="max-width:620px"><h2>Ціна календаря</h2>
     <label class="f">Ціна для клієнтів, грн<input id="s0" type="number" step="0.01" min="1" max="100000" value="${v.price_uah}" required></label>
     <div class="muted">Діє одразу на сайті й для нових замовлень. Уже створені замовлення, які ще не оплачено, лишаються за ціною на момент оформлення. Промокоди рахуються від цієї ціни.</div>
-    <div><button class="btn" id="sp">Зберегти ціну</button></div></div>
+    <label class="f">Курс для показу ціни іноземним клієнтам, грн за 1 USD<input id="s00" type="number" step="0.01" min="1" max="1000" value="${v.usd_rate}" required></label>
+    <div class="muted">Лише для орієнтовного показу «≈ $N» в англомовній версії й для перерахунку бюджету подарунка. Списання завжди у гривнях; конвертує банк клієнта.</div>
+    <div><button class="btn" id="sp">Зберегти</button></div></div>
   <div class="card sec" style="max-width:620px;margin-top:14px"><h2>Відсотки для розрахунку прибутку</h2>
     <div class="muted">Ці відсотки використовує лише дашборд для орієнтовного чистого прибутку. На ціну для клієнтів і на самі платежі вони не впливають.</div>
     <form id="sf" class="grid" style="gap:12px">
@@ -254,7 +256,7 @@ async function settings() {
     <div class="muted">Орієнтовні значення: ЄП 3 група 5% і військовий збір 1%, комісію візьміть із договору з банком. ЄСВ (фіксована сума) не враховується. Уточніть у бухгалтера.</div>
     <div><button class="btn" id="ss">Зберегти</button></div></div>
 `;
-  $('#sp').onclick = async () => { const el = $('#s0'); if (!el.reportValidity()) return; try { await api('POST', '/api/admin/settings', { price_uah: el.value }); toast('Ціну збережено: ' + UAH(Math.round(Number(el.value) * 100))); } catch (e) { toast(errText(e)); } };
+  $('#sp').onclick = async () => { const el = $('#s0'); if (!el.reportValidity()) return; try { if (!$('#s00').reportValidity()) return; await api('POST', '/api/admin/settings', { price_uah: el.value, usd_rate: $('#s00').value }); toast('Збережено: ' + UAH(Math.round(Number(el.value) * 100))); } catch (e) { toast(errText(e)); } };
   $('#ss').onclick = async () => { if (!$('#sf').reportValidity()) return; try { await api('POST', '/api/admin/settings', { fee_percent: $('#s1').value, tax_percent: $('#s2').value, military_percent: $('#s3').value }); toast('Збережено'); } catch (e) { toast(errText(e)); } };
 }
 

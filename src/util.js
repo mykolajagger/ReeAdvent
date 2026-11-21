@@ -53,6 +53,18 @@ export function windowDates(startDate) {
   return Array.from({ length: DAYS }, (_, i) => { const dt = new Date((s + i) * 86400000); return { month: dt.getUTCMonth() + 1, day: dt.getUTCDate(), weekday: dt.getUTCDay() }; });
 }
 
+/** Момент UTC (мс), коли в часовому поясі tz настає локальний час y-m-d h:00. */
+export function zonedToUtc(y, m, d, h, tz) {
+  const want = Date.UTC(y, m - 1, d, h); let t = want;
+  for (let i = 0; i < 3; i++) { const p = localParts(new Date(t), tz); const diff = Date.UTC(p.y, p.m - 1, p.d, p.h) - want; if (!diff) break; t -= diff; }
+  return t;
+}
+/** Точні моменти відкриття 24 вікон (мс UTC) за часом календаря. */
+export function unlockTimes(startDate, tz = TZ) {
+  const s = fromDateStr(startDate);
+  return Array.from({ length: DAYS }, (_, i) => { const dt = new Date((s + i) * 86400000); return zonedToUtc(dt.getUTCFullYear(), dt.getUTCMonth() + 1, dt.getUTCDate(), UNLOCK_HOUR, tz); });
+}
+
 /** Номер дня календаря за ЛОКАЛЬНОЮ датою (без урахування години відкриття): 0 — день до старту, 1..24, >24 — після завершення. */
 export function localDayNumber(startDate, now, tz = TZ) { const p = localParts(now, tz); return dayNum(p.y, p.m, p.d) - fromDateStr(startDate) + 1; }
 /** Перевірка IANA-часового поясу. */

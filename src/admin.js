@@ -4,7 +4,7 @@ import { HttpError, json, randomToken, uid, sha256, parseCookies, EMAIL_RE, norm
 import { sendEmail, loginEmail, welcomeEmail, partnerInviteEmail, refundEmail, supportReplyEmail } from './email.js';
 import { rateLimit, CODE_RE, normCode } from './promo.js';
 import { generateSchedule } from './logic.js';
-import { issueLoginLink, WELCOME_TTL_MS } from './api.js';
+import { issueLoginLink, issueLoginCode, WELCOME_TTL_MS } from './api.js';
 import { getSettings, saveSettings, getPriceUah } from './settings.js';
 import { cancelInvoice } from './payments.js';
 
@@ -148,8 +148,8 @@ async function orderAction(request, env, admin, id, action) {
     const slots = b.slot === 0 || b.slot === 1 ? [b.slot] : [0, 1];
     for (const s of slots) {
       const mem = members[s], partner = members[1 - s];
-      const link = await issueLoginLink(env, mem.id, WELCOME_TTL_MS);
-      const mail = s === 0 ? welcomeEmail(env, mem.suggested_name, partner.suggested_name, cal.start_date, link, cal.lang) : partnerInviteEmail(env, mem.suggested_name, partner.suggested_name, cal.start_date, link, cal.lang);
+      const link = await issueLoginLink(env, mem.id, WELCOME_TTL_MS), code = await issueLoginCode(env, mem.id, WELCOME_TTL_MS);
+      const mail = s === 0 ? welcomeEmail(env, mem.suggested_name, partner.suggested_name, cal.start_date, link, cal.lang, code) : partnerInviteEmail(env, mem.suggested_name, partner.suggested_name, cal.start_date, link, cal.lang, code);
       await sendEmail(env, mem.email, mail.subject, mail.html, mail.text);
     }
     await audit(env, admin, 'resend_access', id, { slots });
@@ -203,7 +203,7 @@ async function orderAction(request, env, admin, id, action) {
       await run(env, 'UPDATE calendars SET start_date = ? WHERE id = ?', newStart, cal.id);
       if (cal.schedule_json) { // свята прив'язані до дат і вихідні — перераховуємо розклад з тим самим зерном
         const surveys = members.map(x => x.survey_json && JSON.parse(x.survey_json));
-        if (surveys.every(Boolean)) await run(env, 'UPDATE calendars SET schedule_json = ? WHERE id = ?', JSON.stringify(generateSchedule(surveys, JSON.parse(cal.schedule_json).seed, windowDates(newStart), cal.region)), cal.id);
+        if (surveys.every(Boolean)) await run(env, 'UPDATE calendars SET schedule_json = ? WHERE id = ?', JSON.stringify(generateSchedule(surveys, JSON.parse(cal.schedule_json).seed, windowDates(newStart), cal.region, cal.country || 'UA')), cal.id);
       }
     }
     for (const [i, em, nm] of [[0, patch.email_a, patch.name_a], [1, patch.email_b, patch.name_b]]) {
@@ -212,9 +212,9 @@ async function orderAction(request, env, admin, id, action) {
       if (em && em !== mem.email) {
         await run(env, 'UPDATE members SET email = ? WHERE id = ?', em, mem.id);
         await run(env, 'DELETE FROM sessions WHERE member_id = ?', mem.id); await run(env, 'DELETE FROM login_tokens WHERE member_id = ?', mem.id);
-        const partner = members[1 - i], link = await issueLoginLink(env, mem.id, WELCOME_TTL_MS);
+        const partner = members[1 - i], link = await issueLoginLink(env, mem.id, WELCOME_TTL_MS), code = await issueLoginCode(env, mem.id, WELCOME_TTL_MS);
         const nameMe = nm || mem.suggested_name, namePartner = (i === 0 ? patch.name_b : patch.name_a) || partner.suggested_name;
-        const mail = i === 0 ? welcomeEmail(env, nameMe, namePartner, newStart || cal.start_date, link, cal.lang) : partnerInviteEmail(env, nameMe, namePartner, newStart || cal.start_date, link, cal.lang);
+        const mail = i === 0 ? welcomeEmail(env, nameMe, namePartner, newStart || cal.start_date, link, cal.lang, code) : partnerInviteEmail(env, nameMe, namePartner, newStart || cal.start_date, link, cal.lang, code);
         await sendEmail(env, em, mail.subject, mail.html, mail.text);
         emailChanged.push(i);
       }
@@ -357,7 +357,8 @@ async function inboxAction(request, env, admin, email, action) {
   if (body.length < 2) throw new HttpError(400, 'empty');
   const subject = cleanText(b.subject || t.last_subject || 'Відповідь підтримки', 200);
   const last = await q1(env, "SELECT msg_id FROM messages WHERE thread_email = ? AND direction = 'in' AND msg_id IS NOT NULL ORDER BY created_at DESC LIMIT 1", email);
-  const mail = supportReplyEmail(env, body, last?.msg_id);
+  const lg = await q1(env, 'SELECT lang FROM orders WHERE email_a = ? OR email_b = ? ORDER BY created_at DESC LIMIT 1', email, email);
+  const mail = supportReplyEmail(env, body, last?.msg_id, lg?.lang || 'uk');
   await sendEmail(env, email, /^re:/i.test(subject) ? subject : 'Re: ' + subject, mail.html, mail.text, { from: env.EMAIL_SUPPORT_FROM || env.EMAIL_FROM, replyTo: env.SUPPORT_EMAIL || 'support@reeadvent.fun', headers: mail.headers });
   const mid = uid(), now = Date.now();
   await env.DB.batch([

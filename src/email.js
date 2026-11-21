@@ -72,6 +72,10 @@ const T = {
   }
 };
 
+const codeLine = (lang, code, ttl) => lang === 'en'
+  ? `Or enter this code on the sign-in page together with your email: <b style="letter-spacing:.15em;font-size:18px">${esc(code)}</b> (valid ${ttl === 'long' ? '7 days' : '30 minutes'}, 5 attempts).`
+  : `Або введіть цей код на сторінці входу разом із вашою поштою: <b style="letter-spacing:.15em;font-size:18px">${esc(code)}</b> (діє ${ttl === 'long' ? '7 днів' : '30 хвилин'}, 5 спроб).`;
+
 function build(lang, { subject, title, paras, cta, url, foot, footText }) {
   const html = layout(lang, title, paras, url, cta, foot);
   const text = `${title}\n\n${paras.map(strip).join('\n\n')}\n\n${cta}: ${url}${footText ? '\n\n' + footText : ''}`;
@@ -79,18 +83,18 @@ function build(lang, { subject, title, paras, cta, url, foot, footText }) {
 }
 
 /** Лист покупцю (slot 0): ваше замовлення готове, партнеру вже надіслано запрошення. */
-export function welcomeEmail(env, name, partnerName, startDate, link, lang = 'uk') {
+export function welcomeEmail(env, name, partnerName, startDate, link, lang = 'uk', code = null) {
   lang = L(lang); const t = T[lang].buyer;
-  return build(lang, { subject: t.subject, title: t.title(name), paras: [...t.p(partnerName, fmtDate(startDate, lang)), T[lang].link7], cta: t.cta, url: link });
+  return build(lang, { subject: t.subject, title: t.title(name), paras: [...t.p(partnerName, fmtDate(startDate, lang)), T[lang].link7, ...(code ? [codeLine(lang, code, 'long')] : [])], cta: t.cta, url: link });
 }
 /** Лист партнеру (slot 1): «[ім'я] створює для вас ваш спільний ReeAdvent». */
-export function partnerInviteEmail(env, name, buyerName, startDate, link, lang = 'uk') {
+export function partnerInviteEmail(env, name, buyerName, startDate, link, lang = 'uk', code = null) {
   lang = L(lang); const t = T[lang].partner;
-  return build(lang, { subject: t.subject(buyerName), title: t.title(name), paras: [...t.p(buyerName, fmtDate(startDate, lang)), T[lang].link7], cta: t.cta, url: link });
+  return build(lang, { subject: t.subject(buyerName), title: t.title(name), paras: [...t.p(buyerName, fmtDate(startDate, lang)), T[lang].link7, ...(code ? [codeLine(lang, code, 'long')] : [])], cta: t.cta, url: link });
 }
-export function loginEmail(env, name, link, lang = 'uk') {
+export function loginEmail(env, name, link, lang = 'uk', code = null) {
   lang = L(lang); const t = T[lang].login;
-  return build(lang, { subject: t.subject, title: t.title, paras: t.p(), cta: t.cta, url: link });
+  return build(lang, { subject: t.subject, title: t.title, paras: [...t.p(), ...(code ? [codeLine(lang, code, 'short')] : [])], cta: t.cta, url: link });
 }
 /** Нагадування. kind: survey | eve | window. */
 export function reminderEmail(env, kind, { name, day, startDate, link, unsubUrl, lang = 'uk', beforeStart }) {

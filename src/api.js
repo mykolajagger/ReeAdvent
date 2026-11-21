@@ -1,13 +1,13 @@
-import { GIFTS, INTIMATE, ACTIVITIES, QUESTIONS, REGIONS, generateSchedule, sanitizeSurvey, giftView, intimView, actView } from './logic.js';
+import { GIFTS, INTIMATE, ACTIVITIES, QUESTIONS, REGIONS, generateSchedule, sanitizeSurvey, giftView, intimView, actView, questionText } from './logic.js';
 import { createInvoice, verifyPaid, invoiceStatus } from './payments.js';
 import { verifyTurnstile } from './turnstile.js';
 import { handleAdmin } from './admin.js';
 import { findPromo, priceWith, rateLimit, normCode } from './promo.js';
-import { getPriceUah } from './settings.js';
+import { getPriceUah, getSettings } from './settings.js';
 const listKop = async env => Math.round((await getPriceUah(env)) * 100);
 import { sendEmail, welcomeEmail, partnerInviteEmail, loginEmail } from './email.js';
 import { runDaily, checkUnsub } from './reminders.js';
-import { json, HttpError, localDayNumber, randomToken, uid, sha256, parseCookies, sessionCookie, EMAIL_RE, normEmail, cleanText, nowOf, tomorrowStr, fromDateStr, toDateStr, todayIndex, windowDates, validTz, DAYS, UNLOCK_HOUR } from './util.js';
+import { json, HttpError, localDayNumber, unlockTimes, randomToken, uid, sha256, parseCookies, sessionCookie, EMAIL_RE, normEmail, cleanText, nowOf, tomorrowStr, fromDateStr, toDateStr, todayIndex, windowDates, validTz, DAYS, UNLOCK_HOUR } from './util.js';
 
 const MAX_START_DAYS = 90; // найдальша дата старту від завтрашнього дня
 
@@ -19,7 +19,7 @@ export async function handle(request, env) {
     const url = new URL(request.url);
     const path = url.pathname.replace(/\/+$/, '');
     const m = request.method;
-    if (m === 'GET' && path === '/api/config') return json({ price: await getPriceUah(env), currency: 'UAH', regions: REGIONS, turnstileSiteKey: env.TURNSTILE_SITE_KEY || null, googleClientId: env.GOOGLE_CLIENT_ID || null });
+    if (m === 'GET' && path === '/api/config') return json({ price: await getPriceUah(env), usdRate: (await getSettings(env)).usd_rate, detected: detectLocale(request), currency: 'UAH', regions: REGIONS, turnstileSiteKey: env.TURNSTILE_SITE_KEY || null, googleClientId: env.GOOGLE_CLIENT_ID || null });
     if (m === 'POST' && path === '/api/orders') return await createOrder(request, env);
     if (m === 'POST' && path === '/api/promo/check') return await promoCheck(request, env);
     let r;
@@ -35,10 +35,12 @@ export async function handle(request, env) {
     if (m === 'POST' && path === '/api/auth/request') return await authRequest(request, env);
     if (m === 'POST' && path === '/api/auth/verify') return await authVerify(request, env);
     if (m === 'POST' && path === '/api/auth/google') return await authGoogle(request, env);
+    if (m === 'POST' && path === '/api/auth/code') return await authCode(request, env);
     if (m === 'POST' && path === '/api/auth/logout') return await authLogout(request, env);
 
     // Далі — тільки для авторизованих
     const member = await requireMember(request, env);
+    if (m === 'POST' && path === '/api/auth/logout-all') { await run(env, 'DELETE FROM sessions WHERE member_id = ?', member.id); return json({ ok: true }, 200, { 'set-cookie': sessionCookie('', 0, env.DEV !== '1') }); }
     if (m === 'GET' && path === '/api/state') return json(await stateOf(env, member));
     if (m === 'POST' && path === '/api/survey') return json(await saveSurvey(request, env, member));
     if (m === 'GET' && (r = path.match(/^\/api\/day\/(\d+)$/))) return json(await getDay(env, member, +r[1]));
@@ -187,18 +189,26 @@ export async function markPaid(env, orderId) {
   const calId = uid(), now = Date.now();
   const mA = uid(), mB = uid();
   await env.DB.batch([
-    env.DB.prepare('INSERT INTO calendars (id, order_id, created_at, city, region, start_date, lang, tz) VALUES (?,?,?,?,?,?,?,?)').bind(calId, orderId, now, o.city, o.region, startDate, lang, tz),
+    env.DB.prepare('INSERT INTO calendars (id, order_id, created_at, city, region, start_date, lang, tz, country) VALUES (?,?,?,?,?,?,?,?,?)').bind(calId, orderId, now, o.city, o.region, startDate, lang, tz, o.country || 'UA'),
     env.DB.prepare('INSERT INTO members (id, calendar_id, email, slot, suggested_name) VALUES (?,?,?,?,?)').bind(mA, calId, o.email_a, 0, o.name_a),
     env.DB.prepare('INSERT INTO members (id, calendar_id, email, slot, suggested_name) VALUES (?,?,?,?,?)').bind(mB, calId, o.email_b, 1, o.name_b)
   ]);
   // покупцю — підтвердження; партнеру — запрошення «[ім'я] створює для вас ваш спільний ReeAdvent»
   const linkA = await issueLoginLink(env, mA, WELCOME_TTL), linkB = await issueLoginLink(env, mB, WELCOME_TTL);
-  const mailA = welcomeEmail(env, o.name_a, o.name_b, startDate, linkA, lang), mailB = partnerInviteEmail(env, o.name_b, o.name_a, startDate, linkB, lang);
+  const codeA = await issueLoginCode(env, mA, WELCOME_TTL), codeB = await issueLoginCode(env, mB, WELCOME_TTL);
+  const mailA = welcomeEmail(env, o.name_a, o.name_b, startDate, linkA, lang, codeA), mailB = partnerInviteEmail(env, o.name_b, o.name_a, startDate, linkB, lang, codeB);
   await sendEmail(env, o.email_a, mailA.subject, mailA.html, mailA.text);
   await sendEmail(env, o.email_b, mailB.subject, mailB.html, mailB.text);
 }
 
 // ---------- Авторизація (посилання на пошту) ----------
+/** Одноразовий 6-значний код (альтернатива посиланню): одна активна пара «учасник — код», 5 спроб. */
+export async function issueLoginCode(env, memberId, ttl) {
+  const code = String(crypto.getRandomValues(new Uint32Array(1))[0] % 1000000).padStart(6, '0');
+  await run(env, 'INSERT INTO login_codes (member_id, code_hash, expires_at, attempts) VALUES (?,?,?,0) ON CONFLICT(member_id) DO UPDATE SET code_hash = excluded.code_hash, expires_at = excluded.expires_at, attempts = 0', memberId, await sha256(code + ':' + memberId), Date.now() + ttl);
+  return code;
+}
+
 export async function issueLoginLink(env, memberId, ttl) {
   const token = randomToken(32);
   await run(env, 'INSERT INTO login_tokens (token_hash, member_id, created_at, expires_at) VALUES (?,?,?,?)', await sha256(token), memberId, Date.now(), Date.now() + ttl);
@@ -214,7 +224,7 @@ async function authRequest(request, env) {
   if (mem) {
     const recent = await q1(env, 'SELECT COUNT(*) AS n FROM login_tokens WHERE member_id = ? AND created_at > ?', mem.id, Date.now() - 3600e3);
     if (recent.n < 5) {
-      const mail = loginEmail(env, mem.survey_json ? JSON.parse(mem.survey_json).name : mem.suggested_name, await issueLoginLink(env, mem.id, LOGIN_TTL), mem.lang);
+      const mail = loginEmail(env, mem.survey_json ? JSON.parse(mem.survey_json).name : mem.suggested_name, await issueLoginLink(env, mem.id, LOGIN_TTL), mem.lang, await issueLoginCode(env, mem.id, LOGIN_TTL));
       await sendEmail(env, email, mail.subject, mail.html, mail.text);
     }
   }
@@ -244,7 +254,7 @@ async function requireMember(request, env) {
   if (!t) throw new HttpError(401, 'auth');
   const s = await q1(env, 'SELECT member_id, expires_at FROM sessions WHERE token_hash = ?', await sha256(t));
   if (!s || s.expires_at < Date.now()) throw new HttpError(401, 'auth');
-  const mem = await q1(env, `SELECT m.*, c.city, c.region, c.start_date, c.schedule_json, c.lang, c.tz, o.refunded_at FROM members m JOIN calendars c ON c.id = m.calendar_id JOIN orders o ON o.id = c.order_id WHERE m.id = ?`, s.member_id);
+  const mem = await q1(env, `SELECT m.*, c.city, c.region, c.start_date, c.schedule_json, c.lang, c.tz, c.country, o.refunded_at FROM members m JOIN calendars c ON c.id = m.calendar_id JOIN orders o ON o.id = c.order_id WHERE m.id = ?`, s.member_id);
   if (!mem || mem.refunded_at) throw new HttpError(401, 'auth');
   return mem;
 }
@@ -263,7 +273,7 @@ async function stateOf(env, mem) {
     me: { name: surveyName(mem), suggestedName: mem.suggested_name },
     partner: { name: surveyName(partner) || partner.suggested_name, done: !!partner.survey_json },
     myDone: !!mem.survey_json, partnerDone: !!partner.survey_json, ready: !!mem.schedule_json,
-    lang: mem.lang, finished: localDayNumber(mem.start_date, nowOf(env), mem.tz) > DAYS, today: todayIndex(mem.start_date, nowOf(env), mem.tz), startDate: mem.start_date, unlockHour: UNLOCK_HOUR, totalDays: DAYS,
+    lang: mem.lang, country: mem.country || 'UA', usdRate: (await getSettings(env)).usd_rate, unlockTimes: unlockTimes(mem.start_date, mem.tz), finished: localDayNumber(mem.start_date, nowOf(env), mem.tz) > DAYS, today: todayIndex(mem.start_date, nowOf(env), mem.tz), startDate: mem.start_date, unlockHour: UNLOCK_HOUR, totalDays: DAYS,
     opened: rows.map(r => r.day), city: mem.city
   };
 }
@@ -275,14 +285,14 @@ async function saveSurvey(request, env, mem) {
   await run(env, 'UPDATE members SET survey_json = ? WHERE id = ?', JSON.stringify(clean), mem.id);
   const both = (await env.DB.prepare('SELECT slot, survey_json FROM members WHERE calendar_id = ? ORDER BY slot').bind(mem.calendar_id).all()).results;
   if (both.length === 2 && both.every(r => r.survey_json)) {
-    const sched = generateSchedule(both.map(r => JSON.parse(r.survey_json)), 1 + Math.floor(Math.random() * 2147483646), windowDates(mem.start_date), mem.region);
+    const sched = generateSchedule(both.map(r => JSON.parse(r.survey_json)), 1 + Math.floor(Math.random() * 2147483646), windowDates(mem.start_date), mem.region, mem.country);
     // умовне оновлення: якщо обидва зберегли одночасно, спрацює лише один
     await run(env, 'UPDATE calendars SET schedule_json = ? WHERE id = ? AND schedule_json IS NULL', JSON.stringify(sched), mem.calendar_id);
   }
   const fresh = await requireMemberById(env, mem.id);
   return stateOf(env, fresh);
 }
-const requireMemberById = (env, id) => q1(env, `SELECT m.*, c.city, c.region, c.start_date, c.schedule_json, c.lang, c.tz FROM members m JOIN calendars c ON c.id = m.calendar_id WHERE m.id = ?`, id);
+const requireMemberById = (env, id) => q1(env, `SELECT m.*, c.city, c.region, c.start_date, c.schedule_json, c.lang, c.tz, c.country FROM members m JOIN calendars c ON c.id = m.calendar_id WHERE m.id = ?`, id);
 
 async function getDay(env, mem, d) {
   if (!(d >= 1 && d <= DAYS)) throw new HttpError(400, 'bad_day');
@@ -293,14 +303,14 @@ async function getDay(env, mem, d) {
   const question = QUESTIONS[plan.q];
   const mine = await q1(env, 'SELECT text FROM answers WHERE member_id = ? AND day = ?', mem.id, d);
   // Спершу відповідь на питання дня: поки її немає, завдань сервер не віддає
-  if (!mine) return { ok: true, day: d, needAnswer: true, forName: surveyName(partner), question: { text: question.text } };
+  if (!mine) return { ok: true, day: d, needAnswer: true, forName: surveyName(partner), question: { text: questionText(question, mem.lang) } };
   const theirs = await q1(env, 'SELECT text FROM answers WHERE member_id = ? AND day = ?', partner.id, d);
   await run(env, `INSERT INTO progress (member_id, day, opened, opened_at) VALUES (?,?,1,?) ON CONFLICT(member_id, day) DO UPDATE SET opened = 1, opened_at = COALESCE(opened_at, excluded.opened_at)`, mem.id, d, Date.now());
   const pr = await q1(env, 'SELECT * FROM progress WHERE member_id = ? AND day = ?', mem.id, d);
   return {
     ok: true, day: d, forName: surveyName(partner),
-    question: { text: question.text, mine: mine.text, partner: theirs ? theirs.text : null },
-    gift: giftView(GIFTS[plan.gift[mem.slot]], mem.city), intim: intimView(INTIMATE[plan.intim]), act: actView(ACTIVITIES[plan.act], mem.city),
+    question: { text: questionText(question, mem.lang), mine: mine.text, partner: theirs ? theirs.text : null },
+    gift: giftView(GIFTS[plan.gift[mem.slot]], mem.city, mem.lang, mem.country), intim: intimView(INTIMATE[plan.intim], mem.lang), act: actView(ACTIVITIES[plan.act], mem.city, mem.lang),
     done: { gift: !!pr.done_gift, intim: !!pr.done_intim, act: !!pr.done_act }
   };
 }
@@ -336,7 +346,7 @@ async function orderResend(env, id) {
   const cal = await q1(env, 'SELECT id, start_date FROM calendars WHERE order_id = ?', id);
   const mem = cal && await q1(env, 'SELECT id, email FROM members WHERE calendar_id = ? AND slot = 0', cal.id);
   if (!mem) throw new HttpError(409, 'not_ready');
-  const mail = welcomeEmail(env, o.name_a, o.name_b, cal.start_date, await issueLoginLink(env, mem.id, WELCOME_TTL), o.lang || 'uk'); // лише покупцю
+  const mail = welcomeEmail(env, o.name_a, o.name_b, cal.start_date, await issueLoginLink(env, mem.id, WELCOME_TTL), o.lang || 'uk', await issueLoginCode(env, mem.id, WELCOME_TTL)); // лише покупцю
   await sendEmail(env, mem.email, mail.subject, mail.html, mail.text);
   return json({ ok: true });
 }
@@ -394,16 +404,43 @@ async function history(env, mem) {
   const days = [];
   for (let d = last; d >= 1; d--) {
     const plan = sched.days[d], a = M.get(d), p = P.get(d);
-    const row = { day: d, opened: !!(a && p && p.opened), question: QUESTIONS[plan.q].text, answered: !!a };
+    const row = { day: d, opened: !!(a && p && p.opened), question: questionText(QUESTIONS[plan.q], mem.lang), answered: !!a };
     if (a) { // питання й відповіді видно лише після власної відповіді (як і в самому вікні)
       row.mine = a.text; row.mine_at = a.created_at; const t = T.get(d); row.partner = t ? t.text : null; row.partner_at = t ? t.created_at : null;
     }
     if (row.opened) {
       row.opened_at = p.opened_at || null;
-      row.gift = GIFTS[plan.gift[mem.slot]].title; row.intim = INTIMATE[plan.intim].title; row.act = ACTIVITIES[plan.act].title;
+      row.gift = giftView(GIFTS[plan.gift[mem.slot]], mem.city, mem.lang, mem.country).title; row.intim = intimView(INTIMATE[plan.intim], mem.lang).title; row.act = actView(ACTIVITIES[plan.act], mem.city, mem.lang).title;
       row.done = { gift: !!p.done_gift, intim: !!p.done_intim, act: !!p.done_act };
     }
     days.push(row);
   }
   return { ok: true, days, partnerName: surveyName(partner), finished: localDayNumber(mem.start_date, nowOf(env), mem.tz) > DAYS };
+}
+
+// ---------- Вхід за кодом із листа ----------
+async function authCode(request, env) {
+  const ip = request.headers.get('CF-Connecting-IP') || 'local';
+  const b = await readJson(request);
+  const email = normEmail(b.email), code = String(b.code || '').replace(/\D/g, '');
+  if (!EMAIL_RE.test(email) || code.length !== 6) throw new HttpError(401, 'bad_code');
+  if (!(await rateLimit(env, 'codeip:' + ip, 30, 3600)) || !(await rateLimit(env, 'codemail:' + email, 15, 3600))) throw new HttpError(429, 'too_many');
+  const mem = await q1(env, `SELECT m.id FROM members m JOIN calendars c ON c.id = m.calendar_id JOIN orders o ON o.id = c.order_id WHERE m.email = ? AND o.refunded_at IS NULL ORDER BY c.created_at DESC LIMIT 1`, email);
+  const row = mem && await q1(env, 'SELECT * FROM login_codes WHERE member_id = ?', mem.id);
+  // однакова відповідь для всіх невдач: не розкриваємо, чи є така пошта
+  if (!row || row.expires_at < Date.now() || row.attempts >= 5) throw new HttpError(401, 'bad_code');
+  if ((await sha256(code + ':' + mem.id)) !== row.code_hash) { await run(env, 'UPDATE login_codes SET attempts = attempts + 1 WHERE member_id = ?', mem.id); throw new HttpError(401, 'bad_code'); }
+  await run(env, 'DELETE FROM login_codes WHERE member_id = ?', mem.id);
+  const sess = randomToken(32);
+  await run(env, 'INSERT INTO sessions (token_hash, member_id, expires_at) VALUES (?,?,?)', await sha256(sess), mem.id, Date.now() + SESSION_TTL);
+  return json({ ok: true }, 200, { 'set-cookie': sessionCookie(sess, SESSION_TTL / 1000, env.DEV !== '1') });
+}
+
+/** Країна за заголовком Cloudflare (CF-IPCountry) та рекомендована мова: Україна → українська, решта світу → англійська. */
+export function detectLocale(request) {
+  const c = String(request.headers.get('CF-IPCountry') || '').toUpperCase();
+  const country = /^[A-Z]{2}$/.test(c) && c !== 'XX' && c !== 'T1' ? c : null;
+  const accept = String(request.headers.get('Accept-Language') || '').toLowerCase();
+  const lang = country ? (country === 'UA' ? 'uk' : 'en') : (/^uk\b|,\s*uk\b/.test(accept) ? 'uk' : 'en');
+  return { country, lang };
 }

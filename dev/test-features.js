@@ -153,10 +153,77 @@ h = (await pa('GET', '/api/history')).j; assert.equal(h.days.length, 24); assert
 assert.equal(h.days.find(d => d.day === 1).mine, 'Перша'); assert.equal(h.days.find(d => d.day === 2).partner, 'Відповідь партнера');
 assert((await pa('GET', '/api/day/24')).j.needAnswer, 'late answering still possible after the end');
 
+// ===== 6b. Вхід за кодом із листа + вихід на всіх пристроях =====
+env.NOW_OVERRIDE = '2026-12-04T10:00:00Z';
+raw.prepare('DELETE FROM login_tokens').run(); raw.prepare('DELETE FROM rate_limits').run(); // скидаємо ліміти попередніх секцій
+const cm = members(o1)[0]; n = outbox().length;
+await call('c', 'POST', '/api/auth/request', { email: 'a@t.com' }); const lm = outbox().at(-1); assert.equal(lm.to_email, 'a@t.com');
+const code = lm.body.match(/(\d{6})/)?.[1]; assert(code, 'login email contains a 6-digit code'); assert(lm.body.includes('/app/#login='), 'and still contains the link');
+assert.equal((await call('c', 'POST', '/api/auth/code', { email: 'a@t.com', code: code === '000000' ? '111111' : '000000' })).j.error, 'bad_code');
+assert.equal((await call('c', 'POST', '/api/auth/code', { email: 'nobody@t.com', code })).j.error, 'bad_code', 'same answer for unknown email');
+assert.equal((await call('c', 'POST', '/api/auth/code', { email: 'b@t.com', code })).j.error, 'bad_code', 'code of another member does not work');
+assert.equal((await call('c', 'GET', '/api/state')).status, 401);
+assert.equal((await call('c', 'POST', '/api/auth/code', { email: 'A@T.com', code: code.slice(0, 3) + ' ' + code.slice(3) })).status, 200, 'spaces and case are tolerated');
+assert.equal((await call('c', 'GET', '/api/state')).status, 200); assert.equal((await call('c2', 'POST', '/api/auth/code', { email: 'a@t.com', code })).j.error, 'bad_code', 'code is single-use');
+// 5 хибних спроб блокують код
+await call('c', 'POST', '/api/auth/request', { email: 'a@t.com' }); const code2 = outbox().at(-1).body.match(/(\d{6})/)[1];
+for (let i = 0; i < 5; i++) await call('c3', 'POST', '/api/auth/code', { email: 'a@t.com', code: code2 === '123456' ? '654321' : '123456' });
+assert.equal((await call('c3', 'POST', '/api/auth/code', { email: 'a@t.com', code: code2 })).j.error, 'bad_code', 'locked after 5 failures');
+// код у листах після оплати (покупцю й партнеру)
+assert(outbox().find(x => x.to_email === 'a@t.com' && x.subject.includes('готовий')).body.match(/\d{6}/), 'welcome mail has a code'); assert(outbox().find(x => x.to_email === 'b@t.com' && x.subject.includes('створює')).body.match(/\d{6}/));
+// вийти на всіх пристроях
+await call('d', 'POST', '/api/auth/request', { email: 'a@t.com' }); await call('d', 'POST', '/api/auth/code', { email: 'a@t.com', code: outbox().at(-1).body.match(/(\d{6})/)[1] });
+assert.equal((await call('d', 'GET', '/api/state')).status, 200); assert.equal((await call('d', 'POST', '/api/auth/logout-all', {})).status, 200);
+assert.equal((await call('d', 'GET', '/api/state')).status, 401); assert.equal((await call('c', 'GET', '/api/state')).status, 401, 'other devices are signed out too');
+
 // ===== 7. Очищення даних через 12 місяців після завершення =====
 env.NOW_OVERRIDE = '2028-02-01T01:30:00Z'; // 01:xx UTC — запускається очищення; старт 1.12.2026 + 24 дні + 365 днів = минуло
 r = (await cron()).j; assert(r.purge && r.purge.calendars >= 1, JSON.stringify(r));
 assert.equal(raw.prepare('SELECT COUNT(*) AS n FROM calendars WHERE order_id = ?').get(o1).n, 0); assert.equal(raw.prepare('SELECT COUNT(*) AS n FROM members WHERE email = ?').get('a@t.com').n, 0);
 assert.equal(raw.prepare('SELECT COUNT(*) AS n FROM answers').get().n >= 0, true);
 const anon = raw.prepare('SELECT * FROM orders WHERE id = ?').get(o1); assert(anon.email_a.startsWith('deleted-a-') && anon.name_a === '—' && anon.amount_kop === 40000, 'order anonymised, amounts kept');
+
+// ===== 8. Міжнародна версія: переклади, країни, часові пояси =====
+{
+  const { GIFTS_EN, INTIMATE_EN, ACTIVITIES_EN, QUESTIONS_EN } = await import('../src/content_en.js');
+  const { GIFTS_RAW, INTIMATE_RAW, ACTIVITIES_RAW, QUESTIONS_RAW } = await import('../src/content.js');
+  assert.equal(GIFTS_EN.length, GIFTS_RAW.length); assert.equal(INTIMATE_EN.length, INTIMATE_RAW.length); assert.equal(ACTIVITIES_EN.length, ACTIVITIES_RAW.length); assert.equal(QUESTIONS_EN.length, QUESTIONS_RAW.length);
+  const cyr = /[А-Яа-яІіЇїЄєҐґ]/;
+  for (const [name, arr] of [['gifts', GIFTS_EN], ['intimate', INTIMATE_EN], ['activities', ACTIVITIES_EN]]) arr.forEach((r, i) => { assert(r[0] && r[1], `${name}[${i}] has title and text`); assert(!cyr.test(r[0] + r[1]), `${name}[${i}] has Cyrillic: ${r[0]}`); if (r[2]) assert(!cyr.test(r[2]) || /Uzhhorod|Mukachevo/.test(r[2]) === false, `${name}[${i}] query in English`); });
+  QUESTIONS_EN.forEach((q, i) => assert(q && !cyr.test(q), `question ${i} translated`));
+  const { generateSchedule, ACTIVITIES, GIFTS, giftView, actView, questionText, QUESTIONS } = await import('../src/logic.js'); const { windowDates, unlockTimes, zonedToUtc } = await import('../src/util.js');
+  // міжнародний календар: без українських і закарпатських активностей
+  const S = () => JSON.parse(SUR('x')), dates = windowDates('2026-12-01');
+  for (let seed = 1; seed <= 60; seed++) { const sc = generateSchedule([S(), S()], seed, dates, 'Bavaria', 'DE'); for (let d = 1; d <= 24; d++) { const a = ACTIVITIES[sc.days[d].act]; assert(!a.tags.includes('zk') && !a.tags.includes('ua'), 'intl: ' + a.title); } }
+  const sawUa = new Set(); for (let seed = 1; seed <= 60; seed++) { const sc = generateSchedule([S(), S()], seed, dates, 'Львівська', 'UA'); for (let d = 1; d <= 24; d++) if (ACTIVITIES[sc.days[d].act].tags.includes('ua')) sawUa.add(seed); } assert(sawUa.size > 0, 'UA calendars may include Ukraine-specific ideas');
+  // англійські вигляди, посилання для інших країн
+  const g = GIFTS.find(x => x.store === 'r'), ge = giftView(g, 'Paris', 'en', 'FR'); assert(!cyr.test(ge.title + ge.desc) && ge.link.url.startsWith('https://www.google.com/search?tbm=shop') && ge.link.label === 'Search online');
+  assert(giftView(g, 'Київ', 'uk', 'UA').link.url.includes('rozetka.com.ua'), 'Ukrainian shops remain for Ukraine');
+  const a = ACTIVITIES.find(x => x.q === 'кав’ярня {city}'), ae = actView(a, 'Lyon', 'en'); assert(!cyr.test(ae.title) && decodeURIComponent(ae.link.url).includes('cafe Lyon') && ae.link.label === 'On the map');
+  assert.equal(questionText(QUESTIONS[0], 'en'), 'Why do you love me?');
+  // точні моменти відкриття за поясом календаря
+  const ny = unlockTimes('2026-12-10', 'America/New_York'), kyiv = unlockTimes('2026-12-10', 'Europe/Kyiv');
+  assert.equal(new Date(ny[0]).toISOString(), '2026-12-10T12:00:00.000Z', '07:00 in New York in winter = 12:00Z'); assert.equal(new Date(kyiv[0]).toISOString(), '2026-12-10T05:00:00.000Z');
+  assert.equal(ny.length, 24); assert.equal(new Date(unlockTimes('2026-03-28', 'Europe/Kyiv')[3]).toISOString(), '2026-03-31T04:00:00.000Z', 'DST switch handled (UTC+3 after 29 March)');
+  // англомовний календар у Німеччині: усе англійською, усе працює
+  env.NOW_OVERRIDE = '2026-11-20T10:00:00Z';
+  const oDe = await makeOrder({ emailA: 'de1@t.com', emailB: 'de2@t.com', lang: 'en', country: 'DE', region: 'Bavaria', city: 'Munich', tz: 'Europe/Berlin', startDate: '2026-12-05' });
+  const mde = members(oDe); for (const [i, who] of ['de1', 'de2'].entries()) { await call(who, 'POST', '/api/auth/request', { email: mde[i].email }); await call(who, 'POST', '/api/auth/verify', { token: tok(outbox().filter(x => x.to_email === mde[i].email).at(-1).body) }); await call(who, 'POST', '/api/survey', { answers: JSON.parse(SUR('N' + i)) }); }
+  env.NOW_OVERRIDE = '2026-12-05T06:30:00Z'; // 07:30 в Берліні, вікно №1
+  let st2 = (await call('de1', 'GET', '/api/state')).j; assert.equal(st2.lang, 'en'); assert.equal(st2.today, 1); assert.equal(st2.unlockTimes.length, 24); assert.equal(new Date(st2.unlockTimes[0]).toISOString(), '2026-12-05T06:00:00.000Z');
+  const pre2 = (await call('de1', 'GET', '/api/day/1')).j; assert(!cyr.test(pre2.question.text), 'question in English');
+  await call('de1', 'POST', '/api/answer', { day: 1, text: 'Because you laugh at my jokes' }); const day1 = (await call('de1', 'GET', '/api/day/1')).j;
+  assert(!cyr.test(day1.gift.title + day1.gift.desc + day1.intim.title + day1.act.title + day1.act.desc), 'whole day in English'); assert(day1.gift.link === null || day1.gift.link.url.includes('google.com'), 'no Ukrainian shops abroad');
+  assert((await call('de1', 'GET', '/api/history')).j.days[0].question.length > 0);
+  // визначення країни
+  const { detectLocale } = await import('../src/api.js'); const rq = h => new Request('http://x/', { headers: h });
+  assert.deepEqual(detectLocale(rq({ 'CF-IPCountry': 'UA' })), { country: 'UA', lang: 'uk' }); assert.deepEqual(detectLocale(rq({ 'CF-IPCountry': 'PL', 'Accept-Language': 'uk-UA' })), { country: 'PL', lang: 'en' });
+  assert.deepEqual(detectLocale(rq({})), { country: null, lang: 'en' }); assert.deepEqual(detectLocale(rq({ 'Accept-Language': 'uk-UA,uk;q=0.9' })), { country: null, lang: 'uk' }); assert.equal(detectLocale(rq({ 'CF-IPCountry': 'XX' })).country, null);
+  const cfg = (await handle(new Request('http://x/api/config', { headers: { 'CF-IPCountry': 'DE' } }), env)).json(); assert.equal((await cfg).detected.lang, 'en');
+  env.NOW_OVERRIDE = '2026-11-20T10:00:00Z';
+  // країна не-UA: область довільна; UA: область з переліку
+  assert.equal((await call('x', 'POST', '/api/orders', { ...good, emailA: 'v1@t.com', emailB: 'v2@t.com', country: 'DE', region: 'Whatever' })).j.ok, true);
+  assert.equal((await call('x', 'POST', '/api/orders', { ...good, emailA: 'v3@t.com', emailB: 'v4@t.com', country: 'UA', region: 'Whatever' })).j.error, 'bad_region');
+  assert.equal((await call('x', 'POST', '/api/orders', { ...good, emailA: 'v5@t.com', emailB: 'v6@t.com', tz: 'Mars/Phobos', startDate: '2026-12-05' })).j.ok, true, 'invalid tz falls back to Kyiv');
+}
 console.log('FEATURES OK');

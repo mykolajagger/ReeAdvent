@@ -1,5 +1,6 @@
 import { GIFTS_RAW, INTIMATE_RAW, ACTIVITIES_RAW, QUESTIONS_RAW } from './content.js';
 import { DAYS } from './util.js';
+import { GIFTS_EN, INTIMATE_EN, ACTIVITIES_EN, QUESTIONS_EN } from './content_en.js';
 
 export const REGIONS = ['Вінницька', 'Волинська', 'Дніпропетровська', 'Донецька', 'Житомирська', 'Закарпатська', 'Запорізька', 'Івано-Франківська', 'Київська', 'Кіровоградська', 'Луганська', 'Львівська', 'Миколаївська', 'Одеська', 'Полтавська', 'Рівненська', 'Сумська', 'Тернопільська', 'Харківська', 'Херсонська', 'Хмельницька', 'Черкаська', 'Чернівецька', 'Чернігівська', 'м. Київ', 'Автономна Республіка Крим'];
 
@@ -31,7 +32,7 @@ function takeWeighted(cands, rnd) {
  * Повертає { seed, days: {1: {gift:[idA,idB], intim, act}}, stretched }
  * gift[k] — те, що дарує k-й учасник іншому.
  */
-export function generateSchedule(answers, seed, dates, region) {
+export function generateSchedule(answers, seed, dates, region, country = 'UA') {
   const rnd = mulberry32(seed);
   const days = {}; for (let d = 1; d <= DAYS; d++) days[d] = { gift: [0, 0] };
   const specialFor = (item, d) => item.day && dates[d - 1].month === 12 && dates[d - 1].day === item.day;
@@ -68,8 +69,8 @@ export function generateSchedule(answers, seed, dates, region) {
   const maxCost = Math.min(answers[0].actBudget, answers[1].actBudget);
   const hasCar = answers[0].car || answers[1].car;
   const avoid = [...answers[0].avoid, ...answers[1].avoid];
-  const zk = region === 'Закарпатська';
-  let aCands = ACTIVITIES.filter(x => !x.day && x.cost <= maxCost && (hasCar || !x.tags.includes('car')) && (zk || !x.tags.includes('zk')) && !hasAvoided(x.tags, avoid))
+  const intl = country && country !== 'UA', zk = !intl && region === 'Закарпатська';
+  let aCands = ACTIVITIES.filter(x => !x.day && x.cost <= maxCost && (hasCar || !x.tags.includes('car')) && (zk || !x.tags.includes('zk')) && !(intl && x.tags.includes('ua')) && !hasAvoided(x.tags, avoid))
     .map(x => {
       const oa = overlap(x.tags, answers[0].actLikes), ob = overlap(x.tags, answers[1].actLikes);
       return { item: x, w: 1 + 2 * oa + 2 * ob + (oa && ob ? 2 : 0) };
@@ -108,9 +109,23 @@ export function storeLink(store, q, city) {
   const query = q.replace('{city}', city);
   return { url: s[0] + encodeURIComponent(query), label: store === 'g' ? 'На мапі' : 'Шукати на ' + s[1] };
 }
-export const giftView = (g, city) => ({ title: g.title, desc: g.desc, price: g.price, link: storeLink(g.store, g.q, city) });
-export const intimView = x => ({ title: x.title, desc: x.desc, level: x.level });
-export const actView = (x, city) => ({ title: x.title, desc: x.desc, cost: x.cost, car: x.tags.includes('car'), link: x.q ? storeLink('g', x.q, city) : null });
+/** Посилання на подарунок: у країнах, окрім України, магазини Rozetka/Prom тощо неактуальні, тож ведемо в Google Shopping (англійський запит для англійського інтерфейсу). */
+const shopLink = (q, lang) => q ? { url: 'https://www.google.com/search?tbm=shop&q=' + encodeURIComponent(q), label: lang === 'en' ? 'Search online' : 'Шукати в інтернеті' } : null;
+function mapsLink(q, city, lang) { return q ? { url: 'https://www.google.com/maps/search/' + encodeURIComponent(String(q).replace('{city}', city)), label: lang === 'en' ? 'On the map' : 'На мапі' } : null; }
+export const giftView = (g, city, lang = 'uk', country = 'UA') => {
+  const en = lang === 'en' ? GIFTS_EN[g.id] : null, abroad = country && country !== 'UA';
+  let link;
+  if (abroad) link = shopLink(en ? en[2] : g.q, lang);
+  else if (en) link = g.store === 'g' ? mapsLink(en[2], city, lang) : (en[2] && g.store ? shopLink(en[2], lang) : null);
+  else link = storeLink(g.store, g.q, city);
+  return { title: en ? en[0] : g.title, desc: en ? en[1] : g.desc, price: g.price, link };
+};
+export const intimView = (x, lang = 'uk') => { const en = lang === 'en' ? INTIMATE_EN[x.id] : null; return { title: en ? en[0] : x.title, desc: en ? en[1] : x.desc, level: x.level }; };
+export const actView = (x, city, lang = 'uk') => {
+  const en = lang === 'en' ? ACTIVITIES_EN[x.id] : null, q = en ? en[2] : x.q;
+  return { title: en ? en[0] : x.title, desc: en ? en[1] : x.desc, cost: x.cost, car: x.tags.includes('car'), link: q ? mapsLink(q, city, lang) : null };
+};
+export const questionText = (q, lang = 'uk') => lang === 'en' ? QUESTIONS_EN[q.id] : q.text;
 
 export const GIFT_TAGS = ['sweet', 'tea', 'beauty', 'cozy', 'book', 'tech', 'game', 'craft', 'plant', 'jewel', 'sport', 'music', 'art', 'gourmet', 'fun', 'photo', 'alcohol', 'scent'];
 export const INTIM_TAGS = ['mas', 'bath', 'dance', 'game', 'role', 'blind', 'photo', 'words', 'food', 'tease', 'cozy', 'music', 'dress'];
