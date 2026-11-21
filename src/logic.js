@@ -125,6 +125,8 @@ export const actView = (x, city, lang = 'uk') => {
   const en = lang === 'en' ? ACTIVITIES_EN[x.id] : null, q = en ? en[2] : x.q;
   return { title: en ? en[0] : x.title, desc: en ? en[1] : x.desc, cost: x.cost, car: x.tags.includes('car'), link: q ? mapsLink(q, city, lang) : null };
 };
+/** Пошуковий запит із містом для рекомендацій закладів (лише шаблонні запити з {city}; конкретні пам'ятки пропускаємо). */
+export const placesQuery = (x, city, lang = 'uk') => { const en = lang === 'en' ? ACTIVITIES_EN[x.id] : null, q = en ? en[2] : x.q; return q && q.includes('{city}') ? q.replace('{city}', city) : null; };
 export const questionText = (q, lang = 'uk') => lang === 'en' ? QUESTIONS_EN[q.id] : q.text;
 
 export const GIFT_TAGS = ['sweet', 'tea', 'beauty', 'cozy', 'book', 'tech', 'game', 'craft', 'plant', 'jewel', 'sport', 'music', 'art', 'gourmet', 'fun', 'photo', 'alcohol', 'scent'];

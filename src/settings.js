@@ -1,7 +1,7 @@
 // Налаштування, які власник змінює в адмінці: ціна календаря й відсотки для дашборда.
 // fee_percent: комісія Monobank з українських карток (1,3%), fee_foreign_percent: з іноземних (2%).
-export const DEFAULTS = { fee_percent: 1.3, fee_foreign_percent: 2, tax_percent: 5, military_percent: 1 };
-const PERCENT_KEYS = Object.keys(DEFAULTS), KEYS = [...PERCENT_KEYS, 'price_uah', 'usd_rate'];
+export const DEFAULTS = { fee_percent: 1.3, fee_foreign_percent: 2, tax_percent: 5, military_percent: 1, places_monthly_cap: 2000 };
+const PERCENT_KEYS = ['fee_percent', 'fee_foreign_percent', 'tax_percent', 'military_percent'], KEYS = [...PERCENT_KEYS, 'price_uah', 'usd_rate', 'places_monthly_cap'];
 export { KEYS };
 
 const bad = code => { const e = new Error(code); e.status = 400; e.code = code; return e; };
@@ -23,6 +23,7 @@ export async function saveSettings(env, input) {
     if (input[k] === undefined) continue;
     const v = Number(String(input[k]).replace(',', '.'));
     if (k === 'price_uah') { if (!isFinite(v) || v < 1 || v > 100000) throw bad('bad_price'); }
+    else if (k === 'places_monthly_cap') { if (!isFinite(v) || v < 0 || v > 1000000) throw bad('bad_cap'); }
     else if (k === 'usd_rate') { if (!isFinite(v) || v < 1 || v > 1000) throw bad('bad_rate'); }
     else if (!isFinite(v) || v < 0 || v > 100) throw bad('bad_percent');
     const r = Math.round(v * 100) / 100; saved[k] = r;

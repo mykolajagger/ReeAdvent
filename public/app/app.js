@@ -236,6 +236,21 @@ const ICONS = {
   intim: '<svg class="ico" viewBox="0 0 48 48"><path d="M24 40S7 29 7 18a9 9 0 0 1 17-4 9 9 0 0 1 17 4c0 11-17 22-17 22z"/></svg>',
   act: '<svg class="ico" viewBox="0 0 48 48"><path d="M24 5l3.5 10.5H38l-8.5 6.2 3.3 10.3L24 25.8l-8.8 6.2 3.3-10.3L10 15.5h10.5z"/><path d="M24 33v10"/></svg>'
 };
+/* Рекомендації закладів (рейтинги Google Maps): вантажаться при відкритті картки активності; сервер їх не зберігає */
+const placesCache = {};
+function placesHtml(day) {
+  const p = placesCache[day]; if (!p || !p.length) return '';
+  return `<div class="muted" style="font-size:12px;letter-spacing:.12em;text-transform:uppercase;margin-top:4px">${L('Рекомендуємо за рейтингом', 'Top rated nearby')}</div><ul class="plist">${p.map(x => `<li><a href="${esc(x.url)}" target="_blank" rel="noopener noreferrer"><b>${esc(x.name)}</b></a><span class="stars">★ ${x.rating} <small>(${x.count})</small></span>${x.address ? `<small class="muted">${esc(x.address)}</small>` : ''}</li>`).join('')}</ul><div class="muted" style="font-size:11px">${L('Рейтинги: Google Maps. Години роботи перевіряйте на мапі.', 'Ratings: Google Maps. Check opening hours on the map.')}</div>`;
+}
+async function loadPlaces(day) {
+  if (day in placesCache) return;
+  placesCache[day] = [];
+  try { const key = `pl_${day}_${st.me.name}`; let v = null; try { v = JSON.parse(sessionStorage.getItem(key)); } catch {}
+    if (!v) { v = (await api('GET', '/api/places/' + day)).places; try { sessionStorage.setItem(key, JSON.stringify(v)); } catch {} }
+    placesCache[day] = v; const box = $('#places-box'); if (box) box.innerHTML = placesHtml(day);
+    if (v.length) { const ml = document.querySelector('.maplink .ml'); if (ml) ml.textContent = L('Шукати самим на мапі', 'Search the map yourself'); } // з рекомендаціями пошук стає альтернативою
+  } catch { /* рекомендації необов'язкові */ }
+}
 const TILES = () => [{ k: 'gift', t: L('Подарунок', 'Gift') }, { k: 'intim', t: L('Пригода для двох', 'Adventure for two') }, { k: 'act', t: L('Спільна активність', 'Shared activity') }];
 async function openDay(day) {
   const ov = document.createElement('div'); ov.className = 'overlay';
@@ -276,7 +291,7 @@ async function openDay(day) {
     if (t.k === 'intim') { meta = `<span>${L(LEVELS[x.level - 1][0], LEVELS[x.level - 1][1])}</span>`; hint = `<div class="hint">${L('Лише для вас двох. Зупиняйтесь, якщо комусь некомфортно.', 'Just for the two of you. Stop if anyone feels uncomfortable.')}</div>`; }
     if (t.k === 'act') { meta = `<span>${[L('безкоштовно', 'free'), L(`до ${fmtCur(300).replace('≈ ', '~')}`, `up to ${fmtCur(300).replace('≈ ', '~')}`), L(`до ${fmtCur(800).replace('≈ ', '~')}`, `up to ${fmtCur(800).replace('≈ ', '~')}`), L('дорожче / далі', 'pricier / farther')][x.cost]}</span>${x.car ? `<span>${L('потрібна машина', 'car needed')}</span>` : ''}`; }
     return `<div class="reveal"><div class="tag">${esc(tag)}</div><h3>${esc(x.title)}</h3><p>${esc(x.desc)}</p>
-      <div class="meta">${meta}</div>${x.link ? `<a class="link" href="${esc(x.link.url)}" target="_blank" rel="noopener noreferrer">${esc(x.link.label)} ↗</a>` : ''}${hint}
+      <div class="meta">${meta}</div>${t.k === 'act' ? `<div class="places" id="places-box">${placesHtml(day)}</div>` : ''}${x.link ? `<a class="link ${t.k === 'act' ? 'maplink' : ''}" href="${esc(x.link.url)}" target="_blank" rel="noopener noreferrer"><span class="ml">${esc(x.link.label)}</span> ↗</a>` : ''}${hint}
       <label class="tick"><input type="checkbox" data-mark="${t.k}" ${d.done[t.k] ? 'checked' : ''}> ${L('Виконано', 'Done')}</label></div>`;
   };
   const render = () => {
@@ -286,6 +301,7 @@ async function openDay(day) {
       <div class="row"><button class="btn ghost sm" id="all">${L('Відкрити все', 'Open all')}</button></div>`;
     ov.querySelector('.x').onclick = close;
     ov.querySelector('#all').onclick = () => { TILES().forEach(t => revealed[t.k] = true); render(); confetti(); };
+    if (revealed.act) loadPlaces(day);
   };
   render();
   ov.addEventListener('click', async e => {

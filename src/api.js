@@ -1,4 +1,5 @@
-import { GIFTS, INTIMATE, ACTIVITIES, QUESTIONS, REGIONS, generateSchedule, sanitizeSurvey, giftView, intimView, actView, questionText } from './logic.js';
+import { GIFTS, INTIMATE, ACTIVITIES, QUESTIONS, REGIONS, generateSchedule, sanitizeSurvey, giftView, intimView, actView, questionText, placesQuery } from './logic.js';
+import { recommend } from './places.js';
 import { createInvoice, verifyPaid, invoiceStatus } from './payments.js';
 import { verifyTurnstile } from './turnstile.js';
 import { handleAdmin } from './admin.js';
@@ -47,6 +48,7 @@ export async function handle(request, env) {
     if (m === 'POST' && path === '/api/survey') return json(await saveSurvey(request, env, member));
     if (m === 'GET' && (r = path.match(/^\/api\/day\/(\d+)$/))) return json(await getDay(env, member, +r[1]));
     if (m === 'POST' && path === '/api/answer') return json(await saveAnswer(request, env, member));
+    if (m === 'GET' && (r = path.match(/^\/api\/places\/(\d+)$/))) return json(await placesFor(env, member, +r[1]));
     if (m === 'GET' && path === '/api/history') return json(await history(env, member));
     if (m === 'POST' && path === '/api/mark') return json(await mark(request, env, member));
     throw new HttpError(404, 'not_found');
@@ -455,4 +457,16 @@ async function configResponse(request, env) {
   const st = await getSettings(env), fx = await getFx(env);
   return json({ price: st.price_uah, usdRate: st.usd_rate, detected: det, country: cc, currency: priceCurrency(fx, cc, st.usd_rate), fxUpdated: fx ? fx.updated : null,
     regions: REGIONS, turnstileSiteKey: env.TURNSTILE_SITE_KEY || null, googleClientId: env.GOOGLE_CLIENT_ID || null });
+}
+
+// ---------- Рекомендації закладів за публічними рейтингами (лише після відповіді на питання дня) ----------
+async function placesFor(env, mem, d) {
+  if (!(d >= 1 && d <= DAYS) || d > todayIndex(mem.start_date, nowOf(env), mem.tz)) throw new HttpError(403, 'not_yet');
+  if (!mem.schedule_json) throw new HttpError(409, 'not_ready');
+  const answered = await q1(env, 'SELECT 1 AS x FROM answers WHERE member_id = ? AND day = ?', mem.id, d);
+  if (!answered) throw new HttpError(403, 'answer_first');
+  const plan = JSON.parse(mem.schedule_json).days[d];
+  const query = placesQuery(ACTIVITIES[plan.act], mem.city, mem.lang);
+  const places = query ? await recommend(env, { query, lang: mem.lang, country: mem.country, memberId: mem.id, day: d }) : [];
+  return { ok: true, places };
 }

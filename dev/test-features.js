@@ -263,4 +263,48 @@ const anon = raw.prepare('SELECT * FROM orders WHERE id = ?').get(o1); assert(an
   // cron оновлює курси
   const c1 = (await cron()).j; assert(c1.fx && (c1.fx.ok || c1.fx.error), 'cron reports fx result');
 }
+
+// ===== 10. Рекомендації закладів (Google Places) =====
+{
+  const { pickTop, recommend, placesUsage } = await import('../src/places.js'); const { placesQuery, ACTIVITIES } = await import('../src/logic.js');
+  const gm = 'https://maps.google.com/?cid=';
+  const sample = [
+    { displayName: { text: 'Café Lumière' }, rating: 4.7, userRatingCount: 1200, googleMapsUri: gm + '1', shortFormattedAddress: '5 Rue A', businessStatus: 'OPERATIONAL' },
+    { displayName: { text: 'Few Reviews' }, rating: 5, userRatingCount: 3, googleMapsUri: gm + '2' },
+    { displayName: { text: 'Closed Place' }, rating: 4.9, userRatingCount: 900, googleMapsUri: gm + '3', businessStatus: 'CLOSED_PERMANENTLY' },
+    { displayName: { text: 'Low Rating' }, rating: 3.9, userRatingCount: 5000, googleMapsUri: gm + '4' },
+    { displayName: { text: 'Evil Link' }, rating: 4.8, userRatingCount: 800, googleMapsUri: 'https://evil.example/x' },
+    { displayName: { text: 'Popular Good' }, rating: 4.5, userRatingCount: 9000, googleMapsUri: gm + '5' },
+    { displayName: { text: 'Small Gem' }, rating: 4.8, userRatingCount: 60, googleMapsUri: gm + '6' }, { displayName: { text: 'Third' }, rating: 4.4, userRatingCount: 300, googleMapsUri: gm + '7' }, { displayName: { text: 'Fourth' }, rating: 4.3, userRatingCount: 200, googleMapsUri: gm + '8' }];
+  const top = pickTop(sample); assert.deepEqual(top.map(x => x.name), ['Popular Good', 'Café Lumière', 'Third'], 'ranked by rating x log(reviews)'); assert.equal(top[0].rating, 4.5); assert.equal(top[1].address, '5 Rue A');
+  assert(!top.some(x => ['Few Reviews', 'Closed Place', 'Low Rating', 'Evil Link'].includes(x.name)), 'filters out few reviews, closed, low rating, foreign links'); assert(top.every(x => x.url.startsWith('https://maps.google.com/')));
+  // запит із містом лише для шаблонних; конкретні пам'ятки пропускаємо
+  const cafe = ACTIVITIES.find(x => x.q === 'кав’ярня {city}'), castle = ACTIVITIES.find(x => x.q === 'Ужгородський замок');
+  assert.equal(placesQuery(cafe, 'Lyon', 'en'), 'cafe Lyon'); assert.equal(placesQuery(cafe, 'Львів', 'uk'), 'кав’ярня Львів'); assert.equal(placesQuery(castle, 'Ужгород', 'uk'), null);
+  // без ключа: порожньо, жодних запитів
+  let calls = 0, body = null, hdr = null; const fake = async (url, init) => { calls++; body = JSON.parse(init.body); hdr = init.headers; assert(String(url).startsWith('https://places.googleapis.com/v1/places:searchText')); return new Response(JSON.stringify({ places: sample }), { status: 200 }); };
+  assert.deepEqual(await recommend(env, { query: 'cafe Lyon', lang: 'en', country: 'FR', memberId: 'm1', day: 1, fetchImpl: fake }), []); assert.equal(calls, 0, 'no key: no request');
+  env.GOOGLE_PLACES_KEY = 'KEY123';
+  let rec = await recommend(env, { query: 'cafe Lyon', lang: 'en', country: 'FR', memberId: 'm1', day: 1, fetchImpl: fake }); assert.equal(rec.length, 3); assert.equal(calls, 1);
+  assert.equal(hdr['X-Goog-Api-Key'], 'KEY123'); assert(hdr['X-Goog-FieldMask'].includes('places.rating')); assert.deepEqual([body.textQuery, body.languageCode, body.regionCode], ['cafe Lyon', 'en', 'FR']);
+  assert.equal(await placesUsage(env), 1, 'usage counted');
+  // ліміт на учасника: не більше 4 запитів за вікно
+  for (let i = 0; i < 3; i++) await recommend(env, { query: 'q', lang: 'uk', memberId: 'm1', day: 1, fetchImpl: fake }); assert.equal(calls, 4);
+  assert.deepEqual(await recommend(env, { query: 'q', lang: 'uk', memberId: 'm1', day: 1, fetchImpl: fake }), [], 'per-member limit'); assert.equal(calls, 4);
+  // помилки Google не ламають картку
+  assert.deepEqual(await recommend(env, { query: 'q', lang: 'uk', memberId: 'm2', day: 1, fetchImpl: async () => new Response('err', { status: 403 }) }), []);
+  assert.deepEqual(await recommend(env, { query: 'q', lang: 'uk', memberId: 'm3', day: 1, fetchImpl: async () => { throw new Error('net'); } }), []);
+  // місячний ліміт: 0 вимикає; ліміт N зупиняє витрати
+  raw.prepare("INSERT INTO settings (key, value, updated_at) VALUES ('places_monthly_cap', '0', 1) ON CONFLICT(key) DO UPDATE SET value = '0'").run();
+  calls = 0; assert.deepEqual(await recommend(env, { query: 'q', lang: 'uk', memberId: 'm4', day: 1, fetchImpl: fake }), []); assert.equal(calls, 0, 'cap 0 disables');
+  const used = await placesUsage(env); raw.prepare("UPDATE settings SET value = ? WHERE key = 'places_monthly_cap'").run(String(used + 1));
+  assert.equal((await recommend(env, { query: 'q', lang: 'uk', memberId: 'm5', day: 1, fetchImpl: fake })).length, 3); assert.deepEqual(await recommend(env, { query: 'q', lang: 'uk', memberId: 'm6', day: 1, fetchImpl: fake }), [], 'monthly cap reached'); assert.equal(calls, 1);
+  raw.prepare("DELETE FROM settings WHERE key = 'places_monthly_cap'").run();
+  // ендпоінт: лише після відповіді на питання дня
+  env.NOW_OVERRIDE = '2026-12-05T06:30:00Z'; const deDay = 1;
+  delete env.GOOGLE_PLACES_KEY; let pr = await call('de1', 'GET', '/api/places/' + deDay); assert.equal(pr.status, 200); assert.deepEqual(pr.j.places, [], 'disabled without key');
+  pr = await call('de1', 'GET', '/api/places/2'); assert.equal(pr.status, 403, 'future window'); assert.equal((await call('x', 'GET', '/api/places/1')).status, 401);
+  const ansRow = raw.prepare("SELECT COUNT(*) AS n FROM answers WHERE member_id = ? AND day = 1").get(raw.prepare("SELECT m.* FROM members m JOIN calendars c ON c.id = m.calendar_id WHERE m.email = 'de2@t.com'").all()[0].id).n; assert.equal(ansRow, 0);
+  assert.equal((await call('de2', 'GET', '/api/places/1')).j.error, 'answer_first', 'recommendations only after answering');
+}
 console.log('FEATURES OK');

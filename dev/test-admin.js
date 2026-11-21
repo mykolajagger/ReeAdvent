@@ -110,10 +110,10 @@ const cu = (await A('a', 'GET', '/api/admin/customers')).j.customers; assert(cu.
 const csv = await call('a', 'GET', '/api/admin/customers.csv'); assert(csv.ct.includes('text/csv')); assert(csv.text.includes('email,імена'));
 assert(csv.text.includes("'=HYPERLINK"), 'CSV formula injection neutralised'); assert(!/(^|,)=HYPERLINK/m.test(csv.text));
 // ---- налаштування відсотків (форма в адмінці) ----
-assert.deepEqual((await A('a', 'GET', '/api/admin/settings')).j.settings, { fee_percent: 2, fee_foreign_percent: 2, tax_percent: 5, military_percent: 1, price_uah: 400, usd_rate: 41 }, 'defaults: fee from env, 5% + 1%, price from env');
+assert.deepEqual((await A('a', 'GET', '/api/admin/settings')).j.settings, { fee_percent: 2, fee_foreign_percent: 2, tax_percent: 5, military_percent: 1, price_uah: 400, usd_rate: 41, places_monthly_cap: 2000 }, 'defaults: fee from env, 5% + 1%, price from env');
 assert.equal((await A('a', 'POST', '/api/admin/settings', { fee_percent: 120 })).j.error, 'bad_percent');
 assert.equal((await A('a', 'POST', '/api/admin/settings', { tax_percent: 'abc' })).j.error, 'bad_percent');
-assert.deepEqual((await A('a', 'POST', '/api/admin/settings', { fee_percent: '2', tax_percent: '5', military_percent: '0' })).j.settings, { fee_percent: 2, fee_foreign_percent: 2, tax_percent: 5, military_percent: 0, price_uah: 400, usd_rate: 41 });
+assert.deepEqual((await A('a', 'POST', '/api/admin/settings', { fee_percent: '2', tax_percent: '5', military_percent: '0' })).j.settings, { fee_percent: 2, fee_foreign_percent: 2, tax_percent: 5, military_percent: 0, price_uah: 400, usd_rate: 41, places_monthly_cap: 2000 });
 // ціна з адмінки
 assert.equal((await A('a', 'POST', '/api/admin/settings', { price_uah: 0 })).j.error, 'bad_price'); assert.equal((await A('a', 'POST', '/api/admin/settings', { price_uah: 'x' })).j.error, 'bad_price');
 assert.equal((await call('x', 'GET', '/api/config')).j.price, 400);
