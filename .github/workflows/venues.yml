@@ -14,7 +14,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        shard: [1, 2]          # два незалежні виконавці з різними адресами; міста «захоплюються», тож не дублюються
+        shard: [1, 2, 3, 4]    # чотири незалежні виконавці з різними адресами; міста «захоплюються», тож не дублюються
     concurrency:
       group: venues-${{ matrix.shard }}
       cancel-in-progress: false
@@ -29,4 +29,5 @@ jobs:
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
           D1_DATABASE_ID: 8dd4d746-1746-4168-b724-1643f99925e6
           BUDGET_MIN: '12'
+          VENUES_CONCURRENCY: '4'
         run: node tools/fill-venues.mjs

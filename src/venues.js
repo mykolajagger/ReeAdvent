@@ -160,18 +160,24 @@ async function fillCity(env, c, fetchImpl) {
       if (twin) { await env.DB.prepare("UPDATE venue_cities SET priority = 1 WHERE id = ? AND status = 'pending'").bind(twin.id).run(); await env.DB.prepare("UPDATE venue_cities SET alias_of = ?, lat = ?, lon = ?, status = 'ready', fetched_at = ? WHERE id = ?").bind(twin.id, lat, lon, now, c.id).run(); return { city: c.key, status: 'alias' }; }
       await env.DB.prepare('UPDATE venue_cities SET lat = ?, lon = ? WHERE id = ?').bind(lat, lon, c.id).run();
     }
-    const els = [], failed = []; let lastErr; const errs = [];
-    for (const [i, q] of overpassQueries(lat, lon).entries()) {
-      if (i) await sleep(fetchImpl === fetch ? 2500 : 0); // пауза між групами, щоб не впиратись у ліміт запитів Overpass
-      try { els.push(...((await overpass(q, fetchImpl, fetchImpl === fetch ? 5000 : 0)).elements || [])); } catch (e) { failed.push(i + 1); lastErr = e; errs.push(`${i + 1}: ${String(e && e.message || e).slice(0, 50)}`); }
+    const els = [], failed = [], counts = []; let lastErr; const errs = [];
+    const qs = overpassQueries(lat, lon), par = fetchImpl === fetch ? 2 : 1;      // у бойовому режимі по дві групи паралельно (Overpass дозволяє 2 слоти на адресу)
+    for (let g = 0; g < qs.length; g += par) {
+      if (g) await sleep(fetchImpl === fetch ? 800 : 0);
+      await Promise.all(qs.slice(g, g + par).map(async (q, k) => {
+        const i = g + k;
+        try { const d = (await overpass(q, fetchImpl, fetchImpl === fetch ? 5000 : 0)).elements || []; counts[i] = d.length; els.push(...d); }
+        catch (e) { counts[i] = -1; failed.push(i + 1); lastErr = e; errs.push(`${i + 1}: ${String(e && e.message || e).slice(0, 50)}`); }
+      }));
     }
+    failed.sort();
     if (failed.length === CAT_GROUPS.length) throw lastErr;     // не відповіла жодна група — повтор пізніше
     const rows = pickVenues(els, lat, lon);
     const st = rows.map(v => env.DB.prepare('INSERT INTO venues (city_id, osm, cat, name, address, lat, lon, prior, hours, seen_at) VALUES (?,?,?,?,?,?,?,?,?,?) ON CONFLICT(city_id, osm, cat) DO UPDATE SET name = excluded.name, address = excluded.address, lat = excluded.lat, lon = excluded.lon, prior = excluded.prior, hours = excluded.hours, seen_at = excluded.seen_at').bind(c.id, v.osm, v.cat, v.name, v.address, v.lat, v.lon, v.prior, v.hours, now));
     for (let i = 0; i < st.length; i += 100) await env.DB.batch(st.slice(i, i + 100));
     if (rows.length) await env.DB.prepare('DELETE FROM venues WHERE city_id = ? AND seen_at < ? AND r_cnt = 0').bind(c.id, now).run(); // зниклі з OSM без оцінок прибираємо
     await env.DB.prepare("UPDATE venue_cities SET status = 'ready', venues_count = ?, fetched_at = ?, attempts = 0, error = ? WHERE id = ?").bind(rows.length, now, failed.length ? 'partial: групи ' + failed.join(',') + ' (' + String(lastErr && lastErr.message || lastErr).slice(0, 60) + ')' : null, c.id).run();
-    return { city: c.key, status: 'ready', venues: rows.length, ...(failed.length ? { failedGroups: failed, errors: errs } : {}) };
+    return { city: c.key, status: 'ready', venues: rows.length, raw: counts, ...(failed.length ? { failedGroups: failed, errors: errs } : {}) };
   } catch (e) {
     const failed = c.attempts + 1 >= 3;
     await env.DB.prepare('UPDATE venue_cities SET attempts = attempts + 1, status = ?, error = ?, fetched_at = ? WHERE id = ?').bind(failed ? 'failed' : (c.prev === 'ready' ? 'ready' : 'pending'), String(e.message || e).slice(0, 120), now, c.id).run();
@@ -183,7 +189,7 @@ async function fillCity(env, c, fetchImpl) {
 /** Бере наступне місто й «захоплює» його (status = 'working'), щоб паралельні запуски не брали те саме. Зависле захоплення (> 10 хв) вважається вільним. */
 async function nextCity(env, now) {
   const busy = await env.DB.prepare("SELECT COUNT(*) AS n FROM venue_cities WHERE status = 'working' AND fetched_at > ?").bind(Date.now() - 600000).first();
-  if (busy.n >= MAX_CONCURRENT) return null;
+  if (busy.n >= (parseInt(env.VENUES_CONCURRENCY, 10) || MAX_CONCURRENT)) return null;
   for (let i = 0; i < 5; i++) {
     let c = await env.DB.prepare("SELECT * FROM venue_cities WHERE alias_of IS NULL AND (status = 'pending' OR (status = 'working' AND fetched_at < ?)) ORDER BY priority DESC, requested_at LIMIT 1").bind(Date.now() - 600000).first();
     if (!c) c = await env.DB.prepare("SELECT * FROM venue_cities WHERE status = 'ready' AND alias_of IS NULL AND error LIKE 'partial%' AND lat IS NOT NULL AND fetched_at < ? ORDER BY fetched_at LIMIT 1").bind(Date.now() - 1800000).first(); // часткові міста повторюємо через 30 хв
