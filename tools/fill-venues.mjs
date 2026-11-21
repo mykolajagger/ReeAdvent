@@ -5,7 +5,7 @@ import { runVenuesLogged } from '../src/venues.js';
 
 const { CLOUDFLARE_API_TOKEN: token, CLOUDFLARE_ACCOUNT_ID: accountId, D1_DATABASE_ID: databaseId } = process.env;
 if (!token || !accountId || !databaseId) { console.error('Потрібні CLOUDFLARE_API_TOKEN, CLOUDFLARE_ACCOUNT_ID, D1_DATABASE_ID'); process.exit(1); }
-const env = { DB: makeRestDb({ accountId, databaseId, token }), VENUES_PER_RUN: '10', VENUES_CONCURRENCY: process.env.VENUES_CONCURRENCY || '2' };
+const env = { DB: makeRestDb({ accountId, databaseId, token }), VENUES_PER_RUN: '10', VENUES_CONCURRENCY: process.env.VENUES_CONCURRENCY || '2', OVERPASS_TIMEOUT: process.env.OVERPASS_TIMEOUT || '30' };
 const end = Date.now() + (Number(process.env.BUDGET_MIN) || 12) * 60e3;
 let cities = 0, rounds = 0;
 while (Date.now() < end) {

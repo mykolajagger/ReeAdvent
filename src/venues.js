@@ -7,7 +7,7 @@ import { rateLimit } from './promo.js';
 const UA = 'ReeAdvent/1.0 (+https://reeadvent.fun; support@reeadvent.fun)';
 const OVERPASS = ['https://overpass-api.de/api/interpreter', 'https://overpass.kumi.systems/api/interpreter', 'https://overpass.private.coffee/api/interpreter'];
 const MAX_CONCURRENT = 2; // одночасно не більше двох міст у роботі: публічний Overpass має обмежену кількість «слотів»
-const RADIUS = 8000, PER_SET = 400, KEEP = 20, REFRESH_MS = 7 * 864e5, VER = '2'; // VER: версія схеми/категорій; зміна ставить готові міста на повторне наповнення
+const RADIUS = 6000, PER_SET = 400, KEEP = 20, REFRESH_MS = 7 * 864e5, VER = '2'; // VER: версія схеми/категорій; зміна ставить готові міста на повторне наповнення
 
 /** Категорії закладів → теги OSM (значення: рядок, масив варіантів або '!a|b' — «крім»). */
 export const CATS = {
@@ -83,19 +83,19 @@ const flt = f => Object.entries(f).map(([k, v]) => Array.isArray(v) ? `["${k}"~"
 // Запити діляться на групи (великі міста типу Києва не витримують одного запиту на 33 категорії) і йдуть за прямокутником — це швидше за «around»
 export const CAT_GROUPS = [['cafe', 'restaurant', 'bar', 'pastry'], ['cinema', 'theatre', 'museum', 'park', 'viewpoint', 'garden', 'castle', 'church', 'market'],
   ['bowling', 'billiards', 'pool', 'spa', 'rink', 'climbing', 'yoga', 'shelter'], ['books', 'florist', 'gift', 'coffee', 'tea', 'wine', 'beer', 'cheese', 'photo', 'jewelry', 'toys', 'beauty']];
-export function overpassQueries(lat, lon) {
+export function overpassQueries(lat, lon, timeoutSec = 30) {
   const dLat = RADIUS / 111200, dLon = RADIUS / (111200 * Math.cos(lat * Math.PI / 180)), bbox = [lat - dLat, lon - dLon, lat + dLat, lon + dLon].map(x => x.toFixed(5)).join(',');
-  return CAT_GROUPS.map(g => `[out:json][timeout:30][maxsize:67108864];${g.map(cat => `(${CATS[cat].map(f => `nwr${flt(f)}["name"](${bbox});`).join('')});out center tags ${PER_SET};`).join('')}`);
+  return CAT_GROUPS.map(g => `[out:json][timeout:${timeoutSec}][maxsize:67108864];${g.map(cat => `(${CATS[cat].map(f => `nwr${flt(f)}["name"](${bbox});`).join('')});out center tags ${PER_SET};`).join('')}`);
 }
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 /** Запит до Overpass із запасними серверами. Два кола: після відмови всіх (429/5xx, таймаут) пауза й спроба ще раз. Відповідь із повідомленням про помилку виконання вважається невдалою. */
-async function overpass(query, fetchImpl, pause = 5000) {
+async function overpass(query, fetchImpl, pause = 5000, abortMs = 40000) {
   let last;
   for (let round = 0; round < 2; round++) {
     if (round) { if (!/overpass (429|50\d)/.test(String(last && last.message))) break; await sleep(pause); }
     for (const url of OVERPASS) {
       try {
-        const r = await fetchImpl(url, { method: 'POST', headers: { 'User-Agent': UA, 'content-type': 'application/x-www-form-urlencoded' }, body: 'data=' + encodeURIComponent(query), signal: AbortSignal.timeout(40000) });
+        const r = await fetchImpl(url, { method: 'POST', headers: { 'User-Agent': UA, 'content-type': 'application/x-www-form-urlencoded' }, body: 'data=' + encodeURIComponent(query), signal: AbortSignal.timeout(abortMs) });
         if (!r.ok) { last = new Error('overpass ' + r.status); continue; }
         const j = await r.json();
         if (j.remark && /runtime error|timed out|timeout|out of memory/i.test(j.remark)) { last = new Error('overpass remark: ' + String(j.remark).slice(0, 40)); continue; }
@@ -161,12 +161,12 @@ async function fillCity(env, c, fetchImpl) {
       await env.DB.prepare('UPDATE venue_cities SET lat = ?, lon = ? WHERE id = ?').bind(lat, lon, c.id).run();
     }
     const els = [], failed = [], counts = []; let lastErr; const errs = [];
-    const qs = overpassQueries(lat, lon), par = fetchImpl === fetch ? 2 : 1;      // у бойовому режимі по дві групи паралельно (Overpass дозволяє 2 слоти на адресу)
+    const T = Math.min(120, Math.max(15, parseInt(env.OVERPASS_TIMEOUT, 10) || 30)), qs = overpassQueries(lat, lon, T), par = fetchImpl === fetch ? 2 : 1;      // у бойовому режимі по дві групи паралельно (Overpass дозволяє 2 слоти на адресу)
     for (let g = 0; g < qs.length; g += par) {
       if (g) await sleep(fetchImpl === fetch ? 800 : 0);
       await Promise.all(qs.slice(g, g + par).map(async (q, k) => {
         const i = g + k;
-        try { const d = (await overpass(q, fetchImpl, fetchImpl === fetch ? 5000 : 0)).elements || []; counts[i] = d.length; els.push(...d); }
+        try { const d = (await overpass(q, fetchImpl, fetchImpl === fetch ? 5000 : 0, (T + 15) * 1000)).elements || []; counts[i] = d.length; els.push(...d); }
         catch (e) { counts[i] = -1; failed.push(i + 1); lastErr = e; errs.push(`${i + 1}: ${String(e && e.message || e).slice(0, 50)}`); }
       }));
     }
