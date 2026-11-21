@@ -83,4 +83,15 @@ const hit = (secret) => handle(new Request('http://x/api/cron/venues', { method:
 assert.equal((await hit(null)).status, 404); assert.equal((await hit('wrong'.repeat(5))).status, 404);
 raw.prepare('UPDATE venue_cities SET fetched_at = ?').run(Date.now() + 864e5 * 400); // нічого не потребує оновлення: реальну мережу не чіпаємо
 const okRes = await hit(env.CRON_SECRET); assert.equal(okRes.status, 200); assert.equal((await okRes.json()).ok, true);
+// ----- кілька міст за запуск і керування чергою з адмінки
+raw.prepare("UPDATE venue_cities SET status = 'ready', fetched_at = ?").run(Date.now() + 864e5 * 400);
+for (const n of ['Сколе', 'Стрий', 'Дрогобич']) { await ensureCity(env, 'UA', n); raw.prepare("UPDATE venue_cities SET lat = 49.0 + ?, lon = 23.5 WHERE key = ?").run(Math.random() * 2, cityKey('UA', n)); }
+env.VENUES_PER_RUN = '2';
+let multi = await runVenues(env, { fetchImpl: mockFetch }); assert.equal(multi.cities.length, 2, JSON.stringify(multi));
+env.VENUES_PER_RUN = '99'; multi = await runVenues(env, { fetchImpl: mockFetch }); assert.equal((multi.cities || [multi]).length, 1, 'лишилось одне місто'); delete env.VENUES_PER_RUN;
+const { venueProblems, retryCities, queueCity } = await import('../src/venues.js');
+assert(await queueCity(env, 'pl', 'Zakopane2')); assert(!(await queueCity(env, 'POL', 'x'))); assert(!(await queueCity(env, 'UA', '')));
+raw.prepare("UPDATE venue_cities SET status = 'failed', error = 'geocode_not_found' WHERE key = 'UA|нікуди'").run();
+const pr = await venueProblems(env); assert(pr.some(p => p.name === 'Нікуди' && p.status === 'failed'), JSON.stringify(pr));
+assert((await retryCities(env, null)) >= 1); assert.equal(raw.prepare("SELECT status FROM venue_cities WHERE key = 'UA|нікуди'").get().status, 'pending');
 console.log('VENUES OK');

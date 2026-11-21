@@ -114,15 +114,41 @@ async function fillCity(env, c, fetchImpl) {
 }
 
 /** Один крок cron (кожні ~10 хв): наповнює одне місто. Спершу нові міста клієнтів, потім найбільші, вночі (UTC 0–4) — тижневе оновлення. */
-export async function runVenues(env, { fetchImpl = fetch, now = Date.now() } = {}) {
-  const seeded = await seedTop(env);
+async function nextCity(env, now) {
   let c = await env.DB.prepare("SELECT * FROM venue_cities WHERE status = 'pending' AND alias_of IS NULL ORDER BY priority DESC, requested_at LIMIT 1").first();
   if (!c) {
     const h = new Date(now).getUTCHours();
     if (h >= 0 && h < 4) c = await env.DB.prepare("SELECT * FROM venue_cities WHERE status IN ('ready','failed') AND alias_of IS NULL AND lat IS NOT NULL AND (fetched_at IS NULL OR fetched_at < ?) ORDER BY fetched_at LIMIT 1").bind(now - REFRESH_MS).first();
   }
-  if (!c) return { seeded, idle: true };
-  return { seeded, ...(await fillCity(env, c, fetchImpl)) };
+  return c;
+}
+/** За запуск обробляється VENUES_PER_RUN міст (за замовчуванням 1, максимум 10), але не довше ~40 с. */
+export async function runVenues(env, { fetchImpl = fetch, now = Date.now() } = {}) {
+  const seeded = await seedTop(env), per = Math.min(10, Math.max(1, parseInt(env.VENUES_PER_RUN, 10) || 1)), t0 = Date.now(), done = [];
+  while (done.length < per && (done.length === 0 || Date.now() - t0 < 25000)) {
+    const c = await nextCity(env, now); if (!c) break;
+    done.push(await fillCity(env, c, fetchImpl));
+  }
+  if (!done.length) return { seeded, idle: true };
+  return { seeded, ...done[0], ...(done.length > 1 ? { cities: done } : {}) };
+}
+
+/** Невдалі й очікувані міста (для адмінки). */
+export async function venueProblems(env) {
+  const { results } = await env.DB.prepare("SELECT id, country, name, status, attempts, error, fetched_at FROM venue_cities WHERE alias_of IS NULL AND (status = 'failed' OR (status = 'pending' AND priority > 0)) ORDER BY (status = 'failed') DESC, requested_at DESC LIMIT 30").all();
+  return results;
+}
+/** Повертає в чергу одне місто (id) або всі невдалі. */
+export async function retryCities(env, id) {
+  const r = id ? await env.DB.prepare("UPDATE venue_cities SET status = 'pending', attempts = 0, error = NULL, priority = 1 WHERE id = ? AND alias_of IS NULL").bind(id).run()
+    : await env.DB.prepare("UPDATE venue_cities SET status = 'pending', attempts = 0, error = NULL, priority = 1 WHERE status = 'failed' AND alias_of IS NULL").run();
+  return r.meta?.changes || 0;
+}
+/** Ручне додавання міста в чергу (адмін). */
+export async function queueCity(env, country, name) {
+  country = String(country || '').toUpperCase(); name = String(name || '').trim().slice(0, 80);
+  if (!/^[A-Z]{2}$/.test(country) || name.length < 2) return false;
+  await ensureCity(env, country, name); return true;
 }
 
 export async function venueStats(env) {
