@@ -110,10 +110,18 @@ const cu = (await A('a', 'GET', '/api/admin/customers')).j.customers; assert(cu.
 const csv = await call('a', 'GET', '/api/admin/customers.csv'); assert(csv.ct.includes('text/csv')); assert(csv.text.includes('email,імена'));
 assert(csv.text.includes("'=HYPERLINK"), 'CSV formula injection neutralised'); assert(!/(^|,)=HYPERLINK/m.test(csv.text));
 // ---- налаштування відсотків (форма в адмінці) ----
-assert.deepEqual((await A('a', 'GET', '/api/admin/settings')).j.settings, { fee_percent: 2, tax_percent: 5, military_percent: 1 }, 'defaults: fee from env, 5% + 1%');
+assert.deepEqual((await A('a', 'GET', '/api/admin/settings')).j.settings, { fee_percent: 2, tax_percent: 5, military_percent: 1, price_uah: 400 }, 'defaults: fee from env, 5% + 1%, price from env');
 assert.equal((await A('a', 'POST', '/api/admin/settings', { fee_percent: 120 })).j.error, 'bad_percent');
 assert.equal((await A('a', 'POST', '/api/admin/settings', { tax_percent: 'abc' })).j.error, 'bad_percent');
-assert.deepEqual((await A('a', 'POST', '/api/admin/settings', { fee_percent: '2', tax_percent: '5', military_percent: '0' })).j.settings, { fee_percent: 2, tax_percent: 5, military_percent: 0 });
+assert.deepEqual((await A('a', 'POST', '/api/admin/settings', { fee_percent: '2', tax_percent: '5', military_percent: '0' })).j.settings, { fee_percent: 2, tax_percent: 5, military_percent: 0, price_uah: 400 });
+// ціна з адмінки
+assert.equal((await A('a', 'POST', '/api/admin/settings', { price_uah: 0 })).j.error, 'bad_price'); assert.equal((await A('a', 'POST', '/api/admin/settings', { price_uah: 'x' })).j.error, 'bad_price');
+assert.equal((await call('x', 'GET', '/api/config')).j.price, 400);
+assert.equal((await A('a', 'POST', '/api/admin/settings', { price_uah: '549,50' })).j.settings.price_uah, 549.5);
+assert.equal((await call('x', 'GET', '/api/config')).j.price, 549.5, 'public price follows the admin setting');
+assert.equal((await call('x', 'POST', '/api/promo/check', { code: 'tenoff' })).j.finalKop, 49455, '10% off the new price');
+const oNew = (await call('x', 'POST', '/api/orders', { nameA: 'А', nameB: 'Б', emailA: 'np1@t.com', emailB: 'np2@t.com', city: 'Львів', region: 'Львівська', startDate: '2026-12-01', age18: true, terms: true })).j; assert.equal(oNew.amountKop, 54950, 'new order uses new price'); raw.prepare('DELETE FROM orders WHERE id = ?').run(oNew.orderId);
+assert((await A('a', 'POST', '/api/admin/settings', { price_uah: 400 })).j.ok);
 assert.equal((await call('a', 'POST', '/api/admin/settings', { fee_percent: 1 })).j.error, 'csrf');
 // ---- дашборд ----
 const d = (await A('a', 'GET', '/api/admin/dashboard?days=30')).j.kpi;

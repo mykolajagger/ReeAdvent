@@ -16,7 +16,7 @@ async function api(method, path, body) {
   if (!r.ok || j.ok === false) { const e = new Error(j.error || 'server_error'); e.code = j.error || 'server_error'; e.detail = j.detail; if (e.code === 'admin_auth') { me = null; showLogin(); } throw e; }
   return j;
 }
-const ERR = { refund_failed: 'Monobank не виконав повернення. Замовлення не змінено', bad_percent: 'Відсоток: число від 0 до 100', admin_auth: 'Сесія закінчилась', code_exists: 'Такий код уже є', bad_code: 'Код: 3–32 символи (літери, цифри, - _)', bad_value: 'Невірне значення знижки', bad_max: 'Ліміт: ціле число від 1', bad_date: 'Невірна дата', already_started: 'Календар уже стартував: дату змінити не можна', same_email: 'Пошти мають бути різні', bad_email: 'Невірна пошта', bad_names: 'Вкажіть імена', not_paid: 'Замовлення не оплачене', already_refunded: 'Повернення вже оформлено', bad_amount: 'Сума більша за оплачену', empty: 'Напишіть текст відповіді', too_many: 'Забагато спроб', csrf: 'Помилка захисту, оновіть сторінку' };
+const ERR = { refund_failed: 'Monobank не виконав повернення. Замовлення не змінено', bad_percent: 'Відсоток: число від 0 до 100', bad_price: 'Ціна: від 1 до 100000 грн', admin_auth: 'Сесія закінчилась', code_exists: 'Такий код уже є', bad_code: 'Код: 3–32 символи (літери, цифри, - _)', bad_value: 'Невірне значення знижки', bad_max: 'Ліміт: ціле число від 1', bad_date: 'Невірна дата', already_started: 'Календар уже стартував: дату змінити не можна', same_email: 'Пошти мають бути різні', bad_email: 'Невірна пошта', bad_names: 'Вкажіть імена', not_paid: 'Замовлення не оплачене', already_refunded: 'Повернення вже оформлено', bad_amount: 'Сума більша за оплачену', empty: 'Напишіть текст відповіді', too_many: 'Забагато спроб', csrf: 'Помилка захисту, оновіть сторінку' };
 const errText = e => (ERR[e.code] || 'Щось пішло не так: ' + (e.code || e.message)) + (e.detail ? ` (${e.detail})` : '');
 function toast(t) { const el = $('#toast'); el.textContent = t; el.classList.add('show'); clearTimeout(toast.t); toast.t = setTimeout(() => el.classList.remove('show'), 2800); }
 
@@ -240,7 +240,11 @@ async function inbox() {
 async function settings() {
   const r = await api('GET', '/api/admin/settings'), v = r.settings;
   $('#main').innerHTML = `<div class="top"><div><h2>Фінанси</h2><h1>Налаштування</h1></div></div>
-  <div class="card sec" style="max-width:620px"><h2>Відсотки для розрахунку прибутку</h2>
+  <div class="card sec" style="max-width:620px"><h2>Ціна календаря</h2>
+    <label class="f">Ціна для клієнтів, грн<input id="s0" type="number" step="0.01" min="1" max="100000" value="${v.price_uah}" required></label>
+    <div class="muted">Діє одразу на сайті й для нових замовлень. Уже створені замовлення, які ще не оплачено, лишаються за ціною на момент оформлення. Промокоди рахуються від цієї ціни.</div>
+    <div><button class="btn" id="sp">Зберегти ціну</button></div></div>
+  <div class="card sec" style="max-width:620px;margin-top:14px"><h2>Відсотки для розрахунку прибутку</h2>
     <div class="muted">Ці відсотки використовує лише дашборд для орієнтовного чистого прибутку. На ціну для клієнтів і на самі платежі вони не впливають.</div>
     <form id="sf" class="grid" style="gap:12px">
       <label class="f">Комісія еквайрингу Monobank, %<input id="s1" type="number" step="0.01" min="0" max="100" value="${v.fee_percent}" required></label>
@@ -249,7 +253,8 @@ async function settings() {
     </form>
     <div class="muted">Орієнтовні значення: ЄП 3 група 5% і військовий збір 1%, комісію візьміть із договору з банком. ЄСВ (фіксована сума) не враховується. Уточніть у бухгалтера.</div>
     <div><button class="btn" id="ss">Зберегти</button></div></div>
-  <div class="card sec" style="max-width:620px;margin-top:14px"><h2>Ціна</h2><div>Поточна ціна: <b>${r.price} ₴</b>. Змінюється змінною <code>PRICE_UAH</code> у <code>wrangler.toml</code> (потрібен новий деплой).</div></div>`;
+`;
+  $('#sp').onclick = async () => { const el = $('#s0'); if (!el.reportValidity()) return; try { await api('POST', '/api/admin/settings', { price_uah: el.value }); toast('Ціну збережено: ' + UAH(Math.round(Number(el.value) * 100))); } catch (e) { toast(errText(e)); } };
   $('#ss').onclick = async () => { if (!$('#sf').reportValidity()) return; try { await api('POST', '/api/admin/settings', { fee_percent: $('#s1').value, tax_percent: $('#s2').value, military_percent: $('#s3').value }); toast('Збережено'); } catch (e) { toast(errText(e)); } };
 }
 

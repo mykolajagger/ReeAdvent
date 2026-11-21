@@ -2,11 +2,10 @@
 export const normCode = c => String(c || '').trim().toUpperCase().replace(/\s+/g, '');
 export const CODE_RE = /^[A-Z0-9_-]{3,32}$/;
 
-export const listPriceKop = env => Math.round(Number(env.PRICE_UAH) * 100);
 
-/** Рахує ціну зі знижкою. Мінімальна ненульова сума — 1 грн (обмеження еквайрингу). */
-export function priceWith(env, promo) {
-  const list = listPriceKop(env);
+
+/** Рахує ціну зі знижкою (list — прайс у копійках). Мінімальна ненульова сума — 1 грн (обмеження еквайрингу). */
+export function priceWith(list, promo) {
   let discount = 0;
   if (promo) {
     discount = promo.type === 'percent' ? Math.round(list * Math.min(100, promo.value) / 100) : Math.min(list, promo.value);

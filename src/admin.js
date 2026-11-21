@@ -2,10 +2,10 @@
 // Менеджер НЕ бачить відповідей анкет і особистих відповідей на питання дня (обіцяно в політиці конфіденційності).
 import { HttpError, json, randomToken, uid, sha256, parseCookies, EMAIL_RE, normEmail, cleanText, nowOf, todayIndex, windowDates, fromDateStr, localParts, toDateStr, tomorrowStr } from './util.js';
 import { sendEmail, loginEmail, welcomeEmail, partnerInviteEmail, refundEmail, supportReplyEmail } from './email.js';
-import { rateLimit, CODE_RE, normCode, listPriceKop } from './promo.js';
+import { rateLimit, CODE_RE, normCode } from './promo.js';
 import { generateSchedule } from './logic.js';
 import { issueLoginLink, WELCOME_TTL_MS } from './api.js';
-import { getSettings, saveSettings } from './settings.js';
+import { getSettings, saveSettings, getPriceUah } from './settings.js';
 import { cancelInvoice } from './payments.js';
 
 const ADMIN_LOGIN_TTL = 30 * 60e3, ADMIN_SESSION_TTL = 14 * 24 * 3600e3;
@@ -63,8 +63,8 @@ export async function handleAdmin(request, env, path, m) {
   const url = new URL(request.url);
   let r;
 
-  if (m === 'GET' && path === '/api/admin/me') return json({ ok: true, email: admin, price: Number(env.PRICE_UAH) });
-  if (m === 'GET' && path === '/api/admin/settings') return json({ ok: true, settings: await getSettings(env), price: Number(env.PRICE_UAH) });
+  if (m === 'GET' && path === '/api/admin/me') return json({ ok: true, email: admin, price: await getPriceUah(env) });
+  if (m === 'GET' && path === '/api/admin/settings') return json({ ok: true, settings: await getSettings(env) });
   if (m === 'POST' && path === '/api/admin/settings') { const saved = await saveSettings(env, await readJson(request)); await audit(env, admin, 'settings', null, saved); return json({ ok: true, settings: await getSettings(env) }); }
   if (m === 'GET' && path === '/api/admin/dashboard') return json({ ok: true, ...(await dashboard(env, url.searchParams.get('days') || '30')) });
   if (m === 'GET' && path === '/api/admin/orders') return json({ ok: true, ...(await listOrders(env, url)) });
@@ -76,7 +76,7 @@ export async function handleAdmin(request, env, path, m) {
     await audit(env, admin, 'export_customers', null, { count: rows.length });
     return csvResponse('customers.csv', ['email', 'імена', 'замовлень', 'сплачено_грн', 'останнє_замовлення', 'міста'], rows.map(c => [c.email, c.names, c.orders, (c.paid_kop / 100).toFixed(2), new Date(c.last_at).toISOString().slice(0, 10), c.cities]));
   }
-  if (m === 'GET' && path === '/api/admin/promos') return json({ ok: true, promos: await listPromos(env), price: Number(env.PRICE_UAH) });
+  if (m === 'GET' && path === '/api/admin/promos') return json({ ok: true, promos: await listPromos(env), price: await getPriceUah(env) });
   if (m === 'POST' && path === '/api/admin/promos') return json(await createPromo(request, env, admin));
   if (m === 'POST' && (r = path.match(/^\/api\/admin\/promos\/([\w-]+)$/))) return json(await updatePromo(request, env, admin, r[1]));
   if (m === 'GET' && path === '/api/admin/audit') return json({ ok: true, rows: await qa(env, 'SELECT * FROM audit_log ORDER BY id DESC LIMIT 200') });

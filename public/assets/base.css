@@ -139,3 +139,11 @@ textarea:focus{outline:none;border-color:var(--gold)}
 .hist .q{font:500 22px/1.2 var(--head)}
 .hist .tasks{margin:0;padding-left:18px;color:var(--muted);font-size:14px}
 .hist .tasks li.done{color:var(--ink)}.hist .tasks li.done::marker{content:"✓ "}
+
+/* вхід через Google: офіційна кнопка (світла пілюля) з м'якою підсвіткою */
+.gwrap{min-height:44px;display:flex;justify-content:center;border-radius:999px;transition:filter .25s,transform .2s}
+.gwrap.on{filter:drop-shadow(0 8px 24px rgba(214,180,106,.22))}
+.gwrap.on:hover{filter:drop-shadow(0 10px 28px rgba(214,180,106,.4));transform:translateY(-1px)}
+.or{display:flex;align-items:center;gap:14px;width:100%;max-width:320px;color:var(--muted);font:600 11px var(--body);letter-spacing:.24em;text-transform:uppercase}
+.or::before,.or::after{content:"";flex:1;height:1px;background:var(--line)}
+.or[hidden]{display:none}

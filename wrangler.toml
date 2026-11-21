@@ -8,7 +8,7 @@ database_name = "reeadvent-db"
 database_id = "8dd4d746-1746-4168-b724-1643f99925e6"
 
 [vars]
-PRICE_UAH = "899"
+PRICE_UAH = "899"   # початкова ціна; далі змінюється в адмінці (Налаштування)
 BASE_URL = "https://reeadvent.fun"
 PAYMENT_MODE = "monobank"  # stub | monobank
 EMAIL_MODE = "resend"      # stub | resend

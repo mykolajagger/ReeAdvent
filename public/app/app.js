@@ -23,8 +23,8 @@ function showLogin(msg) {
     <svg class="ico" viewBox="0 0 48 48"><path d="M24 4v40M4 24h40M10 10l28 28M38 10L10 38"/></svg>
     <div class="eyebrow">ReeAdvent</div><h1>Ваш <em>Адвент</em></h1>
     <p class="muted">Увійдіть через Google або отримайте посилання на пошту, на яку надійшло запрошення.</p>
-    <div id="gbtn" style="min-height:44px;display:flex;justify-content:center"></div>
-    <div class="muted" id="gor" hidden style="font-size:12px;letter-spacing:.2em;text-transform:uppercase">або</div>
+    <div id="gbtn" class="gwrap"></div>
+    <div class="or" id="gor" hidden>або</div>
     <form id="lf" style="display:grid;gap:12px;width:100%;max-width:360px">
       <input id="em" type="email" inputmode="email" autocomplete="email" placeholder="you@example.com" required style="padding:14px 16px;border-radius:12px;border:1px solid var(--line);background:#ffffff08;color:var(--ink);font:500 17px var(--body)">
       <button class="btn" id="sb">Надіслати посилання</button>
@@ -48,7 +48,8 @@ async function initGoogle() {
       try { await api('POST', '/api/auth/google', { credential: r.credential }); boot(); }
       catch (e) { $('#lm') && ($('#lm').textContent = e.code === 'no_access' ? 'Ця Google-пошта не є учасником календаря. Увійдіть за посиланням на пошту, на яку надійшло запрошення.' : errText(e)); }
     } });
-    google.accounts.id.renderButton($('#gbtn'), { theme: 'filled_black', size: 'large', shape: 'pill', text: 'continue_with', locale: 'uk' });
+    google.accounts.id.renderButton($('#gbtn'), { theme: 'outline', size: 'large', shape: 'pill', text: 'continue_with', logo_alignment: 'left', width: Math.min(320, Math.max(220, innerWidth - 64)), locale: 'uk' });
+    $('#gbtn').classList.add('on');
     $('#gor').hidden = false;
   };
   if (window.google?.accounts?.id) return render();

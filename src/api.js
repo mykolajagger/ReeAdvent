@@ -3,6 +3,8 @@ import { createInvoice, verifyPaid, invoiceStatus } from './payments.js';
 import { verifyTurnstile } from './turnstile.js';
 import { handleAdmin } from './admin.js';
 import { findPromo, priceWith, rateLimit, normCode } from './promo.js';
+import { getPriceUah } from './settings.js';
+const listKop = async env => Math.round((await getPriceUah(env)) * 100);
 import { sendEmail, welcomeEmail, partnerInviteEmail, loginEmail } from './email.js';
 import { runDaily, checkUnsub } from './reminders.js';
 import { json, HttpError, localDayNumber, randomToken, uid, sha256, parseCookies, sessionCookie, EMAIL_RE, normEmail, cleanText, nowOf, tomorrowStr, fromDateStr, toDateStr, todayIndex, windowDates, validTz, DAYS, UNLOCK_HOUR } from './util.js';
@@ -17,7 +19,7 @@ export async function handle(request, env) {
     const url = new URL(request.url);
     const path = url.pathname.replace(/\/+$/, '');
     const m = request.method;
-    if (m === 'GET' && path === '/api/config') return json({ price: Number(env.PRICE_UAH), currency: 'UAH', regions: REGIONS, turnstileSiteKey: env.TURNSTILE_SITE_KEY || null, googleClientId: env.GOOGLE_CLIENT_ID || null });
+    if (m === 'GET' && path === '/api/config') return json({ price: await getPriceUah(env), currency: 'UAH', regions: REGIONS, turnstileSiteKey: env.TURNSTILE_SITE_KEY || null, googleClientId: env.GOOGLE_CLIENT_ID || null });
     if (m === 'POST' && path === '/api/orders') return await createOrder(request, env);
     if (m === 'POST' && path === '/api/promo/check') return await promoCheck(request, env);
     let r;
@@ -92,7 +94,7 @@ async function createOrder(request, env) {
     if (r.error) throw new HttpError(400, 'promo_' + r.error);
     promo = r.promo;
   }
-  const price = priceWith(env, promo);
+  const price = priceWith(await listKop(env), promo);
   const order = { id: uid(), amount_kop: price.final, ...o };
   const free = price.final === 0;
   const inv = free ? { invoiceId: 'free_' + order.id, pageUrl: `${env.BASE_URL}/thanks.html?order=${order.id}` } : await createInvoice(env, order);
@@ -108,9 +110,9 @@ async function promoCheck(request, env) {
   if (!(await rateLimit(env, 'promo:' + ip, 20, 600))) throw new HttpError(429, 'too_many');
   const b = await readJson(request);
   const r = await findPromo(env, b.code);
-  const list = priceWith(env, null);
+  const listP = await listKop(env), list = priceWith(listP, null);
   if (r.error) return json({ ok: true, valid: false, reason: r.error, listKop: list.list });
-  const price = priceWith(env, r.promo);
+  const price = priceWith(listP, r.promo);
   return json({ ok: true, valid: true, code: r.promo.code, listKop: price.list, discountKop: price.discount, finalKop: price.final, type: r.promo.type, value: r.promo.value });
 }
 
