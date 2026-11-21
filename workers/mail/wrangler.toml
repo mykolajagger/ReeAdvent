@@ -1,6 +1,7 @@
 name = "reeadvent-inbox"
 main = "src/index.js"
 compatibility_date = "2025-01-01"
+keep_vars = true  # змінні, додані вручну в дашборді, не стираються при деплої
 
 [[d1_databases]]
 binding = "DB"
@@ -16,3 +17,7 @@ crons = ["1 * * * *", "*/10 * * * *"]
 
 [vars]
 BASE_URL = "https://reeadvent.fun"
+
+# Журнали запусків cron видно в Worker → Logs (безкоштовний ліміт: 200 тис. подій на добу)
+[observability]
+enabled = true
