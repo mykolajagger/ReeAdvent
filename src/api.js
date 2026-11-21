@@ -4,11 +4,13 @@ import { verifyTurnstile } from './turnstile.js';
 import { handleAdmin } from './admin.js';
 import { findPromo, priceWith, rateLimit, normCode } from './promo.js';
 import { getPriceUah, getSettings } from './settings.js';
+import { getFx, priceCurrency } from './currency.js';
 const listKop = async env => Math.round((await getPriceUah(env)) * 100);
 import { sendEmail, welcomeEmail, partnerInviteEmail, loginEmail } from './email.js';
 import { runDaily, checkUnsub } from './reminders.js';
 import { json, HttpError, localDayNumber, unlockTimes, randomToken, uid, sha256, parseCookies, sessionCookie, EMAIL_RE, normEmail, cleanText, nowOf, tomorrowStr, fromDateStr, toDateStr, todayIndex, windowDates, validTz, DAYS, UNLOCK_HOUR } from './util.js';
 
+const BLOCKED_COUNTRIES = ['RU', 'BY']; // не обслуговуємо (умови еквайрингу); змініть тут і в public/assets/countries.js
 const MAX_START_DAYS = 90; // найдальша дата старту від завтрашнього дня
 
 const LOGIN_TTL = 30 * 60e3, WELCOME_TTL = 7 * 24 * 3600e3, SESSION_TTL = 60 * 24 * 3600e3;
@@ -19,7 +21,7 @@ export async function handle(request, env) {
     const url = new URL(request.url);
     const path = url.pathname.replace(/\/+$/, '');
     const m = request.method;
-    if (m === 'GET' && path === '/api/config') return json({ price: await getPriceUah(env), usdRate: (await getSettings(env)).usd_rate, detected: detectLocale(request), currency: 'UAH', regions: REGIONS, turnstileSiteKey: env.TURNSTILE_SITE_KEY || null, googleClientId: env.GOOGLE_CLIENT_ID || null });
+    if (m === 'GET' && path === '/api/config') return await configResponse(request, env);
     if (m === 'POST' && path === '/api/orders') return await createOrder(request, env);
     if (m === 'POST' && path === '/api/promo/check') return await promoCheck(request, env);
     let r;
@@ -74,6 +76,7 @@ async function createOrder(request, env) {
     lang: b.lang === 'en' ? 'en' : 'uk', country: /^[A-Za-z]{2}$/.test(String(b.country || '')) ? String(b.country).toUpperCase() : 'UA',
     tz: validTz(b.tz) ? b.tz : 'Europe/Kyiv'
   };
+  if (BLOCKED_COUNTRIES.includes(o.country)) throw new HttpError(400, 'country_blocked'); // оплата з цих країн неможлива
   if (o.country !== 'UA') o.region = cleanText(b.region, 60) || '—';
   if (!o.name_a || !o.name_b) throw new HttpError(400, 'bad_names');
   if (!EMAIL_RE.test(o.email_a) || !EMAIL_RE.test(o.email_b)) throw new HttpError(400, 'bad_email');
@@ -273,7 +276,7 @@ async function stateOf(env, mem) {
     me: { name: surveyName(mem), suggestedName: mem.suggested_name },
     partner: { name: surveyName(partner) || partner.suggested_name, done: !!partner.survey_json },
     myDone: !!mem.survey_json, partnerDone: !!partner.survey_json, ready: !!mem.schedule_json,
-    lang: mem.lang, country: mem.country || 'UA', usdRate: (await getSettings(env)).usd_rate, unlockTimes: unlockTimes(mem.start_date, mem.tz), finished: localDayNumber(mem.start_date, nowOf(env), mem.tz) > DAYS, today: todayIndex(mem.start_date, nowOf(env), mem.tz), startDate: mem.start_date, unlockHour: UNLOCK_HOUR, totalDays: DAYS,
+    lang: mem.lang, country: mem.country || 'UA', usdRate: (await getSettings(env)).usd_rate, currency: priceCurrency(await getFx(env), mem.country || 'UA', (await getSettings(env)).usd_rate), unlockTimes: unlockTimes(mem.start_date, mem.tz), finished: localDayNumber(mem.start_date, nowOf(env), mem.tz) > DAYS, today: todayIndex(mem.start_date, nowOf(env), mem.tz), startDate: mem.start_date, unlockHour: UNLOCK_HOUR, totalDays: DAYS,
     opened: rows.map(r => r.day), city: mem.city
   };
 }
@@ -443,4 +446,13 @@ export function detectLocale(request) {
   const accept = String(request.headers.get('Accept-Language') || '').toLowerCase();
   const lang = country ? (country === 'UA' ? 'uk' : 'en') : (/^uk\b|,\s*uk\b/.test(accept) ? 'uk' : 'en');
   return { country, lang };
+}
+
+/** Публічний конфіг: ціна (грн), валюта показу для країни (?country=XX або визначеної за IP) і курс. */
+async function configResponse(request, env) {
+  const url = new URL(request.url), det = detectLocale(request);
+  const asked = (url.searchParams.get('country') || '').toUpperCase(), cc = /^[A-Z]{2}$/.test(asked) ? asked : (det.country || 'UA');
+  const st = await getSettings(env), fx = await getFx(env);
+  return json({ price: st.price_uah, usdRate: st.usd_rate, detected: det, country: cc, currency: priceCurrency(fx, cc, st.usd_rate), fxUpdated: fx ? fx.updated : null,
+    regions: REGIONS, turnstileSiteKey: env.TURNSTILE_SITE_KEY || null, googleClientId: env.GOOGLE_CLIENT_ID || null });
 }

@@ -61,3 +61,14 @@ footer a{color:var(--muted);margin:0 10px}
 .langsw button.on{background:var(--gold);color:#14110a}
 .hero .langsw{margin-top:8px}
 .fld select{appearance:auto}
+
+/* випадні списки з пошуком (країна → область → місто) */
+.combo{position:relative}
+.cbx{position:absolute;z-index:30;left:0;right:0;top:calc(100% - 2px);margin:4px 0 0;padding:4px;list-style:none;max-height:260px;overflow:auto;background:#161722;border:1px solid var(--line2,#ffffff2b);border-radius:12px;box-shadow:0 18px 40px rgba(0,0,0,.55)}
+.cbx[hidden]{display:none}
+.cbx li{padding:9px 12px;border-radius:8px;cursor:pointer;font-size:15px;display:flex;justify-content:space-between;gap:10px}
+.cbx li small{color:var(--muted);font-size:12px;margin:0;white-space:nowrap}
+.cbx li.on,.cbx li:hover{background:#d6b46a22}
+.cbx li.none{cursor:default;color:var(--muted)}
+.cbx li.none:hover{background:transparent}
+.cbx mark{background:transparent;color:var(--gold2);font-weight:600}

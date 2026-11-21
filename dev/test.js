@@ -181,4 +181,12 @@ delete env.DEBUG;
 }
 // 7. вихід
 await call('A', 'POST', '/api/auth/logout'); assert.equal((await call('A', 'GET', '/api/state')).status, 401);
+// 8. Запобіжник: жоден статичний файл сайту не порожній, а HTML-сторінки містять розмітку
+{
+  const fs = await import('node:fs'), pth = await import('node:path');
+  const walk = d => fs.readdirSync(d, { withFileTypes: true }).flatMap(e => e.isDirectory() ? walk(pth.join(d, e.name)) : [pth.join(d, e.name)]);
+  const files = walk(pth.join(root, 'public')); assert(files.length > 50, 'public/ has files');
+  for (const f of files) { const st = fs.statSync(f); assert(st.size > 0, 'EMPTY FILE: ' + f); if (f.endsWith('.html')) assert(/<!doctype html/i.test(fs.readFileSync(f, 'utf8')), 'not an HTML document: ' + f); }
+  for (const must of ['index.html', 'thanks.html', 'admin/index.html', 'app/index.html', 'legal/offer.html', 'legal/offer.en.html', 'legal/privacy.html', 'legal/privacy.en.html', 'geo/UA.json', 'geo/index.json']) assert(fs.existsSync(pth.join(root, 'public', must)), 'missing ' + must);
+}
 console.log('ALL OK');

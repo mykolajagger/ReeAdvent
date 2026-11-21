@@ -13,8 +13,22 @@ document.documentElement.lang = LANG;
 const LOCALE = () => (LANG === 'en' ? 'en-GB' : 'uk-UA');
 
 let st = null, tab = 'cal';
-const rate = () => (st && st.usdRate) || 41;
-const money = uah => L(`≈ ${uah} ₴`, `≈ $${Math.max(1, Math.round(uah / rate()))}`);
+const cur = () => (st && st.currency) || { code: 'UAH', rate: 1 };
+const niceRound = v => v < 100 ? Math.max(1, Math.round(v)) : v < 1000 ? Math.round(v / 5) * 5 : v < 10000 ? Math.round(v / 10) * 10 : Math.round(v / 100) * 100;
+const niceNum = v => { const p = 10 ** Math.floor(Math.log10(v)), m = v / p; return (m < 1.5 ? 1 : m < 3.5 ? 2 : m < 7.5 ? 5 : 10) * p; };
+/** Сума в гривнях -> рядок у валюті країни календаря (для UAH: «≈ 200 ₴»). */
+const fmtCur = (uah, approx = true) => {
+  if (cur().code === 'UAH') return `${approx ? '≈ ' : ''}${uah} ₴`;
+  const v = niceRound(uah * cur().rate);
+  try { return (approx ? '≈ ' : '') + new Intl.NumberFormat(LANG === 'en' ? 'en' : 'uk', { style: 'currency', currency: cur().code, maximumFractionDigits: 0 }).format(v); } catch { return `${approx ? '≈ ' : ''}${v} ${cur().code}`; }
+};
+const money = uah => fmtCur(uah, true);
+/** Слайдер бюджету подарунка у валюті країни: { min, max, step, def, toUah(v), show(v) }. */
+const budgetCfg = () => {
+  if (cur().code === 'UAH') return { min: 100, max: 500, step: 50, def: 300, toUah: v => v, show: v => `${v} ₴` };
+  const r = cur().rate, step = niceNum((500 - 100) * r / 8), min = Math.max(step, Math.round(100 * r / step) * step), max = Math.max(min + step, Math.round(500 * r / step) * step);
+  return { min, max, step, def: Math.min(max, Math.max(min, Math.round(300 * r / step) * step)), toUah: v => Math.min(1000, Math.max(100, Math.round(v / r))), show: v => fmtCur(v / r, false) };
+};
 const dayDate = day => { const [y, m, d] = st.startDate.split('-').map(Number); return new Date(Date.UTC(y, m - 1, d + day - 1)).toLocaleDateString(LOCALE(), { day: 'numeric', month: 'long', timeZone: 'UTC' }); };
 const dtime = ms => new Date(ms).toLocaleString(LOCALE(), { day: 'numeric', month: 'long', hour: '2-digit', minute: '2-digit' });
 const hh = () => String(st?.unlockHour ?? 7).padStart(2, '0') + ':00';
@@ -103,19 +117,19 @@ const AVOID_OPTS = { alcohol: ['Не п’ю алкоголь', 'I do not drink 
 const INTIM_OPTS = { mas: ['Масаж', 'Massage'], bath: ['Ванна / SPA', 'Bath / spa'], dance: ['Танці', 'Dancing'], game: ['Ігри', 'Games'], role: ['Рольові ігри', 'Role-play'], blind: ['Сенсорні (пов’язка)', 'Sensory play (blindfold)'], photo: ['Фото лише для нас', 'Photos just for us'], words: ['Слова й листи', 'Words & letters'], food: ['Смаколики', 'Treats'], tease: ['Флірт і дражнилки', 'Flirting & teasing'], cozy: ['Затишок', 'Cosiness'], music: ['Музика', 'Music'], dress: ['Образи й білизна', 'Outfits & lingerie'] };
 const ACT_OPTS = { home: ['Затишок удома', 'Cosy at home'], out: ['Прогулянки', 'Walks'], food: ['Їжа й заклади', 'Food & places'], cult: ['Культура й музеї', 'Culture & museums'], act: ['Актив і спорт', 'Active & sport'], craft: ['Творчість', 'Creativity'], relax: ['SPA й релакс', 'Spa & relaxation'], night: ['Вечірній відпочинок', 'Evenings out'], cine: ['Кіно', 'Cinema'], play: ['Ігри', 'Games'], trip: ['Поїздки околицями', 'Day trips'], music: ['Музика', 'Music'] };
 const LEVELS = [['Романтика', 'Romance', 'I', 'Ніжність, свічки, обійми, масаж і слова', 'Tenderness, candles, hugs, massage and words'], ['Гра', 'Play', 'II', 'Флірт, пікантні ігри, дотики із зав’язаними очима', 'Flirting, spicy games, blindfolded touch'], ['Смілива ніч', 'Bold night', 'III', 'Відверто, але завжди з повагою до комфорту обох', 'Explicit, but always respecting the comfort of both']];
-const ACT_BUDGETS = [['Безкоштовно', 'Free', 'Лише те, що не коштує грошей', 'Only things that cost nothing'], ['До ~300 ₴ на двох', 'Up to ~$8 for two', 'Кава, кіно, невеличкі розваги', 'Coffee, cinema, small fun'], ['До ~800 ₴', 'Up to ~$20', 'Ресторан, майстер-клас, концерт', 'Restaurant, workshop, concert'], ['Без обмежень', 'No limit', 'Термальні води, подорожі, свята', 'Thermal baths, trips, celebrations']];
+const ACT_BUDGETS = () => [['Безкоштовно', 'Free', 'Лише те, що не коштує грошей', 'Only things that cost nothing'], [`До ${fmtCur(300).replace('≈ ', '~')} на двох`, `Up to ${fmtCur(300).replace('≈ ', '~')} for two`, 'Кава, кіно, невеличкі розваги', 'Coffee, cinema, small fun'], [`До ${fmtCur(800).replace('≈ ', '~')}`, `Up to ${fmtCur(800).replace('≈ ', '~')}`, 'Ресторан, майстер-клас, концерт', 'Restaurant, workshop, concert'], ['Без обмежень', 'No limit', 'Термальні води, подорожі, свята', 'Thermal baths, trips, celebrations']];
 
 let ans = { name: '', budget: 300, giftLikes: [], avoid: [], level: 1, intimLikes: [], actLikes: [], actBudget: 1, car: false };
-let step = 0, usd = 10;
+let step = 0, budgetVal = null;
 const chips = (key, opts) => `<div class="chips">${Object.entries(opts).map(([k, v]) => `<button type="button" class="chip ${ans[key].includes(k) ? 'on' : ''}" data-chip="${key}" data-v="${k}">${esc(L(v[0], v[1]))}</button>`).join('')}</div>`;
-const budgetShown = () => (LANG === 'en' ? `$${usd}` : `${ans.budget} ₴`);
+const budgetShown = () => { const c = budgetCfg(); return c.show(budgetVal ?? c.def); };
 
 const STEPS = [
   () => `<h2>${L('Привіт', 'Hello')}</h2><p>${L('Кілька швидких питань, щоб календар був саме для вас. Свої відповіді бачиш тільки ти: партнер їх не побачить, як і ти його.', 'A few quick questions so the calendar fits the two of you. Only you can see your answers, just as you will not see your partner’s.')}</p>
     <div><label class="lbl" for="nm">${L('Як тебе називати?', 'What should we call you?')}</label><input id="nm" type="text" maxlength="30" value="${esc(ans.name)}" placeholder="${L('Ім’я', 'Name')}"></div>`,
   () => `<h2>${L('Подарунки', 'Gifts')}</h2>
     <div><label class="lbl">${L('Мій бюджет на один подарунок', 'My budget for one gift')}</label><div class="big" id="bv">${budgetShown()}</div>
-    ${LANG === 'en' ? `<input class="range" id="bg" type="range" min="5" max="25" step="5" value="${usd}">` : `<input class="range" id="bg" type="range" min="100" max="500" step="50" value="${ans.budget}">`}</div>
+    ${(() => { const c = budgetCfg(); return `<input class="range" id="bg" type="range" min="${c.min}" max="${c.max}" step="${c.step}" value="${budgetVal ?? c.def}">`; })()}</div>
     <div><label class="lbl">${L('Що люблю отримувати', 'What I love to receive')}</label>${chips('giftLikes', GIFT_OPTS)}</div>
     <div><label class="lbl">${L('Мені краще без…', 'I would rather avoid…')}</label>${chips('avoid', AVOID_OPTS)}</div>`,
   () => `<h2>${L('Пригоди для двох', 'Adventures for two')}</h2><p class="muted">${L('Береться менший рівень із двох: ніхто нікого не змушує.', 'The lower of your two levels is used, so nobody is pushed.')}</p>
@@ -123,7 +137,7 @@ const STEPS = [
     <div><label class="lbl">${L('Що мені до вподоби', 'What I enjoy')}</label>${chips('intimLikes', INTIM_OPTS)}</div>`,
   () => `<h2>${L('Спільні активності', 'Shared activities')}</h2>
     <div><label class="lbl">${L('Що ми любимо робити', 'What we love to do')}</label>${chips('actLikes', ACT_OPTS)}</div>
-    <div><label class="lbl">${L('Бюджет на день для двох', 'Daily budget for two')}</label><div class="opts">${ACT_BUDGETS.map((b, i) => `<button type="button" class="opt ${ans.actBudget === i ? 'on' : ''}" data-ab="${i}"><b>${L(b[0], b[1])}</b><small>${L(b[2], b[3])}</small></button>`).join('')}</div></div>
+    <div><label class="lbl">${L('Бюджет на день для двох', 'Daily budget for two')}</label><div class="opts">${ACT_BUDGETS().map((b, i) => `<button type="button" class="opt ${ans.actBudget === i ? 'on' : ''}" data-ab="${i}"><b>${L(b[0], b[1])}</b><small>${L(b[2], b[3])}</small></button>`).join('')}</div></div>
     <div><label class="lbl">${L('Є машина для поїздок околицями?', 'Do you have a car for day trips?')}</label><div class="opts two">
       <button type="button" class="opt ${ans.car ? 'on' : ''}" data-car="1"><b>${L('Є', 'Yes')}</b></button><button type="button" class="opt ${!ans.car ? 'on' : ''}" data-car="0"><b>${L('Ні', 'No')}</b></button></div></div>`,
   () => `<div class="center" style="min-height:0">${ICONS.gift}<h2>${L('Усе готово', 'All set')}</h2><p>${L('Після відправки анкету змінити не можна. Календар складеться, коли відповість і другий з вас, і все ж ви не знатимете, що чекає. Це секрет.', 'Once sent, the questionnaire cannot be changed. The calendar will be built when your partner answers too, and you will still not know what is waiting. It is a secret.')}</p></div>`
@@ -135,7 +149,7 @@ function showSurvey() {
     <div class="nav"><button class="btn ghost" id="back" ${step === 0 ? 'style="visibility:hidden"' : ''}>${L('Назад', 'Back')}</button>
     <button class="btn" id="next">${step === STEPS.length - 1 ? L('Відправити', 'Send') : L('Далі', 'Next')}</button></div></div>`;
   const nm = $('#nm'); if (nm) nm.oninput = () => ans.name = nm.value;
-  const bg = $('#bg'); if (bg) bg.oninput = () => { if (LANG === 'en') { usd = +bg.value; ans.budget = Math.round(usd * rate()); } else ans.budget = +bg.value; $('#bv').textContent = budgetShown(); };
+  const bg = $('#bg'); if (bg) bg.oninput = () => { budgetVal = +bg.value; ans.budget = budgetCfg().toUah(budgetVal); $('#bv').textContent = budgetShown(); };
   $('#back').onclick = () => { step--; showSurvey(); };
   $('#next').onclick = async () => {
     if (step === 0 && !ans.name.trim()) return toast(L('Напиши, як тебе називати', 'Tell us what to call you'));
@@ -260,7 +274,7 @@ async function openDay(day) {
     const x = d[t.k]; let meta = '', hint = '', tag = t.t;
     if (t.k === 'gift') { tag = L(`Подарунок для: ${d.forName}`, `Gift for: ${d.forName}`); meta = `<span>${x.price ? money(x.price) : L('у межах твого бюджету', 'within your budget')}</span>`; hint = `<div class="hint">${L('Це сюрприз: не показуй і не розповідай.', 'It is a surprise: do not show or tell.')}</div>`; }
     if (t.k === 'intim') { meta = `<span>${L(LEVELS[x.level - 1][0], LEVELS[x.level - 1][1])}</span>`; hint = `<div class="hint">${L('Лише для вас двох. Зупиняйтесь, якщо комусь некомфортно.', 'Just for the two of you. Stop if anyone feels uncomfortable.')}</div>`; }
-    if (t.k === 'act') { meta = `<span>${[L('безкоштовно', 'free'), L('до ~300 ₴', 'up to ~$8'), L('до ~800 ₴', 'up to ~$20'), L('дорожче / далі', 'pricier / farther')][x.cost]}</span>${x.car ? `<span>${L('потрібна машина', 'car needed')}</span>` : ''}`; }
+    if (t.k === 'act') { meta = `<span>${[L('безкоштовно', 'free'), L(`до ${fmtCur(300).replace('≈ ', '~')}`, `up to ${fmtCur(300).replace('≈ ', '~')}`), L(`до ${fmtCur(800).replace('≈ ', '~')}`, `up to ${fmtCur(800).replace('≈ ', '~')}`), L('дорожче / далі', 'pricier / farther')][x.cost]}</span>${x.car ? `<span>${L('потрібна машина', 'car needed')}</span>` : ''}`; }
     return `<div class="reveal"><div class="tag">${esc(tag)}</div><h3>${esc(x.title)}</h3><p>${esc(x.desc)}</p>
       <div class="meta">${meta}</div>${x.link ? `<a class="link" href="${esc(x.link.url)}" target="_blank" rel="noopener noreferrer">${esc(x.link.label)} ↗</a>` : ''}${hint}
       <label class="tick"><input type="checkbox" data-mark="${t.k}" ${d.done[t.k] ? 'checked' : ''}> ${L('Виконано', 'Done')}</label></div>`;
@@ -291,7 +305,7 @@ function handleErr(e) {
 function route() {
   clearTimeout(pollT); clearInterval(timerI);
   if (st.lang && st.lang !== LANG) setLang(st.lang); // мова календаря
-  if (!st.myDone) { if (!ans.name) ans.name = st.me.suggestedName || ''; if (LANG === 'en') { ans.budget = Math.round(usd * rate()); } return showSurvey(); }
+  if (!st.myDone) { if (!ans.name) ans.name = st.me.suggestedName || ''; const bc = budgetCfg(); if (budgetVal === null) { budgetVal = bc.def; ans.budget = bc.toUah(bc.def); } return showSurvey(); }
   if (!st.ready) return showWaiting();
   if (tab === 'hist') return showHistory();
   showCalendar();

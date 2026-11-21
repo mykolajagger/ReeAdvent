@@ -16,7 +16,7 @@ async function api(method, path, body) {
   if (!r.ok || j.ok === false) { const e = new Error(j.error || 'server_error'); e.code = j.error || 'server_error'; e.detail = j.detail; if (e.code === 'admin_auth') { me = null; showLogin(); } throw e; }
   return j;
 }
-const ERR = { refund_failed: 'Monobank не виконав повернення. Замовлення не змінено', bad_percent: 'Відсоток: число від 0 до 100', bad_rate: 'Курс: від 1 до 1000', bad_price: 'Ціна: від 1 до 100000 грн', admin_auth: 'Сесія закінчилась', code_exists: 'Такий код уже є', bad_code: 'Код: 3–32 символи (літери, цифри, - _)', bad_value: 'Невірне значення знижки', bad_max: 'Ліміт: ціле число від 1', bad_date: 'Невірна дата', already_started: 'Календар уже стартував: дату змінити не можна', same_email: 'Пошти мають бути різні', bad_email: 'Невірна пошта', bad_names: 'Вкажіть імена', not_paid: 'Замовлення не оплачене', already_refunded: 'Повернення вже оформлено', bad_amount: 'Сума більша за оплачену', empty: 'Напишіть текст відповіді', too_many: 'Забагато спроб', csrf: 'Помилка захисту, оновіть сторінку' };
+const ERR = { fx_failed: 'Не вдалося отримати курси (сервіс недоступний)', refund_failed: 'Monobank не виконав повернення. Замовлення не змінено', bad_percent: 'Відсоток: число від 0 до 100', bad_rate: 'Курс: від 1 до 1000', bad_price: 'Ціна: від 1 до 100000 грн', admin_auth: 'Сесія закінчилась', code_exists: 'Такий код уже є', bad_code: 'Код: 3–32 символи (літери, цифри, - _)', bad_value: 'Невірне значення знижки', bad_max: 'Ліміт: ціле число від 1', bad_date: 'Невірна дата', already_started: 'Календар уже стартував: дату змінити не можна', same_email: 'Пошти мають бути різні', bad_email: 'Невірна пошта', bad_names: 'Вкажіть імена', not_paid: 'Замовлення не оплачене', already_refunded: 'Повернення вже оформлено', bad_amount: 'Сума більша за оплачену', empty: 'Напишіть текст відповіді', too_many: 'Забагато спроб', csrf: 'Помилка захисту, оновіть сторінку' };
 const errText = e => (ERR[e.code] || 'Щось пішло не так: ' + (e.code || e.message)) + (e.detail ? ` (${e.detail})` : '');
 function toast(t) { const el = $('#toast'); el.textContent = t; el.classList.add('show'); clearTimeout(toast.t); toast.t = setTimeout(() => el.classList.remove('show'), 2800); }
 
@@ -245,7 +245,8 @@ async function settings() {
     <div class="muted">Діє одразу на сайті й для нових замовлень. Уже створені замовлення, які ще не оплачено, лишаються за ціною на момент оформлення. Промокоди рахуються від цієї ціни.</div>
     <label class="f">Курс для показу ціни іноземним клієнтам, грн за 1 USD<input id="s00" type="number" step="0.01" min="1" max="1000" value="${v.usd_rate}" required></label>
     <div class="muted">Лише для орієнтовного показу «≈ $N» в англомовній версії й для перерахунку бюджету подарунка. Списання завжди у гривнях; конвертує банк клієнта.</div>
-    <div><button class="btn" id="sp">Зберегти</button></div></div>
+    <div class="muted" id="fxinfo">${r.fx ? `Автокурси оновлено ${dt(r.fx.updated)}: 1 USD ≈ ${r.fx.usd} ₴, 1 EUR ≈ ${r.fx.eur} ₴ (${r.fx.count} валют). Оновлюються щодня самі.` : 'Автокурси ще не завантажено (оновляться за добу після запуску крону). До того для інших валют показується долар за курсом вище.'} Дані: <a href="https://www.exchangerate-api.com" target="_blank" rel="noopener">ExchangeRate-API</a>.</div>
+    <div class="row"><button class="btn" id="sp">Зберегти</button><button class="btn ghost" id="fxr" type="button">Оновити курси зараз</button></div></div>
   <div class="card sec" style="max-width:620px;margin-top:14px"><h2>Відсотки для розрахунку прибутку</h2>
     <div class="muted">Ці відсотки використовує лише дашборд для орієнтовного чистого прибутку. На ціну для клієнтів і на самі платежі вони не впливають.</div>
     <form id="sf" class="grid" style="gap:12px">
@@ -257,6 +258,7 @@ async function settings() {
     <div class="muted">За даними Monobank: 1,3% з українських карток і 2% з іноземних (країну беремо із замовлення). Повернення в день оплати комісію не стягує, в інший день комісія не повертається. ЄП 3 група 5% і військовий збір 1%: уточніть у бухгалтера. ЄСВ (фіксована сума) не враховується.</div>
     <div><button class="btn" id="ss">Зберегти</button></div></div>
 `;
+  $('#fxr').onclick = async () => { $('#fxr').disabled = true; try { const x = await api('POST', '/api/admin/fx/refresh', {}); toast('Курси оновлено: ' + x.count + ' валют'); settings(); } catch (e) { toast(errText(e)); $('#fxr').disabled = false; } };
   $('#sp').onclick = async () => { const el = $('#s0'); if (!el.reportValidity()) return; try { if (!$('#s00').reportValidity()) return; await api('POST', '/api/admin/settings', { price_uah: el.value, usd_rate: $('#s00').value }); toast('Збережено: ' + UAH(Math.round(Number(el.value) * 100))); } catch (e) { toast(errText(e)); } };
   $('#ss').onclick = async () => { if (!$('#sf').reportValidity()) return; try { await api('POST', '/api/admin/settings', { fee_percent: $('#s1').value, fee_foreign_percent: $('#s1f').value, tax_percent: $('#s2').value, military_percent: $('#s3').value }); toast('Збережено'); } catch (e) { toast(errText(e)); } };
 }

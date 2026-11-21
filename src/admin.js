@@ -6,6 +6,7 @@ import { rateLimit, CODE_RE, normCode } from './promo.js';
 import { generateSchedule } from './logic.js';
 import { issueLoginLink, issueLoginCode, WELCOME_TTL_MS } from './api.js';
 import { getSettings, saveSettings, getPriceUah } from './settings.js';
+import { getFx, refreshFx } from './currency.js';
 import { cancelInvoice } from './payments.js';
 
 const ADMIN_LOGIN_TTL = 30 * 60e3, ADMIN_SESSION_TTL = 14 * 24 * 3600e3;
@@ -64,7 +65,8 @@ export async function handleAdmin(request, env, path, m) {
   let r;
 
   if (m === 'GET' && path === '/api/admin/me') return json({ ok: true, email: admin, price: await getPriceUah(env) });
-  if (m === 'GET' && path === '/api/admin/settings') return json({ ok: true, settings: await getSettings(env) });
+  if (m === 'GET' && path === '/api/admin/settings') { const fx = await getFx(env); return json({ ok: true, settings: await getSettings(env), fx: fx ? { updated: fx.updated, usd: fx.rates.USD ? Math.round(1 / fx.rates.USD * 100) / 100 : null, eur: fx.rates.EUR ? Math.round(1 / fx.rates.EUR * 100) / 100 : null, count: Object.keys(fx.rates).length } : null }); }
+  if (m === 'POST' && path === '/api/admin/fx/refresh') { const r = await refreshFx(env, { force: true }); await audit(env, admin, 'fx_refresh', null, r); if (!r.ok) throw Object.assign(new HttpError(502, 'fx_failed'), { detail: r.error }); return json({ ok: true, ...r }); }
   if (m === 'POST' && path === '/api/admin/settings') { const saved = await saveSettings(env, await readJson(request)); await audit(env, admin, 'settings', null, saved); return json({ ok: true, settings: await getSettings(env) }); }
   if (m === 'GET' && path === '/api/admin/dashboard') return json({ ok: true, ...(await dashboard(env, url.searchParams.get('days') || '30')) });
   if (m === 'GET' && path === '/api/admin/orders') return json({ ok: true, ...(await listOrders(env, url)) });

@@ -14,7 +14,7 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,400;0,500;0,600;1,400;1,500&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="/assets/base.css?v=5">
-<link rel="stylesheet" href="/assets/landing.css?v=4">
+<link rel="stylesheet" href="/assets/landing.css?v=5">
 </head>
 <body>
 <canvas id="fx" aria-hidden="true"></canvas>
@@ -71,10 +71,10 @@
           <div class="fld"><label for="emailB" data-i18n="f_emailB">Пошта партнера(ки)</label><input id="emailB" type="email" required></div>
         </div>
         <div class="f2">
-          <div class="fld"><label for="country" data-i18n="f_country">Країна</label><select id="country" required></select></div>
-          <div class="fld"><label for="region" id="rlabel" data-i18n="f_region">Область</label><select id="region"><option value="">…</option></select><input id="regionTxt" maxlength="60" hidden></div>
+          <div class="fld combo"><label for="country" data-i18n="f_country">Країна</label><input id="country" autocomplete="off" role="combobox" aria-autocomplete="list" aria-expanded="false" required data-i18n-ph="f_type" placeholder="Почніть вводити…"><ul class="cbx" id="country-list" role="listbox" hidden></ul></div>
+          <div class="fld combo"><label for="region" id="rlabel" data-i18n="f_region">Область</label><input id="region" autocomplete="off" role="combobox" aria-autocomplete="list" aria-expanded="false" maxlength="60" data-i18n-ph="f_type" placeholder="Почніть вводити…"><ul class="cbx" id="region-list" role="listbox" hidden></ul></div>
         </div>
-        <div class="fld"><label for="city" data-i18n="f_city">Місто</label><input id="city" maxlength="60" required placeholder="Львів" data-i18n-ph="f_city_ph"><small data-i18n="f_city_hint">Від нього залежать заклади та активності.</small></div>
+        <div class="fld combo"><label for="city" data-i18n="f_city">Місто</label><input id="city" autocomplete="off" role="combobox" aria-autocomplete="list" aria-expanded="false" maxlength="60" required data-i18n-ph="f_type" placeholder="Почніть вводити…"><ul class="cbx" id="city-list" role="listbox" hidden></ul><small data-i18n="f_city_hint">Від нього залежать заклади та активності. Можна ввести будь-яке місто.</small></div>
         <div class="fld"><label for="startDate" data-i18n="f_start">Дата старту</label><input id="startDate" type="date" required><small data-i18n="f_start_hint">Перше вікно відкриється цього дня о 07:00, далі 24 дні поспіль. Можна обрати будь-який день від завтра, наприклад 1 грудня.</small></div>
         <div class="fld"><label for="promo" data-i18n="f_promo">Промокод (якщо є)</label>
           <div style="display:flex;gap:8px"><input id="promo" maxlength="32" autocomplete="off" autocapitalize="characters" placeholder="WELCOME"><button class="btn ghost sm" id="pbtn" type="button" style="flex:none" data-i18n="f_apply">Застосувати</button></div>
@@ -100,12 +100,12 @@
     </div>
   </section>
 
-  <footer><div>© ReeAdvent · ФОП Радченко М. А.</div><div style="margin-top:8px"><span data-i18n="ft_support">Підтримка</span>: <a href="mailto:support@reeadvent.fun">support@reeadvent.fun</a> · +38 099 562 66 87</div><div style="margin-top:8px"><a href="/legal/offer.html" data-legal="offer" data-i18n="ft_offer">Публічна оферта</a><a href="/legal/privacy.html" data-legal="privacy" data-i18n="ft_privacy">Політика конфіденційності</a></div></footer>
+  <footer><div>© ReeAdvent · ФОП Радченко М. А.</div><div style="margin-top:8px"><span data-i18n="ft_support">Підтримка</span>: <a href="mailto:support@reeadvent.fun">support@reeadvent.fun</a> · +38 099 562 66 87</div><div style="margin-top:8px" class="muted" data-i18n="ft_fx">Курси валют (довідково): <a href="https://www.exchangerate-api.com" target="_blank" rel="noopener">ExchangeRate-API</a></div><div style="margin-top:8px"><a href="/legal/offer.html" data-legal="offer" data-i18n="ft_offer">Публічна оферта</a><a href="/legal/privacy.html" data-legal="privacy" data-i18n="ft_privacy">Політика конфіденційності</a></div></footer>
 </main>
 <div id="toast" role="status"></div>
-<script src="/assets/lang.js?v=1"></script>
+<script src="/assets/lang.js?v=2"></script>
 <script src="/assets/countries.js"></script>
 <script src="/assets/fx.js?v=2"></script>
-<script src="/assets/landing.js?v=4"></script>
+<script src="/assets/landing.js?v=6"></script>
 </body>
 </html>

@@ -2,6 +2,7 @@
 // Викликається щогодини з Cloudflare Cron (Worker reeadvent-inbox) через POST /api/cron/daily.
 import { sendEmail, reminderEmail } from './email.js';
 import { issueLoginLink } from './api.js';
+import { refreshFx } from './currency.js';
 import { nowOf, localParts, localDayNumber, hmac, toDateStr, fromDateStr, DAYS } from './util.js';
 
 const q = (env, sql, ...a) => env.DB.prepare(sql).bind(...a).all().then(r => r.results);
@@ -75,8 +76,9 @@ export async function purgeOld(env) {
 }
 
 export async function runDaily(env) {
+  const fx = await refreshFx(env); // курси валют оновлюються раз на добу
   const reminders = await runReminders(env);
   let purge = null;
   if (nowOf(env).getUTCHours() === 1) purge = await purgeOld(env);
-  return { reminders, purge };
+  return { reminders, purge, fx };
 }

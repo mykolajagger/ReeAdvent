@@ -226,4 +226,33 @@ const anon = raw.prepare('SELECT * FROM orders WHERE id = ?').get(o1); assert(an
   assert.equal((await call('x', 'POST', '/api/orders', { ...good, emailA: 'v3@t.com', emailB: 'v4@t.com', country: 'UA', region: 'Whatever' })).j.error, 'bad_region');
   assert.equal((await call('x', 'POST', '/api/orders', { ...good, emailA: 'v5@t.com', emailB: 'v6@t.com', tz: 'Mars/Phobos', startDate: '2026-12-05' })).j.ok, true, 'invalid tz falls back to Kyiv');
 }
+
+// ===== 9. Валюти та курси =====
+{
+  const { currencyOf, priceCurrency, refreshFx, getFx } = await import('../src/currency.js');
+  assert.equal(currencyOf('DE'), 'EUR'); assert.equal(currencyOf('UA'), 'UAH'); assert.equal(currencyOf('US'), 'USD'); assert.equal(currencyOf('PL'), 'PLN'); assert.equal(currencyOf('JP'), 'JPY'); assert.equal(currencyOf('zz'), 'USD'); assert.equal(currencyOf(null), 'USD');
+  assert.deepEqual(priceCurrency(null, 'UA', 41), { code: 'UAH', rate: 1 }, 'Ukraine: hryvnia');
+  assert.deepEqual(priceCurrency(null, 'DE', 40), { code: 'USD', rate: 1 / 40 }, 'no rates yet: fall back to USD by manual rate');
+  const fx = { updated: 1, rates: { USD: 0.025, EUR: 0.023, PLN: 0.1 } };
+  assert.deepEqual(priceCurrency(fx, 'DE', 41), { code: 'EUR', rate: 0.023 }); assert.deepEqual(priceCurrency(fx, 'PL', 41), { code: 'PLN', rate: 0.1 });
+  assert.deepEqual(priceCurrency(fx, 'JP', 41), { code: 'USD', rate: 0.025 }, 'currency without a rate: USD');
+  // оновлення курсів: лише валідна відповідь; кеш на 20 годин
+  let calls = 0; const ok = async () => { calls++; return new Response(JSON.stringify({ result: 'success', rates: { USD: 0.0245, EUR: 0.0226, JPY: 3.7, XXX: 5, UAH: 1 } }), { status: 200 }); };
+  let r = await refreshFx(env, { fetchImpl: ok }); assert(r.ok && r.count === 4, JSON.stringify(r)); // USD, EUR, JPY, UAH (невідому XXX відкинуто)
+  assert.equal((await getFx(env)).rates.JPY, 3.7); assert.equal((await getFx(env)).rates.XXX, undefined);
+  r = await refreshFx(env, { fetchImpl: ok }); assert(r.skipped && calls === 1, 'fresh rates are not re-fetched');
+  r = await refreshFx(env, { force: true, fetchImpl: async () => new Response('oops', { status: 500 }) }); assert(!r.ok); assert.equal((await getFx(env)).rates.USD, 0.0245, 'failed refresh keeps old rates');
+  r = await refreshFx(env, { force: true, fetchImpl: async () => new Response(JSON.stringify({ result: 'error' }), { status: 200 }) }); assert(!r.ok && r.error === 'bad_payload');
+  // конфіг: країна → валюта (?country=) і визначена за IP
+  let cfg = (await call('x', 'GET', '/api/config?country=DE')).j; assert.equal(cfg.currency.code, 'EUR'); assert.equal(cfg.currency.rate, 0.0226); assert.equal(cfg.country, 'DE');
+  cfg = (await call('x', 'GET', '/api/config?country=UA')).j; assert.deepEqual(cfg.currency, { code: 'UAH', rate: 1 });
+  cfg = (await call('x', 'GET', '/api/config?country=zz!')).j; assert.equal(cfg.country, 'UA', 'invalid country ignored');
+  cfg = await (await handle(new Request('http://x/api/config', { headers: { 'CF-IPCountry': 'JP' } }), env)).json(); assert.equal(cfg.currency.code, 'JPY'); assert.equal(cfg.country, 'JP');
+  // стан календаря: валюта країни календаря
+  const stDeR = await call('de1', 'GET', '/api/state'); assert.equal(stDeR.status, 200, JSON.stringify(stDeR.j)); assert.equal(stDeR.j.currency.code, 'EUR');
+  assert.equal((await call('x', 'POST', '/api/orders', { ...good, emailA: 'ru1@t.com', emailB: 'ru2@t.com', country: 'RU', region: 'x' })).j.error, 'country_blocked');
+  assert.equal((await call('x', 'POST', '/api/orders', { ...good, emailA: 'by1@t.com', emailB: 'by2@t.com', country: 'by', region: 'x' })).j.error, 'country_blocked');
+  // cron оновлює курси
+  const c1 = (await cron()).j; assert(c1.fx && (c1.fx.ok || c1.fx.error), 'cron reports fx result');
+}
 console.log('FEATURES OK');

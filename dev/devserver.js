@@ -9,7 +9,8 @@ if (process.env.SEED === '1') seed(db._raw);
 // тестові промокоди (лише в пам'яті dev-сервера)
 db._raw.prepare('INSERT OR IGNORE INTO promo_codes (id, code, type, value, max_uses, active, label, created_at) VALUES (?,?,?,?,?,?,?,?)').run('d1', 'WELCOME', 'percent', 20, null, 1, 'dev', Date.now());
 db._raw.prepare('INSERT OR IGNORE INTO promo_codes (id, code, type, value, max_uses, active, label, created_at) VALUES (?,?,?,?,?,?,?,?)').run('d2', 'FREE', 'percent', 100, null, 1, 'dev', Date.now());
-const types = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript', '.css': 'text/css' };
+db._raw.prepare("INSERT OR REPLACE INTO settings (key, value, updated_at) VALUES ('fx_rates', ?, ?)").run(JSON.stringify({ updated: Date.now(), rates: { UAH: 1, USD: 0.0241, EUR: 0.0222, PLN: 0.0965, GBP: 0.019, JPY: 3.7 } }), Date.now());
+const types = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript', '.css': 'text/css', '.json': 'application/json' };
 http.createServer(async (req, res) => {
   const url = new URL(req.url, env.BASE_URL);
   if (url.pathname === '/dev/now') { env.NOW_OVERRIDE = url.searchParams.get('set'); res.writeHead(200); return res.end('ok'); }
