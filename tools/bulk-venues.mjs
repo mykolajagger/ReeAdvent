@@ -6,7 +6,7 @@ import fs from 'node:fs'; import path from 'node:path'; import os from 'node:os'
 import { spawnSync } from 'node:child_process';
 import { makeRestDb } from './d1-rest.mjs';
 import { pickVenues, storeCityVenues, resolveCoords } from '../src/venues.js';
-import { osmiumExpressions, findPbf, parseFeature, CityIndex, queueCountries, queueCities } from '../src/bulk.js';
+import { osmiumExpressions, findPbf, describeIndex, parseFeature, CityIndex, queueCountries, queueCities } from '../src/bulk.js';
 
 const { CLOUDFLARE_API_TOKEN: token, CLOUDFLARE_ACCOUNT_ID: accountId, D1_DATABASE_ID: databaseId } = process.env;
 if (!token || !accountId || !databaseId) { console.error('Потрібні CLOUDFLARE_API_TOKEN, CLOUDFLARE_ACCOUNT_ID, D1_DATABASE_ID'); process.exit(1); }
@@ -18,8 +18,8 @@ const sleep = ms => new Promise(r => setTimeout(r, ms));
 const DAY = 864e5;
 
 // ---------- налаштування: країни, що тимчасово пропускаємо (помилка, завеликий файл) ----------
-async function getSkip() { const r = await env.DB.prepare("SELECT value FROM settings WHERE key = 'bulk_skip'").first(); try { return r ? JSON.parse(r.value) : {}; } catch { return {}; } }
-async function skipCountry(cc, why, days = 1) { const s = await getSkip(); s[cc] = { until: Date.now() + days * DAY, why }; await env.DB.prepare("INSERT INTO settings (key, value, updated_at) VALUES ('bulk_skip', ?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value, updated_at = excluded.updated_at").bind(JSON.stringify(s), Date.now()).run(); log('пропускаємо', cc, 'на', days, 'дн.:', why); }
+async function getSkip() { const r = await env.DB.prepare("SELECT value FROM settings WHERE key = 'bulk_skip2'").first(); try { return r ? JSON.parse(r.value) : {}; } catch { return {}; } }
+async function skipCountry(cc, why, days = 1) { const s = await getSkip(); s[cc] = { until: Date.now() + days * DAY, why }; await env.DB.prepare("INSERT INTO settings (key, value, updated_at) VALUES ('bulk_skip2', ?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value, updated_at = excluded.updated_at").bind(JSON.stringify(s), Date.now()).run(); log('пропускаємо', cc, 'на', days, 'дн.:', why); }
 
 async function pickCountry(done) {
   const skip = await getSkip();
@@ -47,8 +47,9 @@ async function processCountry(cc) {
   cities = ready; if (!cities.length) return;
 
   const idx = await (await fetch('https://download.geofabrik.de/index-v1-nogeom.json')).json();
-  const pbf = findPbf(idx, cc);
-  if (!pbf) { await skipCountry(cc, 'немає вигрузки Geofabrik', 30); return; }
+  let cname = null; try { cname = new Intl.DisplayNames(['en'], { type: 'region' }).of(cc); } catch {}
+  const pbf = findPbf(idx, cc, cname);
+  if (!pbf) { log('УВАГА: у каталозі Geofabrik немає країни', cc, cname, '|', describeIndex(idx)); await skipCountry(cc, 'немає вигрузки Geofabrik', 1); return; }
   const head = await fetch(pbf.url, { method: 'HEAD' }); const gb = Number(head.headers.get('content-length') || 0) / 1e9;
   log(`вигрузка ${pbf.id}: ${gb.toFixed(2)} ГБ`, pbf.shared ? '(спільна для кількох країн)' : '');
   if (gb > MAX_GB) { await skipCountry(cc, `файл ${gb.toFixed(1)} ГБ більший за ліміт ${MAX_GB} ГБ`, 30); return; }

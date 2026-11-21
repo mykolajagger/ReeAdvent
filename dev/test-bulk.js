@@ -2,7 +2,7 @@
 import assert from 'node:assert/strict';
 import path from 'node:path'; import { fileURLToPath } from 'node:url';
 import { makeDb } from './d1.js';
-import { osmiumExpressions, findPbf, centerOf, parseFeature, CityIndex, queueCountries, queueCities } from '../src/bulk.js';
+import { osmiumExpressions, findPbf, describeIndex, centerOf, parseFeature, CityIndex, queueCountries, queueCities } from '../src/bulk.js';
 import { pickVenues, storeCityVenues, venuePicks, cityKey, dist } from '../src/venues.js';
 const root = path.join(path.dirname(fileURLToPath(import.meta.url)), '..'), db = makeDb(root), raw = db._raw, env = { DB: db };
 
@@ -21,7 +21,10 @@ const idx = { features: [
   { properties: { id: 'no-pbf', 'iso3166-1:alpha2': ['ZZ'], urls: {} } }] };
 assert.deepEqual(findPbf(idx, 'UA'), { id: 'ukraine', url: 'https://x/ukraine.pbf', shared: false });
 assert.equal(findPbf(idx, 'SN').shared, true); assert.equal(findPbf(idx, 'GM').id, 'gambia-only', 'вужча вигрузка має перевагу');
-assert.equal(findPbf(idx, 'ZZ'), null); assert.equal(findPbf(idx, 'FR'), null); assert.equal(findPbf({}, 'UA'), null);
+assert.equal(findPbf(idx, 'ZZ'), null); assert.equal(findPbf({ features: [{ properties: { id: 'europe/ukraine', name: 'Ukraine', urls: { pbf: 'https://x/u.pbf' } } }] }, 'UA', 'Ukraine').url, 'https://x/u.pbf', 'пошук за назвою, якщо немає кодів');
+assert.equal(findPbf({ features: [{ properties: { id: 'ukraine', 'iso3166-1:alpha2': 'UA', urls: { pbf: 'https://x/u2.pbf' } } }] }, 'UA').url, 'https://x/u2.pbf', 'код рядком, а не масивом'); assert.equal(findPbf(idx, 'FR'), null); assert.equal(findPbf({}, 'UA'), null);
+
+assert(describeIndex(idx).includes('з pbf 4'), describeIndex(idx));
 
 // ----- розбір рядків geojsonseq
 assert.deepEqual(centerOf({ type: 'Point', coordinates: [24, 49] }), [24, 49]);

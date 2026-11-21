@@ -12,11 +12,24 @@ export function osmiumExpressions() {
   return Object.entries(m).map(([k, set]) => `nwr/${k}=${[...set].join(',')}`);
 }
 
-/** Знаходить вигрузку країни в індексі Geofabrik (index-v1-nogeom.json); найвужча (за кількістю країн) перемагає. */
-export function findPbf(index, cc) {
-  const props = ((index && index.features) || []).map(f => f.properties).filter(p => p && p.urls && p.urls.pbf && Array.isArray(p['iso3166-1:alpha2']));
-  const hit = props.filter(p => p['iso3166-1:alpha2'].includes(cc)).sort((a, b) => a['iso3166-1:alpha2'].length - b['iso3166-1:alpha2'].length || String(a.id).length - String(b.id).length)[0];
-  return hit ? { id: hit.id, url: hit.urls.pbf, shared: hit['iso3166-1:alpha2'].length > 1 } : null;
+const slug = s => String(s || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
+const codesOf = p => { const out = []; for (const [k, v] of Object.entries(p)) if (/alpha2|iso3166-1/i.test(k)) for (const x of [].concat(v)) if (typeof x === 'string') out.push(x.toUpperCase()); return out; };
+/** Знаходить вигрузку країни в індексі Geofabrik (index-v1-nogeom.json): за кодом ISO (найвужча вигрузка перемагає), а якщо поля з кодами немає, за назвою країни. */
+export function findPbf(index, cc, countryName = null) {
+  const props = ((index && index.features) || []).map(f => f.properties).filter(p => p && p.urls && p.urls.pbf);
+  const byCode = props.filter(p => codesOf(p).includes(cc)).sort((a, b) => codesOf(a).length - codesOf(b).length || String(a.id).length - String(b.id).length)[0];
+  if (byCode) return { id: byCode.id, url: byCode.urls.pbf, shared: codesOf(byCode).length > 1 };
+  if (countryName) {                                                         // запасний варіант: назва країни = назва вигрузки (Ukraine → ukraine)
+    const want = slug(countryName), byName = props.find(p => slug(p.name) === want || String(p.id).split('/').pop() === want);
+    if (byName) return { id: byName.id, url: byName.urls.pbf, shared: false };
+  }
+  return null;
+}
+/** Короткий опис індексу для журналу, якщо країну не знайдено. */
+export function describeIndex(index) {
+  const f = ((index && index.features) || []); const p = (f[0] && f[0].properties) || {};
+  const withPbf = f.filter(x => x.properties && x.properties.urls && x.properties.urls.pbf).length;
+  return `об'єктів ${f.length}, з pbf ${withPbf}, поля першого: ${Object.keys(p).join(',')}; приклад: ${JSON.stringify(f.find(x => x.properties && x.properties.urls && x.properties.urls.pbf)?.properties || p).slice(0, 300)}`;
 }
 
 function bbox(c, b) {
