@@ -92,10 +92,10 @@ const sleep = ms => new Promise(r => setTimeout(r, ms));
 async function overpass(query, fetchImpl, pause = 5000) {
   let last;
   for (let round = 0; round < 2; round++) {
-    if (round) await sleep(pause);
+    if (round) { if (!/overpass (429|50\d)/.test(String(last && last.message))) break; await sleep(pause); }
     for (const url of OVERPASS) {
       try {
-        const r = await fetchImpl(url, { method: 'POST', headers: { 'User-Agent': UA, 'content-type': 'application/x-www-form-urlencoded' }, body: 'data=' + encodeURIComponent(query) });
+        const r = await fetchImpl(url, { method: 'POST', headers: { 'User-Agent': UA, 'content-type': 'application/x-www-form-urlencoded' }, body: 'data=' + encodeURIComponent(query), signal: AbortSignal.timeout(40000) });
         if (!r.ok) { last = new Error('overpass ' + r.status); continue; }
         const j = await r.json();
         if (j.remark && /runtime error|timed out|timeout|out of memory/i.test(j.remark)) { last = new Error('overpass remark: ' + String(j.remark).slice(0, 40)); continue; }
@@ -104,6 +104,20 @@ async function overpass(query, fetchImpl, pause = 5000) {
     }
   }
   throw last;
+}
+
+/** Діагностика для адмінки: що відповідає кожне дзеркало Overpass на малий запит і на справжній (група 1, Львів). Дзеркала опитуються паралельно. */
+export async function overpassProbe(fetchImpl = fetch) {
+  const small = '[out:json][timeout:15];nwr["amenity"="cafe"]["name"](49.83,24.02,49.85,24.04);out center tags 3;', big = overpassQueries(49.8397, 24.0297)[0];
+  const one = async (url, q) => {
+    const t = Date.now();
+    try {
+      const r = await fetchImpl(url, { method: 'POST', headers: { 'User-Agent': UA, 'content-type': 'application/x-www-form-urlencoded' }, body: 'data=' + encodeURIComponent(q), signal: AbortSignal.timeout(35000) });
+      const txt = await r.text(); let j = null; try { j = JSON.parse(txt); } catch {}
+      return { status: r.status, ms: Date.now() - t, bytes: txt.length, n: j && j.elements ? j.elements.length : null, note: j && j.remark ? String(j.remark).slice(0, 80) : (r.ok ? '' : txt.replace(/\s+/g, ' ').slice(0, 80)) };
+    } catch (e) { return { error: String(e && e.message || e).slice(0, 80), ms: Date.now() - t }; }
+  };
+  return Promise.all(OVERPASS.map(async url => ({ mirror: new URL(url).host, small: await one(url, small), group1: await one(url, big) })));
 }
 const RE_CACHE = new Map(), reOf = src => { let r = RE_CACHE.get(src); if (!r) RE_CACHE.set(src, r = new RegExp(`^(${src})$`)); return r; };
 const tagMatch = (t, f) => { for (const k in f) { const v = f[k], x = t[k], not = typeof v === 'string' && v.charCodeAt(0) === 33; if (x == null) { if (!not) return false; continue; } if (Array.isArray(v) ? !v.includes(x) : not ? reOf(v.slice(1)).test(x) : x !== v) return false; } return true; };
@@ -145,10 +159,10 @@ async function fillCity(env, c, fetchImpl) {
       if (twin) { await env.DB.prepare("UPDATE venue_cities SET priority = 1 WHERE id = ? AND status = 'pending'").bind(twin.id).run(); await env.DB.prepare("UPDATE venue_cities SET alias_of = ?, lat = ?, lon = ?, status = 'ready', fetched_at = ? WHERE id = ?").bind(twin.id, lat, lon, now, c.id).run(); return { city: c.key, status: 'alias' }; }
       await env.DB.prepare('UPDATE venue_cities SET lat = ?, lon = ? WHERE id = ?').bind(lat, lon, c.id).run();
     }
-    const els = [], failed = []; let lastErr;
+    const els = [], failed = []; let lastErr; const errs = [];
     for (const [i, q] of overpassQueries(lat, lon).entries()) {
       if (i) await sleep(fetchImpl === fetch ? 2500 : 0); // пауза між групами, щоб не впиратись у ліміт запитів Overpass
-      try { els.push(...((await overpass(q, fetchImpl, fetchImpl === fetch ? 5000 : 0)).elements || [])); } catch (e) { failed.push(i + 1); lastErr = e; }
+      try { els.push(...((await overpass(q, fetchImpl, fetchImpl === fetch ? 5000 : 0)).elements || [])); } catch (e) { failed.push(i + 1); lastErr = e; errs.push(`${i + 1}: ${String(e && e.message || e).slice(0, 50)}`); }
     }
     if (failed.length === CAT_GROUPS.length) throw lastErr;     // не відповіла жодна група — повтор пізніше
     const rows = pickVenues(els, lat, lon);
@@ -156,7 +170,7 @@ async function fillCity(env, c, fetchImpl) {
     for (let i = 0; i < st.length; i += 100) await env.DB.batch(st.slice(i, i + 100));
     if (rows.length) await env.DB.prepare('DELETE FROM venues WHERE city_id = ? AND seen_at < ? AND r_cnt = 0').bind(c.id, now).run(); // зниклі з OSM без оцінок прибираємо
     await env.DB.prepare("UPDATE venue_cities SET status = 'ready', venues_count = ?, fetched_at = ?, attempts = 0, error = ? WHERE id = ?").bind(rows.length, now, failed.length ? 'partial: групи ' + failed.join(',') + ' (' + String(lastErr && lastErr.message || lastErr).slice(0, 60) + ')' : null, c.id).run();
-    return { city: c.key, status: 'ready', venues: rows.length, ...(failed.length ? { failedGroups: failed } : {}) };
+    return { city: c.key, status: 'ready', venues: rows.length, ...(failed.length ? { failedGroups: failed, errors: errs } : {}) };
   } catch (e) {
     const failed = c.attempts + 1 >= 3;
     await env.DB.prepare('UPDATE venue_cities SET attempts = attempts + 1, status = ?, error = ?, fetched_at = ? WHERE id = ?').bind(failed ? 'failed' : (c.prev === 'ready' ? 'ready' : 'pending'), String(e.message || e).slice(0, 120), now, c.id).run();
