@@ -1,6 +1,6 @@
 import { GIFTS, INTIMATE, ACTIVITIES, QUESTIONS, REGIONS, generateSchedule, sanitizeSurvey, giftView, intimView, actView, questionText, placesQuery } from './logic.js';
 import { recommend } from './places.js';
-import { ensureCity, runVenues, venuePicks, rateVenue, catOfQuery } from './venues.js';
+import { ensureCity, runVenues, venuePicks, rateVenue, catOfQuery, catOfGift } from './venues.js';
 import { createInvoice, verifyPaid, invoiceStatus } from './payments.js';
 import { verifyTurnstile } from './turnstile.js';
 import { handleAdmin } from './admin.js';
@@ -53,7 +53,7 @@ export async function handle(request, env) {
     if (m === 'POST' && path === '/api/survey') return json(await saveSurvey(request, env, member));
     if (m === 'GET' && (r = path.match(/^\/api\/day\/(\d+)$/))) return json(await getDay(env, member, +r[1]));
     if (m === 'POST' && path === '/api/answer') return json(await saveAnswer(request, env, member));
-    if (m === 'GET' && (r = path.match(/^\/api\/places\/(\d+)$/))) return json(await placesFor(env, member, +r[1]));
+    if (m === 'GET' && (r = path.match(/^\/api\/places\/(\d+)$/))) return json(await placesFor(env, member, +r[1], url.searchParams.get('k')));
     if (m === 'POST' && (r = path.match(/^\/api\/venues\/(\d+)\/rate$/))) { const b = await readJson(request); const out = await rateVenue(env, { memberId: member.id, country: member.country, city: member.city, venueId: +r[1], stars: Number(b.stars) }); if (!out.ok) throw new HttpError(out.error === 'too_many' ? 429 : out.error === 'not_found' ? 404 : 400, out.error); return json(out); }
     if (m === 'GET' && path === '/api/history') return json(await history(env, member));
     if (m === 'POST' && path === '/api/mark') return json(await mark(request, env, member));
@@ -468,14 +468,18 @@ async function configResponse(request, env) {
 }
 
 // ---------- Рекомендації закладів за публічними рейтингами (лише після відповіді на питання дня) ----------
-async function placesFor(env, mem, d) {
+async function placesFor(env, mem, d, kind) {
   if (!(d >= 1 && d <= DAYS) || d > todayIndex(mem.start_date, nowOf(env), mem.tz)) throw new HttpError(403, 'not_yet');
   if (!mem.schedule_json) throw new HttpError(409, 'not_ready');
   const answered = await q1(env, 'SELECT 1 AS x FROM answers WHERE member_id = ? AND day = ?', mem.id, d);
   if (!answered) throw new HttpError(403, 'answer_first');
   const plan = JSON.parse(mem.schedule_json).days[d];
+  if (kind === 'gift') { // «де купити поблизу»: лише власна база (Google не використовуємо, щоб не множити платні запити)
+    const places = await venuePicks(env, { country: mem.country, city: mem.city, cat: catOfGift(GIFTS[plan.gift[mem.slot]].q), seedKey: mem.id + ':g' + d, lang: mem.lang });
+    return { ok: true, places };
+  }
   const query = placesQuery(ACTIVITIES[plan.act], mem.city, mem.lang);
   let places = query ? await recommend(env, { query, lang: mem.lang, country: mem.country, memberId: mem.id, day: d }) : [];
-  if (!places.length) places = await venuePicks(env, { country: mem.country, city: mem.city, cat: catOfQuery(ACTIVITIES[plan.act].q), seedKey: mem.id + ':' + d }); // власна база (OpenStreetMap + оцінки користувачів)
+  if (!places.length) places = await venuePicks(env, { country: mem.country, city: mem.city, cat: catOfQuery(ACTIVITIES[plan.act].q), seedKey: mem.id + ':' + d, lang: mem.lang }); // власна база (OpenStreetMap + оцінки користувачів)
   return { ok: true, places };
 }

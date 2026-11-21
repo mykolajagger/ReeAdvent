@@ -236,11 +236,17 @@ const ICONS = {
   intim: '<svg class="ico" viewBox="0 0 48 48"><path d="M24 40S7 29 7 18a9 9 0 0 1 17-4 9 9 0 0 1 17 4c0 11-17 22-17 22z"/></svg>',
   act: '<svg class="ico" viewBox="0 0 48 48"><path d="M24 5l3.5 10.5H38l-8.5 6.2 3.3 10.3L24 25.8l-8.8 6.2 3.3-10.3L10 15.5h10.5z"/><path d="M24 33v10"/></svg>'
 };
-/* Рекомендації закладів (рейтинги Google Maps): вантажаться при відкритті картки активності; сервер їх не зберігає */
+/* Рекомендації закладів: Google Maps (якщо ввімкнено) або наша база OpenStreetMap + оцінки користувачів. Сервер їх для Google не зберігає */
 const placesCache = {};
-function placesHtml(day) {
-  const p = placesCache[day]; if (!p || !p.length) return '';
-  return `<div class="muted" style="font-size:12px;letter-spacing:.12em;text-transform:uppercase;margin-top:4px">${L('Рекомендуємо за рейтингом', 'Top rated nearby')}</div><ul class="plist">${p.map(x => `<li><a href="${esc(x.url)}" target="_blank" rel="noopener noreferrer"><b>${esc(x.name)}</b></a>${x.rating ? `<span class="stars">★ ${x.rating} <small>(${x.count})</small></span>` : ''}${x.address ? `<small class="muted">${esc(x.address)}</small>` : ''}${x.id ? `<span class="rate" data-v="${x.id}"><small class="muted">${L('Ваша оцінка:', 'Your rating:')}</small>${[1, 2, 3, 4, 5].map(n => `<button type="button" data-s="${n}" aria-label="${n}">★</button>`).join('')}</span>` : ''}</li>`).join('')}</ul><div class="muted" style="font-size:11px">${p.some(x => x.id) ? L('Добірка за даними OpenStreetMap і оцінками користувачів ReeAdvent. Перевіряйте години роботи на мапі. © <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener noreferrer">OpenStreetMap contributors</a>', 'Picked from OpenStreetMap data and ReeAdvent users’ ratings. Check opening hours on the map. © <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener noreferrer">OpenStreetMap contributors</a>') : L('Рейтинги: Google Maps. Години роботи перевіряйте на мапі.', 'Ratings: Google Maps. Check opening hours on the map.')}</div>`;
+const fmtKm = km => km < 1 ? `${Math.max(50, Math.round(km * 20) * 50)} ${L('м', 'm')}` : `${km.toFixed(1)} ${L('км', 'km')}`;
+function placesHtml(day, k = 'act') {
+  const p = placesCache[day + k]; if (!p || !p.length) return '';
+  const osm = p.some(x => x.id), head = k === 'gift' ? L('Де купити поблизу', 'Where to buy nearby') : osm ? L('Куди піти поблизу', 'Where to go nearby') : L('Рекомендуємо за рейтингом', 'Top rated nearby');
+  const OSM = '<a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener noreferrer">OpenStreetMap contributors</a>';
+  return `<div class="muted" style="font-size:12px;letter-spacing:.12em;text-transform:uppercase;margin-top:4px">${head}</div><ul class="plist">${p.map(x => {
+    const meta = [x.address, x.km != null ? L(`${fmtKm(x.km)} від центру`, `${fmtKm(x.km)} from the centre`) : '', x.hours ? L('Години: ', 'Hours: ') + x.hours : ''].filter(Boolean).map(esc).join(' · ');
+    return `<li><a href="${esc(x.url)}" target="_blank" rel="noopener noreferrer"><b>${esc(x.name)}</b></a>${x.rating ? `<span class="stars">★ ${x.rating} <small>(${x.count})</small></span>` : ''}${meta ? `<small class="muted">${meta}</small>` : ''}${x.id ? `<span class="rate" data-v="${x.id}"><small class="muted">${L('Ваша оцінка:', 'Your rating:')}</small>${[1, 2, 3, 4, 5].map(n => `<button type="button" data-s="${n}" aria-label="${n}">★</button>`).join('')}</span>` : ''}</li>`; }).join('')}</ul>
+    <div class="muted" style="font-size:11px">${osm ? L(`Добірка за даними OpenStreetMap і оцінками користувачів ReeAdvent. Години роботи можуть бути неточними, перевіряйте на мапі. © ${OSM}. Не знайшли заклад або бачите помилку? <a href="https://www.openstreetmap.org/fixthemap" target="_blank" rel="noopener noreferrer">Додайте чи виправте його на openstreetmap.org</a>.`, `Picked from OpenStreetMap data and ReeAdvent users’ ratings. Opening hours may be inaccurate, check the map. © ${OSM}. Can’t find a place or see a mistake? <a href="https://www.openstreetmap.org/fixthemap" target="_blank" rel="noopener noreferrer">Add or fix it on openstreetmap.org</a>.`) : L('Рейтинги: Google Maps. Години роботи перевіряйте на мапі.', 'Ratings: Google Maps. Check opening hours on the map.')}</div>`;
 }
 function bindRate(box) {
   box.querySelectorAll('.rate').forEach(r => r.addEventListener('click', async e => {
@@ -248,13 +254,13 @@ function bindRate(box) {
     try { await api('POST', `/api/venues/${r.dataset.v}/rate`, { stars: s }); r.querySelectorAll('button').forEach(x => x.classList.toggle('on', +x.dataset.s <= s)); toast(L('Дякуємо за оцінку!', 'Thanks for rating!')); } catch { toast(L('Не вдалося зберегти оцінку', 'Could not save the rating')); }
   }));
 }
-async function loadPlaces(day) {
-  if (day in placesCache) return;
-  placesCache[day] = [];
-  try { const key = `pl_${day}_${st.me.name}`; let v = null; try { v = JSON.parse(sessionStorage.getItem(key)); } catch {}
-    if (!v) { v = (await api('GET', '/api/places/' + day)).places; try { sessionStorage.setItem(key, JSON.stringify(v)); } catch {} }
-    placesCache[day] = v; const box = $('#places-box'); if (box) { box.innerHTML = placesHtml(day); bindRate(box); }
-    if (v.length) { const ml = document.querySelector('.maplink .ml'); if (ml) ml.textContent = L('Шукати самим на мапі', 'Search the map yourself'); } // з рекомендаціями пошук стає альтернативою
+async function loadPlaces(day, k = 'act') {
+  const ck = day + k; if (ck in placesCache) return;
+  placesCache[ck] = [];
+  try { const key = `pl_${day}_${k}_${st.me.name}`; let v = null; try { v = JSON.parse(sessionStorage.getItem(key)); } catch {}
+    if (!v) { v = (await api('GET', `/api/places/${day}?k=${k}`)).places; try { sessionStorage.setItem(key, JSON.stringify(v)); } catch {} }
+    placesCache[ck] = v; const box = $('#places-box-' + k); if (box) { box.innerHTML = placesHtml(day, k); bindRate(box); }
+    if (k === 'act' && v.length) { const ml = document.querySelector('.maplink .ml'); if (ml) ml.textContent = L('Шукати самим на мапі', 'Search the map yourself'); } // з рекомендаціями пошук стає альтернативою
   } catch { /* рекомендації необов'язкові */ }
 }
 const TILES = () => [{ k: 'gift', t: L('Подарунок', 'Gift') }, { k: 'intim', t: L('Пригода для двох', 'Adventure for two') }, { k: 'act', t: L('Спільна активність', 'Shared activity') }];
@@ -297,7 +303,7 @@ async function openDay(day) {
     if (t.k === 'intim') { meta = `<span>${L(LEVELS[x.level - 1][0], LEVELS[x.level - 1][1])}</span>`; hint = `<div class="hint">${L('Лише для вас двох. Зупиняйтесь, якщо комусь некомфортно.', 'Just for the two of you. Stop if anyone feels uncomfortable.')}</div>`; }
     if (t.k === 'act') { meta = `<span>${[L('безкоштовно', 'free'), L(`до ${fmtCur(300).replace('≈ ', '~')}`, `up to ${fmtCur(300).replace('≈ ', '~')}`), L(`до ${fmtCur(800).replace('≈ ', '~')}`, `up to ${fmtCur(800).replace('≈ ', '~')}`), L('дорожче / далі', 'pricier / farther')][x.cost]}</span>${x.car ? `<span>${L('потрібна машина', 'car needed')}</span>` : ''}`; }
     return `<div class="reveal"><div class="tag">${esc(tag)}</div><h3>${esc(x.title)}</h3><p>${esc(x.desc)}</p>
-      <div class="meta">${meta}</div>${t.k === 'act' ? `<div class="places" id="places-box">${placesHtml(day)}</div>` : ''}${x.link ? `<a class="link ${t.k === 'act' ? 'maplink' : ''}" href="${esc(x.link.url)}" target="_blank" rel="noopener noreferrer"><span class="ml">${esc(x.link.label)}</span> ↗</a>` : ''}${hint}
+      <div class="meta">${meta}</div>${t.k === 'act' || t.k === 'gift' ? `<div class="places" id="places-box-${t.k}">${placesHtml(day, t.k)}</div>` : ''}${x.link ? `<a class="link ${t.k === 'act' ? 'maplink' : ''}" href="${esc(x.link.url)}" target="_blank" rel="noopener noreferrer"><span class="ml">${esc(x.link.label)}</span> ↗</a>` : ''}${hint}
       <label class="tick"><input type="checkbox" data-mark="${t.k}" ${d.done[t.k] ? 'checked' : ''}> ${L('Виконано', 'Done')}</label></div>`;
   };
   const render = () => {
@@ -307,7 +313,8 @@ async function openDay(day) {
       <div class="row"><button class="btn ghost sm" id="all">${L('Відкрити все', 'Open all')}</button></div>`;
     ov.querySelector('.x').onclick = close;
     ov.querySelector('#all').onclick = () => { TILES().forEach(t => revealed[t.k] = true); render(); confetti(); };
-    if (revealed.act) loadPlaces(day);
+    if (revealed.act) loadPlaces(day, 'act');
+    if (revealed.gift) loadPlaces(day, 'gift');
   };
   render();
   ov.addEventListener('click', async e => {

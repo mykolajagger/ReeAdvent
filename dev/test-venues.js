@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import path from 'node:path'; import { fileURLToPath } from 'node:url';
 import { makeDb } from './d1.js';
 import { handle } from '../src/api.js';
-import { runVenues, venuePicks, rateVenue, ensureCity, catOfQuery, cityKey, overpassQuery, pickVenues, venueStats, CATS } from '../src/venues.js';
+import { runVenues, venuePicks, rateVenue, ensureCity, catOfQuery, catOfGift, formatHours, cityKey, overpassQuery, pickVenues, venueStats, CATS } from '../src/venues.js';
 import { TOP_CITIES } from '../src/top_cities.js';
 const root = path.join(path.dirname(fileURLToPath(import.meta.url)), '..');
 const db = makeDb(root), raw = db._raw;
@@ -15,6 +15,11 @@ assert.equal(cityKey('ua', 'Ľviv'), 'UA|lviv'); assert(TOP_CITIES.length > 280 
 assert(!TOP_CITIES.some(c => ['Donetsk', 'Luhansk', 'Simferopol'].includes(c[1])), 'окуповані міста не в базі');
 const q = overpassQuery(49.84, 24.03); assert(q.includes('"amenity"="cafe"') && q.includes('around:8000,49.84,24.03') && q.includes('"access"!~'), q.slice(0, 200));
 
+// ----- подарунки: де купити; години роботи
+assert.equal(catOfGift('обсмажка кави {city}'), 'coffee'); assert.equal(catOfGift('винна крамниця {city}'), 'wine'); assert.equal(catOfGift('срібний кулон'), 'jewelry'); assert.equal(catOfGift('кав’ярня {city}'), 'cafe'); assert.equal(catOfGift('плед флісовий'), null);
+assert.equal(formatHours('Mo-Fr 09:00-18:00; Sa 10:00-16:00; Su off'), 'Пн–Пт 09:00–18:00; Сб 10:00–16:00; Нд вихідний'); assert.equal(formatHours('24/7'), 'цілодобово'); assert.equal(formatHours('Mo-Su 08:00-22:00', 'en'), 'Mon–Sun 08:00–22:00'); assert.equal(formatHours(''), '');
+assert(formatHours('Mo 09:00-10:00; Tu 09:00-10:00; We 09:00-10:00; Th 09:00-10:00; Fr 09:00-10:00; Sa 09:00-10:00').length <= 71);
+
 // ----- відбір із відповіді Overpass
 const el = (id, tags, lat = 49.84, lon = 24.03) => ({ type: 'node', id, lat, lon, tags });
 const picked = pickVenues([el(1, { amenity: 'cafe', name: 'Копальня', website: 'x', opening_hours: '24/7' }), el(2, { amenity: 'cafe', name: 'Нова' }, 49.9, 24.1), el(3, { amenity: 'cafe' }), el(4, { tourism: 'museum', name: 'Музей', wikidata: 'Q1' }),
@@ -22,6 +27,7 @@ const picked = pickVenues([el(1, { amenity: 'cafe', name: 'Копальня', we
 assert.deepEqual(picked.filter(p => p.cat === 'cafe').map(p => p.name), ['Копальня', 'Нова'], 'безіменні відкинуто, багатші тегами вище');
 assert.deepEqual(picked.filter(p => p.cat === 'pool').map(p => p.name), ['Басейн'], 'приватні відкинуто');
 assert.equal(picked.filter(p => p.cat === 'museum').length, 1);
+const hv = pickVenues([el(11, { shop: 'coffee', name: 'Roastery', opening_hours: 'Mo-Su 09:00-20:00' })], 49.84, 24.03); assert.equal(hv[0].cat, 'coffee'); assert.equal(hv[0].hours, 'Mo-Su 09:00-20:00');
 
 // ----- мок мережі: Nominatim + Overpass
 let calls = { nom: 0, op: 0 }, failOverpass = 0;
@@ -29,7 +35,7 @@ const cafes = Array.from({ length: 40 }, (_, i) => el(100 + i, { amenity: 'cafe'
 const mockFetch = async (url, init) => {
   const u = String(url);
   if (u.includes('nominatim')) { calls.nom++; const city = decodeURIComponent(u.split('q=')[1]); return new Response(JSON.stringify(city === 'Нікуди' ? [] : [{ lat: '49.8397', lon: '24.0297' }]), { status: 200 }); }
-  if (u.includes('overpass')) { calls.op++; if (failOverpass > 0) { failOverpass--; return new Response('busy', { status: 429 }); } return new Response(JSON.stringify({ elements: [...cafes, el(900, { tourism: 'museum', name: 'Музей Лева' })] }), { status: 200 }); }
+  if (u.includes('overpass')) { calls.op++; if (failOverpass > 0) { failOverpass--; return new Response('busy', { status: 429 }); } return new Response(JSON.stringify({ elements: [...cafes, el(900, { tourism: 'museum', name: 'Музей Лева' }), el(901, { shop: 'coffee', name: 'Обсмажка Лева', opening_hours: 'Mo-Fr 09:00-18:00' }, 49.85, 24.04)] }), { status: 200 }); }
   throw new Error('unexpected ' + u);
 };
 
@@ -42,14 +48,17 @@ assert.equal(r1.seeded, true); assert.equal(r1.city, 'UA|жовква', 'нов�
 const lv = raw.prepare("SELECT * FROM venue_cities WHERE key = 'UA|lviv'").get(); assert(lv);
 const zh = raw.prepare("SELECT * FROM venue_cities WHERE key = 'UA|жовква'").get();
 if (zh.alias_of) { assert.equal(zh.alias_of, lv.id); assert.equal(lv.priority, 1); assert.equal((await venuePicks(env, { country: 'UA', city: 'Жовква', cat: 'cafe', seedKey: 's' })).length, 0, 'ціль ще не готова'); }
-const r2 = await runVenues(env, { fetchImpl: mockFetch }); assert.equal(r2.city, 'UA|lviv'); assert.equal(r2.status, 'ready'); assert(r2.venues >= 26);
-assert(raw.prepare("SELECT COUNT(*) AS n FROM venues WHERE city_id = ? AND cat = 'cafe'").get(lv.id).n === 25, 'не більше 25 на категорію');
+const r2 = await runVenues(env, { fetchImpl: mockFetch }); assert.equal(r2.city, 'UA|lviv'); assert.equal(r2.status, 'ready'); assert(r2.venues >= 21);
+assert(raw.prepare("SELECT COUNT(*) AS n FROM venues WHERE city_id = ? AND cat = 'cafe'").get(lv.id).n === 20, 'не більше 20 на категорію');
 
 // ----- видача: аліас і місто-ціль
 let picks = await venuePicks(env, { country: 'UA', city: 'Жовква', cat: 'cafe', seedKey: 'm1:1' });
 assert.equal(picks.length, 3); assert(picks.every(p => p.id && p.url.includes('google.com/maps/search') && p.source === 'osm' && p.rating === null));
 assert.equal((await venuePicks(env, { country: 'UA', city: 'Жовква', cat: 'planetarium', seedKey: 's' })).length, 0);
 assert.equal((await venuePicks(env, { country: 'UA', city: 'Невідоме', cat: 'cafe', seedKey: 's' })).length, 0);
+
+const gp = await venuePicks(env, { country: 'UA', city: 'Жовква', cat: 'coffee', seedKey: 'g:1' });
+assert.equal(gp.length, 1); assert.equal(gp[0].hours, 'Пн–Пт 09:00–18:00'); assert(gp[0].km > 0.5 && gp[0].km < 3, 'відстань від центру, км: ' + gp[0].km);
 
 // ----- оцінки
 const vid = picks[0].id;

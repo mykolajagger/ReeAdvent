@@ -6,7 +6,7 @@ import { rateLimit } from './promo.js';
 
 const UA = 'ReeAdvent/1.0 (+https://reeadvent.fun; support@reeadvent.fun)';
 const OVERPASS = ['https://overpass-api.de/api/interpreter', 'https://overpass.kumi.systems/api/interpreter'];
-const RADIUS = 8000, PER_SET = 400, KEEP = 25, REFRESH_MS = 7 * 864e5;
+const RADIUS = 8000, PER_SET = 400, KEEP = 20, REFRESH_MS = 7 * 864e5, VER = '2'; // VER: версія схеми/категорій; зміна ставить готові міста на повторне наповнення
 
 /** Категорії закладів → теги OSM (значення: рядок, масив варіантів або '!a|b' — «крім»). */
 export const CATS = {
@@ -15,7 +15,10 @@ export const CATS = {
   viewpoint: [{ tourism: 'viewpoint' }], bowling: [{ leisure: 'bowling_alley' }], billiards: [{ sport: 'billiards' }], pool: [{ leisure: 'swimming_pool', access: '!private|no' }, { leisure: 'sports_centre', sport: 'swimming' }],
   spa: [{ leisure: ['sauna', 'spa'] }, { shop: 'massage' }], rink: [{ leisure: 'ice_rink' }], climbing: [{ sport: 'climbing' }], yoga: [{ sport: ['yoga', 'pilates'] }],
   church: [{ amenity: 'place_of_worship', building: ['cathedral', 'church'] }], garden: [{ leisure: 'garden' }], castle: [{ historic: ['castle', 'fort'] }],
-  books: [{ shop: 'books' }], florist: [{ shop: 'florist' }], market: [{ amenity: 'marketplace' }], shelter: [{ amenity: 'animal_shelter' }], gift: [{ shop: 'gift' }]
+  books: [{ shop: 'books' }], florist: [{ shop: 'florist' }], market: [{ amenity: 'marketplace' }], shelter: [{ amenity: 'animal_shelter' }], gift: [{ shop: 'gift' }],
+  // магазини для підказок «де купити» до подарунків
+  coffee: [{ shop: 'coffee' }], tea: [{ shop: 'tea' }], wine: [{ shop: 'wine' }], beer: [{ shop: ['alcohol', 'beverages'] }], cheese: [{ shop: 'cheese' }], photo: [{ shop: 'photo' }],
+  jewelry: [{ shop: 'jewelry' }], toys: [{ shop: ['toys', 'games'] }], beauty: [{ shop: ['cosmetics', 'perfumery'] }]
 };
 // Українська пошукова фраза активності → категорія (перша відповідність)
 const QUERY_CAT = [[/театр|філармон|афіш/, 'theatre'], [/кінотеатр/, 'cinema'], [/музей/, 'museum'], [/оглядов|пагорб/, 'viewpoint'], [/ботан|оранжер/, 'garden'], [/парк|ліс |ліс$|набереж/, 'park'],
@@ -23,6 +26,21 @@ const QUERY_CAT = [[/театр|філармон|афіш/, 'theatre'], [/кін
   [/храм|собор|церкв/, 'church'], [/замок|фортец/, 'castle'], [/книгарн/, 'books'], [/квіт/, 'florist'], [/ринок|ярмарок/, 'market'], [/притулок/, 'shelter'], [/сувенір|ялинк/, 'gift'],
   [/кондитер/, 'pastry'], [/коктейл|караоке|вин|глінтвейн|жива музика/, 'bar'], [/піцер|азійськ|ресторан/, 'restaurant'], [/кав.ярн|бранч|шоколад|настіл/, 'cafe']];
 export const catOfQuery = q => { const s = String(q || '').toLowerCase(); for (const [re, c] of QUERY_CAT) if (re.test(s)) return c; return null; };
+
+// Подарунок → категорія магазину (за українською назвою/запитом); шаблонні запити з {city} (кав’ярня, піца, кіно…) спадають на catOfQuery
+const GIFT_CAT = [[/обсмажк/, 'coffee'], [/винн.*крамниц/, 'wine'], [/пиво|сидр/, 'beer'], [/сироварн/, 'cheese'], [/масаж спини/, 'spa'], [/фотодрук|магніт|фотоальбом|фоторамк/, 'photo'],
+  [/гравіюван|сережк|браслет|кулон/, 'jewelry'], [/букет|сукулент|фіалк|вінок|сухоцвіт/, 'florist'], [/книг|комікс|манга|календар|блокнот/, 'books'], [/пазл|lego|настільна гра|головоломк|гральні|funko/, 'toys'],
+  [/чай|чаюван/, 'tea'], [/шоколад|пряник|імбирн/, 'pastry'], [/свічк|аромадифузор/, 'gift'], [/парфум|крем|бальзам|гель для душу|сіль для ванни|бомбочки для ванни|масажна олія/, 'beauty']];
+export const catOfGift = q => { const s = String(q || '').toLowerCase(); for (const [re, c] of GIFT_CAT) if (re.test(s)) return c; return s.includes('{city}') ? catOfQuery(s) : null; };
+
+/** Години роботи з OSM (opening_hours) у зручному вигляді: «Пн–Пт 09:00–18:00». Складні правила скорочуються. */
+export function formatHours(raw, lang = 'uk') {
+  let s = String(raw || '').trim(); if (!s) return '';
+  if (s === '24/7') return lang === 'en' ? '24/7' : 'цілодобово';
+  const D = lang === 'en' ? { Mo: 'Mon', Tu: 'Tue', We: 'Wed', Th: 'Thu', Fr: 'Fri', Sa: 'Sat', Su: 'Sun', PH: 'holidays', off: 'closed' } : { Mo: 'Пн', Tu: 'Вт', We: 'Ср', Th: 'Чт', Fr: 'Пт', Sa: 'Сб', Su: 'Нд', PH: 'свята', off: 'вихідний' };
+  s = s.replace(/\b(Mo|Tu|We|Th|Fr|Sa|Su|PH|off)\b/g, m => D[m]).replace(/(\d)-(\d)/g, '$1–$2').replace(/(\p{L})-(\p{L})/gu, '$1–$2').replace(/\s*;\s*/g, '; ');
+  return s.length > 70 ? s.slice(0, 69).replace(/[;,\s]+\S*$/, '') + '…' : s;
+}
 
 const norm = s => String(s).toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[’'‘`ʼ]/g, '').replace(/\s+/g, ' ').trim();
 export const cityKey = (country, name) => `${String(country || 'UA').toUpperCase()}|${norm(name)}`;
@@ -37,7 +55,16 @@ export async function ensureCity(env, country, name) {
 }
 async function seedTop(env) {
   const f = await env.DB.prepare("SELECT value FROM settings WHERE key = 'venues_seeded'").first();
-  if (f) return false;
+  if (f) {
+    // нова версія категорій/полів: уже готові міста ставимо на повторне наповнення (старі дані показуються, доки не оновляться)
+    const v = await env.DB.prepare("SELECT value FROM settings WHERE key = 'venues_ver'").first();
+    if (!v || v.value !== VER) {
+      await env.DB.prepare("UPDATE venue_cities SET status = 'pending' WHERE status = 'ready' AND alias_of IS NULL AND priority = 0 AND lat IS NOT NULL").run();
+      await env.DB.prepare("INSERT INTO settings (key, value, updated_at) VALUES ('venues_ver', ?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value, updated_at = excluded.updated_at").bind(VER, Date.now()).run();
+    }
+    return false;
+  }
+  await env.DB.prepare("INSERT INTO settings (key, value, updated_at) VALUES ('venues_ver', ?, ?) ON CONFLICT(key) DO NOTHING").bind(VER, Date.now()).run();
   const now = Date.now(), st = TOP_CITIES.map(([cc, name, lat, lon]) => env.DB.prepare("INSERT INTO venue_cities (key, country, name, lat, lon, status, priority, requested_at) VALUES (?, ?, ?, ?, ?, 'pending', 0, ?) ON CONFLICT(key) DO NOTHING").bind(cityKey(cc, name), cc, name, lat, lon, now));
   for (let i = 0; i < st.length; i += 100) await env.DB.batch(st.slice(i, i + 100));
   await env.DB.prepare("INSERT INTO settings (key, value, updated_at) VALUES ('venues_seeded', '1', ?) ON CONFLICT(key) DO NOTHING").bind(now).run();
@@ -79,7 +106,7 @@ export function pickVenues(elements, lat, lon) {
     for (const [cat, fs] of Object.entries(CATS)) {
       if (!fs.some(f => tagMatch(t, f))) continue;
       const osm = `${e.type[0]}${e.id}`, k = osm + cat; if (seen.has(k)) continue; seen.add(k);
-      (byCat[cat] ||= []).push({ osm, cat, name, address, lat: la, lon: lo, prior: Math.round(prior * 100) / 100 });
+      (byCat[cat] ||= []).push({ osm, cat, name, address, lat: la, lon: lo, prior: Math.round(prior * 100) / 100, hours: t.opening_hours ? String(t.opening_hours).slice(0, 120) : null });
     }
   }
   return Object.values(byCat).flatMap(a => a.sort((x, y) => y.prior - x.prior).slice(0, KEEP));
@@ -101,7 +128,7 @@ async function fillCity(env, c, fetchImpl) {
     }
     const data = await overpass(overpassQuery(lat, lon), fetchImpl);
     const rows = pickVenues(data.elements, lat, lon);
-    const st = rows.map(v => env.DB.prepare('INSERT INTO venues (city_id, osm, cat, name, address, lat, lon, prior, seen_at) VALUES (?,?,?,?,?,?,?,?,?) ON CONFLICT(city_id, osm, cat) DO UPDATE SET name = excluded.name, address = excluded.address, lat = excluded.lat, lon = excluded.lon, prior = excluded.prior, seen_at = excluded.seen_at').bind(c.id, v.osm, v.cat, v.name, v.address, v.lat, v.lon, v.prior, now));
+    const st = rows.map(v => env.DB.prepare('INSERT INTO venues (city_id, osm, cat, name, address, lat, lon, prior, hours, seen_at) VALUES (?,?,?,?,?,?,?,?,?,?) ON CONFLICT(city_id, osm, cat) DO UPDATE SET name = excluded.name, address = excluded.address, lat = excluded.lat, lon = excluded.lon, prior = excluded.prior, hours = excluded.hours, seen_at = excluded.seen_at').bind(c.id, v.osm, v.cat, v.name, v.address, v.lat, v.lon, v.prior, v.hours, now));
     for (let i = 0; i < st.length; i += 100) await env.DB.batch(st.slice(i, i + 100));
     if (rows.length) await env.DB.prepare('DELETE FROM venues WHERE city_id = ? AND seen_at < ? AND r_cnt = 0').bind(c.id, now).run(); // зниклі з OSM без оцінок прибираємо
     await env.DB.prepare("UPDATE venue_cities SET status = 'ready', venues_count = ?, fetched_at = ?, attempts = 0, error = NULL WHERE id = ?").bind(rows.length, now, c.id).run();
@@ -161,18 +188,18 @@ export async function venueStats(env) {
 const bayes = v => (v.r_sum + 4 * 5) / (v.r_cnt + 5);           // середня з «апріорною» четвіркою: нових закладів не штрафуємо
 const hash = s => { let h = 2166136261; for (const ch of String(s)) h = Math.imul(h ^ ch.charCodeAt(0), 16777619); return h >>> 0; };
 async function cityId(env, country, name) {
-  const c = await env.DB.prepare('SELECT t.id AS id, t.status AS status FROM venue_cities c JOIN venue_cities t ON t.id = COALESCE(c.alias_of, c.id) WHERE c.key = ?').bind(cityKey(country, name)).first();
-  return c ? { id: c.id, status: c.status } : null;
+  const c = await env.DB.prepare('SELECT t.id AS id, t.status AS status, t.venues_count AS n, t.lat AS lat, t.lon AS lon FROM venue_cities c JOIN venue_cities t ON t.id = COALESCE(c.alias_of, c.id) WHERE c.key = ?').bind(cityKey(country, name)).first();
+  return c ? { id: c.id, status: c.status, n: c.n, lat: c.lat, lon: c.lon } : null;
 }
 
 /** До 3 закладів категорії: найкращі за (оцінки користувачів + повнота даних OSM), з варіативністю за учасником/днем. Порожньо, якщо база міста ще не готова. */
-export async function venuePicks(env, { country, city, cat, seedKey }) {
-  const c = await cityId(env, country, city); if (!c || c.status !== 'ready' || !cat) return [];
-  const { results } = await env.DB.prepare('SELECT id, name, address, prior, r_sum, r_cnt FROM venues WHERE city_id = ? AND cat = ?').bind(c.id, cat).all();
+export async function venuePicks(env, { country, city, cat, seedKey, lang = 'uk' }) {
+  const c = await cityId(env, country, city); if (!c || !cat || (c.status !== 'ready' && !(c.n > 0))) return [];
+  const { results } = await env.DB.prepare('SELECT id, name, address, prior, r_sum, r_cnt, lat, lon, hours FROM venues WHERE city_id = ? AND cat = ?').bind(c.id, cat).all();
   const ok = results.filter(v => !(v.r_cnt >= 5 && v.r_sum / v.r_cnt < 3));
   ok.sort((a, b) => (bayes(b) + b.prior * 0.35) - (bayes(a) + a.prior * 0.35));
   const top = ok.slice(0, 9).map(v => ({ v, k: hash(seedKey + ':' + v.id) })).sort((a, b) => a.k - b.k).slice(0, 3).map(x => x.v);
-  return top.sort((a, b) => bayes(b) - bayes(a)).map(v => ({ id: v.id, name: v.name, address: v.address || '', rating: v.r_cnt >= 3 ? Math.round(v.r_sum / v.r_cnt * 10) / 10 : null, count: v.r_cnt,
+  return top.sort((a, b) => bayes(b) - bayes(a)).map(v => ({ id: v.id, name: v.name, address: v.address || '', km: c.lat != null && v.lat != null ? Math.round(dist(v.lat, v.lon, c.lat, c.lon) * 10) / 10 : null, hours: formatHours(v.hours, lang), rating: v.r_cnt >= 3 ? Math.round(v.r_sum / v.r_cnt * 10) / 10 : null, count: v.r_cnt,
     url: `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(v.name + ' ' + city)}`, source: 'osm' }));
 }
 
