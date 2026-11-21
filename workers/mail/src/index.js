@@ -1,3 +1,4 @@
+// Версія наповнення бази закладів: 4 (повтори з паузою, ліміт 2 міста одночасно). Зміна цього рядка перезбирає Worker після правок у ../../src.
 import PostalMime from 'postal-mime';
 import { saveInbound } from './ingest.js';
 import { runVenuesLogged } from '../../../src/venues.js';

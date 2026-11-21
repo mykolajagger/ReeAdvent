@@ -112,7 +112,7 @@ assert.equal(raw.prepare("SELECT COUNT(*) AS n FROM venue_cities WHERE status = 
 // ----- часткова відповідь: одна група запитів не відповіла, місто все одно готове
 raw.prepare("UPDATE venue_cities SET status = 'ready', fetched_at = ?").run(Date.now() + 864e5 * 400);
 await ensureCity(env, 'UA', 'Косів2'); raw.prepare("UPDATE venue_cities SET lat = 48.3, lon = 25.0 WHERE key = ?").run(cityKey('UA', 'Косів2'));
-let n = 0; const flaky = async (url, init) => String(url).includes('overpass') && ++n >= 3 && n <= 5 ? new Response('x', { status: 504 }) : mockFetch(url, init); // 3–5-й виклики: група 3 (усі три дзеркала)
+let n = 0; const flaky = async (url, init) => String(url).includes('overpass') && ++n >= 3 && n <= 8 ? new Response('x', { status: 504 }) : mockFetch(url, init); // 3–8-й виклики: група 3 (три дзеркала в обох колах)
 const part = await runVenues(env, { fetchImpl: flaky }); assert.equal(part.status, 'ready'); assert.deepEqual(part.failedGroups, [3], JSON.stringify(part));
 assert.match(raw.prepare("SELECT error FROM venue_cities WHERE key = 'UA|косів2'").get().error, /partial/);
 console.log('VENUES OK');

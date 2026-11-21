@@ -87,11 +87,21 @@ export function overpassQueries(lat, lon) {
   const dLat = RADIUS / 111200, dLon = RADIUS / (111200 * Math.cos(lat * Math.PI / 180)), bbox = [lat - dLat, lon - dLon, lat + dLat, lon + dLon].map(x => x.toFixed(5)).join(',');
   return CAT_GROUPS.map(g => `[out:json][timeout:30][maxsize:67108864];${g.map(cat => `(${CATS[cat].map(f => `nwr${flt(f)}["name"](${bbox});`).join('')});out center tags ${PER_SET};`).join('')}`);
 }
-async function overpass(query, fetchImpl) {
+const sleep = ms => new Promise(r => setTimeout(r, ms));
+/** Запит до Overpass із запасними серверами. Два кола: після відмови всіх (429/5xx, таймаут) пауза й спроба ще раз. Відповідь із повідомленням про помилку виконання вважається невдалою. */
+async function overpass(query, fetchImpl, pause = 5000) {
   let last;
-  for (const url of OVERPASS) {
-    try { const r = await fetchImpl(url, { method: 'POST', headers: { 'User-Agent': UA, 'content-type': 'application/x-www-form-urlencoded' }, body: 'data=' + encodeURIComponent(query) }); if (r.ok) return await r.json(); last = new Error('overpass ' + r.status); }
-    catch (e) { last = e; }
+  for (let round = 0; round < 2; round++) {
+    if (round) await sleep(pause);
+    for (const url of OVERPASS) {
+      try {
+        const r = await fetchImpl(url, { method: 'POST', headers: { 'User-Agent': UA, 'content-type': 'application/x-www-form-urlencoded' }, body: 'data=' + encodeURIComponent(query) });
+        if (!r.ok) { last = new Error('overpass ' + r.status); continue; }
+        const j = await r.json();
+        if (j.remark && /runtime error|timed out|timeout|out of memory/i.test(j.remark)) { last = new Error('overpass remark: ' + String(j.remark).slice(0, 40)); continue; }
+        return j;
+      } catch (e) { last = e; }
+    }
   }
   throw last;
 }
@@ -137,7 +147,8 @@ async function fillCity(env, c, fetchImpl) {
     }
     const els = [], failed = []; let lastErr;
     for (const [i, q] of overpassQueries(lat, lon).entries()) {
-      try { els.push(...((await overpass(q, fetchImpl)).elements || [])); } catch (e) { failed.push(i + 1); lastErr = e; }
+      if (i) await sleep(fetchImpl === fetch ? 2500 : 0); // пауза між групами, щоб не впиратись у ліміт запитів Overpass
+      try { els.push(...((await overpass(q, fetchImpl, fetchImpl === fetch ? 5000 : 0)).elements || [])); } catch (e) { failed.push(i + 1); lastErr = e; }
     }
     if (failed.length === CAT_GROUPS.length) throw lastErr;     // не відповіла жодна група — повтор пізніше
     const rows = pickVenues(els, lat, lon);
