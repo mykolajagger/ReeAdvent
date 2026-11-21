@@ -116,3 +116,11 @@ td.num,th.num{text-align:right;font-variant-numeric:tabular-nums;white-space:now
 
 .logo-img{display:block;height:40px;width:auto}.login .logo-img{height:56px;margin:0 auto 6px}
 .login .logo-img{height:92px}
+
+/* картки налаштувань: нічого не виходить за рамку */
+.sec>*{min-width:0}.sec .muted,.sec p{overflow-wrap:anywhere}
+.vwrap{margin-top:6px}.vtbl,.vtbl tbody{display:block;min-width:0;width:100%;font-size:13px}.vtbl thead{display:none}
+.vtbl tr{display:grid;grid-template-columns:1fr auto;gap:3px 10px;padding:10px 0;border-bottom:1px solid var(--line)}
+.vtbl td{display:block;padding:0;border:0;min-width:0;overflow-wrap:anywhere;word-break:break-word}
+.vtbl td:nth-child(1){font-weight:600}.vtbl td:nth-child(2){text-align:right;white-space:nowrap}.vtbl td:nth-child(3){grid-column:1/-1}.vtbl td:nth-child(4){grid-column:1/-1}.vtbl td:nth-child(4):empty{display:none}
+.vadd{gap:8px;margin-top:10px}.vadd input{min-width:0}.vadd #vc{width:110px;text-transform:uppercase}.vadd #vn{flex:1 1 150px}.vadd .btn{flex:0 0 auto}
