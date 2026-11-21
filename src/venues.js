@@ -7,7 +7,7 @@ import { rateLimit } from './promo.js';
 const UA = 'ReeAdvent/1.0 (+https://reeadvent.fun; support@reeadvent.fun)';
 const OVERPASS = ['https://overpass-api.de/api/interpreter', 'https://overpass.kumi.systems/api/interpreter', 'https://overpass.private.coffee/api/interpreter'];
 const MAX_CONCURRENT = 2; // одночасно не більше двох міст у роботі: публічний Overpass має обмежену кількість «слотів»
-const RADIUS = 6000, PER_SET = 400, KEEP = 20, REFRESH_MS = 7 * 864e5, VER = '2'; // VER: версія схеми/категорій; зміна ставить готові міста на повторне наповнення
+export const RADIUS = 6000, PER_SET = 400, KEEP = 20, REFRESH_MS = 7 * 864e5, VER = '2'; // VER: версія схеми/категорій; зміна ставить готові міста на повторне наповнення
 
 /** Категорії закладів → теги OSM (значення: рядок, масив варіантів або '!a|b' — «крім»). */
 export const CATS = {
@@ -124,7 +124,7 @@ const RE_CACHE = new Map(), reOf = src => { let r = RE_CACHE.get(src); if (!r) R
 const tagMatch = (t, f) => { for (const k in f) { const v = f[k], x = t[k], not = typeof v === 'string' && v.charCodeAt(0) === 33; if (x == null) { if (!not) return false; continue; } if (Array.isArray(v) ? !v.includes(x) : not ? reOf(v.slice(1)).test(x) : x !== v) return false; } return true; };
 // Індекс «ключ тегу → категорії»: для кожного елемента перевіряємо лише ті категорії, чиї ключі в нього є (економить процесорний час на великих містах)
 const KEY_CATS = {}; for (const [cat, fs] of Object.entries(CATS)) for (const f of fs) for (const k of Object.keys(f)) (KEY_CATS[k] ||= new Set()).add(cat);
-const dist = (a, b, c, d) => Math.hypot((a - c) * 111.2, (b - d) * 111.2 * Math.cos(a * Math.PI / 180)); // км, наближено
+export const dist = (a, b, c, d) => Math.hypot((a - c) * 111.2, (b - d) * 111.2 * Math.cos(a * Math.PI / 180)); // км, наближено
 
 /** Перетворює відповідь Overpass на рядки для БД: до KEEP найкращих у кожній категорії за «багатством» тегів і близькістю до центру. */
 export function pickVenues(elements, lat, lon) {
@@ -147,19 +147,33 @@ export function pickVenues(elements, lat, lon) {
 }
 
 // ---------- Наповнення одного міста ----------
+/** Координати міста: беремо збережені або геокодуємо (Nominatim). Повертає { lat, lon } або { result } — готовий результат для випадків «аліас» і «не знайдено». */
+export async function resolveCoords(env, c, fetchImpl = fetch) {
+  const now = Date.now();
+  if (c.lat != null && c.lon != null) return { lat: c.lat, lon: c.lon };
+  const g = await geocode(c.name, c.country, fetchImpl);
+  if (!g) { await env.DB.prepare("UPDATE venue_cities SET status = 'failed', error = 'geocode_not_found', fetched_at = ? WHERE id = ?").bind(now, c.id).run(); return { result: { city: c.key, status: 'failed' } }; }
+  const { lat, lon } = g;
+  // те саме місто під іншою назвою (Львів / Lviv): не дублюємо — посилаємося на вже наявне
+  const twin = await env.DB.prepare("SELECT id FROM venue_cities WHERE country = ? AND id != ? AND alias_of IS NULL AND lat IS NOT NULL AND ABS(lat - ?) < 0.12 AND ABS(lon - ?) < 0.18 ORDER BY (status = 'ready') DESC, id LIMIT 1").bind(c.country, c.id, lat, lon).first();
+  if (twin) { await env.DB.prepare("UPDATE venue_cities SET priority = 1 WHERE id = ? AND status = 'pending'").bind(twin.id).run(); await env.DB.prepare("UPDATE venue_cities SET alias_of = ?, lat = ?, lon = ?, status = 'ready', fetched_at = ? WHERE id = ?").bind(twin.id, lat, lon, now, c.id).run(); return { result: { city: c.key, status: 'alias' } }; }
+  await env.DB.prepare('UPDATE venue_cities SET lat = ?, lon = ? WHERE id = ?').bind(lat, lon, c.id).run();
+  return { lat, lon };
+}
+
+/** Записує заклади міста (upsert), прибирає зниклі з OSM без оцінок і позначає місто готовим. note — примітка про часткове наповнення. */
+export async function storeCityVenues(env, c, rows, note = null, now = Date.now()) {
+  const st = rows.map(v => env.DB.prepare('INSERT INTO venues (city_id, osm, cat, name, address, lat, lon, prior, hours, seen_at) VALUES (?,?,?,?,?,?,?,?,?,?) ON CONFLICT(city_id, osm, cat) DO UPDATE SET name = excluded.name, address = excluded.address, lat = excluded.lat, lon = excluded.lon, prior = excluded.prior, hours = excluded.hours, seen_at = excluded.seen_at').bind(c.id, v.osm, v.cat, v.name, v.address, v.lat, v.lon, v.prior, v.hours, now));
+  for (let i = 0; i < st.length; i += 100) await env.DB.batch(st.slice(i, i + 100));
+  if (rows.length) await env.DB.prepare('DELETE FROM venues WHERE city_id = ? AND seen_at < ? AND r_cnt = 0').bind(c.id, now).run(); // зниклі з OSM без оцінок прибираємо
+  await env.DB.prepare("UPDATE venue_cities SET status = 'ready', venues_count = ?, fetched_at = ?, attempts = 0, error = ? WHERE id = ?").bind(rows.length, now, note, c.id).run();
+}
+
 async function fillCity(env, c, fetchImpl) {
   const now = Date.now();
-  let { lat, lon } = c;
   try {
-    if (lat == null || lon == null) {
-      const g = await geocode(c.name, c.country, fetchImpl);
-      if (!g) { await env.DB.prepare("UPDATE venue_cities SET status = 'failed', error = 'geocode_not_found', fetched_at = ? WHERE id = ?").bind(now, c.id).run(); return { city: c.key, status: 'failed' }; }
-      ({ lat, lon } = g);
-      // те саме місто під іншою назвою (Львів / Lviv): не дублюємо — посилаємося на вже наявне
-      const twin = await env.DB.prepare("SELECT id FROM venue_cities WHERE country = ? AND id != ? AND alias_of IS NULL AND lat IS NOT NULL AND ABS(lat - ?) < 0.12 AND ABS(lon - ?) < 0.18 ORDER BY (status = 'ready') DESC, id LIMIT 1").bind(c.country, c.id, lat, lon).first();
-      if (twin) { await env.DB.prepare("UPDATE venue_cities SET priority = 1 WHERE id = ? AND status = 'pending'").bind(twin.id).run(); await env.DB.prepare("UPDATE venue_cities SET alias_of = ?, lat = ?, lon = ?, status = 'ready', fetched_at = ? WHERE id = ?").bind(twin.id, lat, lon, now, c.id).run(); return { city: c.key, status: 'alias' }; }
-      await env.DB.prepare('UPDATE venue_cities SET lat = ?, lon = ? WHERE id = ?').bind(lat, lon, c.id).run();
-    }
+    const co = await resolveCoords(env, c, fetchImpl); if (co.result) return co.result;
+    const { lat, lon } = co;
     const els = [], failed = [], counts = []; let lastErr; const errs = [];
     const T = Math.min(120, Math.max(15, parseInt(env.OVERPASS_TIMEOUT, 10) || 30)), qs = overpassQueries(lat, lon, T), par = fetchImpl === fetch ? 2 : 1;      // у бойовому режимі по дві групи паралельно (Overpass дозволяє 2 слоти на адресу)
     for (let g = 0; g < qs.length; g += par) {
@@ -173,10 +187,7 @@ async function fillCity(env, c, fetchImpl) {
     failed.sort();
     if (failed.length === CAT_GROUPS.length) throw lastErr;     // не відповіла жодна група — повтор пізніше
     const rows = pickVenues(els, lat, lon);
-    const st = rows.map(v => env.DB.prepare('INSERT INTO venues (city_id, osm, cat, name, address, lat, lon, prior, hours, seen_at) VALUES (?,?,?,?,?,?,?,?,?,?) ON CONFLICT(city_id, osm, cat) DO UPDATE SET name = excluded.name, address = excluded.address, lat = excluded.lat, lon = excluded.lon, prior = excluded.prior, hours = excluded.hours, seen_at = excluded.seen_at').bind(c.id, v.osm, v.cat, v.name, v.address, v.lat, v.lon, v.prior, v.hours, now));
-    for (let i = 0; i < st.length; i += 100) await env.DB.batch(st.slice(i, i + 100));
-    if (rows.length) await env.DB.prepare('DELETE FROM venues WHERE city_id = ? AND seen_at < ? AND r_cnt = 0').bind(c.id, now).run(); // зниклі з OSM без оцінок прибираємо
-    await env.DB.prepare("UPDATE venue_cities SET status = 'ready', venues_count = ?, fetched_at = ?, attempts = 0, error = ? WHERE id = ?").bind(rows.length, now, failed.length ? 'partial: групи ' + failed.join(',') + ' (' + String(lastErr && lastErr.message || lastErr).slice(0, 60) + ')' : null, c.id).run();
+    await storeCityVenues(env, c, rows, failed.length ? 'partial: групи ' + failed.join(',') + ' (' + String(lastErr && lastErr.message || lastErr).slice(0, 60) + ')' : null, now);
     return { city: c.key, status: 'ready', venues: rows.length, raw: counts, ...(failed.length ? { failedGroups: failed, errors: errs } : {}) };
   } catch (e) {
     const failed = c.attempts + 1 >= 3;

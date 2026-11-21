@@ -3,9 +3,7 @@ name: Наповнення бази закладів (OpenStreetMap)
 # Публічний Overpass не відповідає з Cloudflare, тому наповнення працює тут: запити йдуть із серверів GitHub, запис у D1 через REST API.
 # Потрібні секрети репозиторію: CLOUDFLARE_API_TOKEN (права Account → D1 → Edit) і CLOUDFLARE_ACCOUNT_ID.
 on:
-  schedule:
-    - cron: '*/10 * * * *'
-  workflow_dispatch:
+  workflow_dispatch:      # запасний варіант (Overpass) для країн із завеликими вигрузками, наприклад США; основний механізм — bulk.yml
 
 jobs:
   fill:
