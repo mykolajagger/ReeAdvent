@@ -240,9 +240,17 @@ const anon = raw.prepare('SELECT * FROM orders WHERE id = ?').get(o1); assert(an
   let calls = 0; const ok = async () => { calls++; return new Response(JSON.stringify({ result: 'success', rates: { USD: 0.0245, EUR: 0.0226, JPY: 3.7, XXX: 5, UAH: 1 } }), { status: 200 }); };
   let r = await refreshFx(env, { fetchImpl: ok }); assert(r.ok && r.count === 4, JSON.stringify(r)); // USD, EUR, JPY, UAH (невідому XXX відкинуто)
   assert.equal((await getFx(env)).rates.JPY, 3.7); assert.equal((await getFx(env)).rates.XXX, undefined);
-  r = await refreshFx(env, { fetchImpl: ok }); assert(r.skipped && calls === 1, 'fresh rates are not re-fetched');
+  r = await refreshFx(env, { fetchImpl: ok }); assert(r.skipped && calls === 2, 'fresh rates are not re-fetched (one refresh = Monobank + fallback source)');
   r = await refreshFx(env, { force: true, fetchImpl: async () => new Response('oops', { status: 500 }) }); assert(!r.ok); assert.equal((await getFx(env)).rates.USD, 0.0245, 'failed refresh keeps old rates');
   r = await refreshFx(env, { force: true, fetchImpl: async () => new Response(JSON.stringify({ result: 'error' }), { status: 200 }) }); assert(!r.ok && r.error === 'bad_payload');
+  // Monobank має пріоритет; інше джерело доповнює; працює і з одним джерелом
+  const mono = [{ currencyCodeA: 840, currencyCodeB: 980, rateBuy: 41, rateSell: 42 }, { currencyCodeA: 978, currencyCodeB: 980, rateCross: 48 }, { currencyCodeA: 840, currencyCodeB: 978, rateCross: 1.1 }, { currencyCodeA: 999, currencyCodeB: 980, rateCross: 5 }];
+  const both = async url => String(url).includes('monobank') ? new Response(JSON.stringify(mono), { status: 200 }) : new Response(JSON.stringify({ result: 'success', rates: { USD: 0.025, EUR: 0.023, JPY: 3.7 } }), { status: 200 });
+  r = await refreshFx(env, { force: true, fetchImpl: both }); assert(r.ok && r.mono === 2 && r.other >= 1, JSON.stringify(r));
+  let fxs = await getFx(env); assert(Math.abs(fxs.rates.USD - 1 / 41.5) < 1e-9, 'USD from Monobank (average of buy/sell)'); assert(Math.abs(fxs.rates.EUR - 1 / 48) < 1e-9, 'EUR from Monobank (rateCross)'); assert.equal(fxs.rates.JPY, 3.7, 'JPY from the second source'); assert.equal(fxs.sources.mono, 2);
+  r = await refreshFx(env, { force: true, fetchImpl: async url => String(url).includes('monobank') ? new Response(JSON.stringify(mono), { status: 200 }) : new Response('x', { status: 503 }) }); assert(r.ok && r.mono === 2, 'works with Monobank only');
+  r = await refreshFx(env, { force: true, fetchImpl: async url => String(url).includes('monobank') ? new Response('down', { status: 500 }) : new Response(JSON.stringify({ result: 'success', rates: { USD: 0.026 } }), { status: 200 }) }); assert(r.ok && r.mono === 0, 'works without Monobank'); assert.equal((await getFx(env)).rates.USD, 0.026);
+  await refreshFx(env, { force: true, fetchImpl: ok }); // повертаємо базові значення для наступних перевірок
   // конфіг: країна → валюта (?country=) і визначена за IP
   let cfg = (await call('x', 'GET', '/api/config?country=DE')).j; assert.equal(cfg.currency.code, 'EUR'); assert.equal(cfg.currency.rate, 0.0226); assert.equal(cfg.country, 'DE');
   cfg = (await call('x', 'GET', '/api/config?country=UA')).j; assert.deepEqual(cfg.currency, { code: 'UAH', rate: 1 });
