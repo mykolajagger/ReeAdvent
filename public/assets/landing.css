@@ -75,3 +75,5 @@ footer a{color:var(--muted);margin:0 10px}
 
 .logo-img{display:block;height:58px;width:auto}.legal .logo{display:inline-block}
 @media(max-width:560px){.logo-img{height:44px}}
+.logo-img.logo-full{height:92px}
+@media(max-width:560px){.logo-img.logo-full{height:72px}}

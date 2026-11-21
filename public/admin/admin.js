@@ -22,7 +22,7 @@ function toast(t) { const el = $('#toast'); el.textContent = t; el.classList.add
 
 /* ---------- Вхід ---------- */
 function showLogin(msg) {
-  root.innerHTML = `<div class="login"><div class="card"><div class="logo"><img class="logo-img" src="/assets/logo.png" alt="ReeAdvent" width="150" height="55"></div><div class="muted">Адмінка</div>
+  root.innerHTML = `<div class="login"><div class="card"><div class="logo"><img class="logo-img" src="/assets/logo-full.png" alt="ReeAdvent: Unwrap Love. Every Day." width="200" height="92"></div><div class="muted">Адмінка</div>
     <form id="lf" style="display:grid;gap:10px"><input id="em" type="email" placeholder="пошта адміністратора" autocomplete="email" required><button class="btn" id="sb">Надіслати посилання для входу</button></form>
     <div class="muted" id="lm">${esc(msg || '')}</div></div></div>`;
   $('#lf').onsubmit = async e => {

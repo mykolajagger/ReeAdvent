@@ -115,3 +115,4 @@ td.num,th.num{text-align:right;font-variant-numeric:tabular-nums;white-space:now
 @media (prefers-reduced-motion:reduce){*{transition:none!important}}
 
 .logo-img{display:block;height:40px;width:auto}.login .logo-img{height:56px;margin:0 auto 6px}
+.login .logo-img{height:92px}
