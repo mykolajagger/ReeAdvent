@@ -21,6 +21,17 @@ const DAY = 864e5;
 async function getSkip() { const r = await env.DB.prepare("SELECT value FROM settings WHERE key = 'bulk_skip2'").first(); try { return r ? JSON.parse(r.value) : {}; } catch { return {}; } }
 async function skipCountry(cc, why, days = 1) { const s = await getSkip(); s[cc] = { until: Date.now() + days * DAY, why }; await env.DB.prepare("INSERT INTO settings (key, value, updated_at) VALUES ('bulk_skip2', ?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value, updated_at = excluded.updated_at").bind(JSON.stringify(s), Date.now()).run(); log('пропускаємо', cc, 'на', days, 'дн.:', why); }
 
+// Мережеві запити до Geofabrik із повторами: «fetch failed» трапляється випадково
+async function fetchRetry(url, opts = {}, tries = 5) {
+  let last;
+  for (let i = 0; i < tries; i++) {
+    try { const r = await fetch(url, { ...opts, signal: AbortSignal.timeout(60000) }); if (r.ok) return r; last = new Error('HTTP ' + r.status + ' ' + url); }
+    catch (e) { last = new Error(`${e.message}${e.cause ? ' (' + (e.cause.code || e.cause.message) + ')' : ''} ${url}`); }
+    log('повтор', i + 1, 'з', tries, ':', last.message); await sleep(3000 * (i + 1));
+  }
+  throw last;
+}
+let _idx = null; const getIndex = async () => _idx || (_idx = await (await fetchRetry('https://download.geofabrik.de/index-v1-nogeom.json')).json());
 async function unskipCountry(cc) { const s = await getSkip(); if (!s[cc]) return; delete s[cc]; await env.DB.prepare("INSERT INTO settings (key, value, updated_at) VALUES ('bulk_skip2', ?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value, updated_at = excluded.updated_at").bind(JSON.stringify(s), Date.now()).run(); }
 async function pickCountry(done) {
   const skip = await getSkip();
@@ -47,11 +58,11 @@ async function processCountry(cc) {
   }
   cities = ready; if (!cities.length) return;
 
-  const idx = await (await fetch('https://download.geofabrik.de/index-v1-nogeom.json')).json();
+  const idx = await getIndex();
   let cname = null; try { cname = new Intl.DisplayNames(['en'], { type: 'region' }).of(cc); } catch {}
   const pbf = findPbf(idx, cc, cname);
   if (!pbf) { log('УВАГА: у каталозі Geofabrik немає країни', cc, cname, '|', describeIndex(idx)); await skipCountry(cc, 'немає вигрузки Geofabrik', 1); return; }
-  const head = await fetch(pbf.url, { method: 'HEAD' }); const gb = Number(head.headers.get('content-length') || 0) / 1e9;
+  const head = await fetchRetry(pbf.url, { method: 'HEAD' }); const gb = Number(head.headers.get('content-length') || 0) / 1e9;
   log(`вигрузка ${pbf.id}: ${gb.toFixed(2)} ГБ`, pbf.shared ? '(спільна для кількох країн)' : '');
   if (gb > MAX_GB) { await skipCountry(cc, `файл ${gb.toFixed(1)} ГБ більший за ліміт ${MAX_GB} ГБ`, 30); return; }
 
