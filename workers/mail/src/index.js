@@ -1,14 +1,21 @@
 import PostalMime from 'postal-mime';
 import { saveInbound } from './ingest.js';
+import { runVenues } from '../../../src/venues.js';
 
 const MAX_BYTES = 5 * 1024 * 1024;
 
 export default {
   // Щогодини (Cron Trigger): нагадування о 09:01 за часом календаря та очищення застарілих даних виконує основний сайт
   async scheduled(event, env, ctx) {
-    if (!env.CRON_SECRET || !env.BASE_URL) { console.error('CRON_SECRET/BASE_URL are not set'); return; }
     // "*/2 * * * *" — наповнення бази закладів (VENUES_PER_RUN міст за запуск); "1 * * * *" — нагадування, курси, очищення
-    const job = event.cron !== '1 * * * *' ? 'venues' : 'daily';
+    if (event.cron !== '1 * * * *') {
+      // Наповнення бази закладів іде тут, у Worker: запити до Overpass тривають довше за ліміт HTTP-запиту (100 с), а запуск за розкладом може працювати до 15 хв
+      const out = await runVenues(env, { budgetMs: 100000 });
+      console.log('venues', JSON.stringify(out).slice(0, 600));
+      return;
+    }
+    if (!env.CRON_SECRET || !env.BASE_URL) { console.error('CRON_SECRET/BASE_URL are not set'); return; }
+    const job = 'daily';
     const res = await fetch(`${env.BASE_URL}/api/cron/${job}`, { method: 'POST', headers: { 'x-cron-secret': env.CRON_SECRET, 'content-type': 'application/json' }, body: '{}' });
     console.log('cron/' + job, res.status, await res.text());
   },

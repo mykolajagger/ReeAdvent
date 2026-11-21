@@ -155,10 +155,10 @@ async function nextCity(env, now) {
   }
   return null;
 }
-/** За запуск обробляється VENUES_PER_RUN міст (за замовчуванням 1, максимум 10), але не довше ~40 с. */
-export async function runVenues(env, { fetchImpl = fetch, now = Date.now() } = {}) {
+/** За запуск обробляється VENUES_PER_RUN міст (за замовчуванням 1, максимум 10), але не довше budgetMs (HTTP — 25 с; Worker за розкладом — 100 с). */
+export async function runVenues(env, { fetchImpl = fetch, now = Date.now(), budgetMs = 25000 } = {}) {
   const seeded = await seedTop(env), per = Math.min(10, Math.max(1, parseInt(env.VENUES_PER_RUN, 10) || 1)), t0 = Date.now(), done = [];
-  while (done.length < per && (done.length === 0 || Date.now() - t0 < 25000)) {
+  while (done.length < per && (done.length === 0 || Date.now() - t0 < budgetMs)) {
     const c = await nextCity(env, now); if (!c) break;
     done.push(await fillCity(env, c, fetchImpl));
   }

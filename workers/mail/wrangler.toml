@@ -17,6 +17,7 @@ crons = ["1 * * * *", "*/2 * * * *"]
 
 [vars]
 BASE_URL = "https://reeadvent.fun"
+VENUES_PER_RUN = "8"   # міст за запуск (cron */2). Після початкового наповнення поставте "1"
 
 # Журнали запусків cron видно в Worker → Logs (безкоштовний ліміт: 200 тис. подій на добу)
 [observability]
