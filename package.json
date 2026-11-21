@@ -3,7 +3,7 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "test": "node dev/test.js && node dev/test-admin.js",
+    "test": "node dev/test.js && node dev/test-admin.js && node dev/test-features.js",
     "dev": "node dev/devserver.js",
     "deploy": "wrangler pages deploy public --project-name reeadvent",
     "db:migrate": "wrangler d1 migrations apply reeadvent-db --remote"

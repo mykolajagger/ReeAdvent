@@ -20,11 +20,27 @@ export async function createInvoice(env, order) {
   return { invoiceId: j.invoiceId, pageUrl: j.pageUrl };
 }
 
-/** Безпечна перевірка: не вірить тілу вебхука, а питає статус інвойсу у Monobank нашим токеном. */
+/** Статус інвойсу з Monobank (нашим токеном; тілу вебхука не віримо). */
+export async function invoiceStatus(env, invoiceId) {
+  const res = await fetch(`${MONO}/api/merchant/invoice/status?invoiceId=${encodeURIComponent(invoiceId)}`, { headers: { 'X-Token': env.MONOBANK_TOKEN } });
+  if (!res.ok) return null;
+  return res.json();
+}
 export async function verifyPaid(env, invoiceId, expectedAmountKop) {
   if (env.PAYMENT_MODE !== 'monobank') return true;
-  const res = await fetch(`${MONO}/api/merchant/invoice/status?invoiceId=${encodeURIComponent(invoiceId)}`, { headers: { 'X-Token': env.MONOBANK_TOKEN } });
-  if (!res.ok) return false;
-  const j = await res.json();
-  return j.status === 'success' && Number(j.amount) === expectedAmountKop;
+  const j = await invoiceStatus(env, invoiceId);
+  return !!j && j.status === 'success' && Number(j.amount) === expectedAmountKop;
+}
+
+/** Скасування/повернення оплати через Monobank (повне або часткове). Повертає { ok, status } або { ok:false, error }. */
+export async function cancelInvoice(env, invoiceId, amountKop, extRef) {
+  try {
+    const res = await fetch(`${MONO}/api/merchant/invoice/cancel`, {
+      method: 'POST', headers: { 'X-Token': env.MONOBANK_TOKEN, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ invoiceId, extRef, amount: amountKop })
+    });
+    const j = await res.json().catch(() => ({}));
+    if (!res.ok) return { ok: false, error: j.errText || j.errCode || ('http_' + res.status) };
+    return { ok: true, status: j.status || 'processing' };
+  } catch (e) { return { ok: false, error: 'network' }; }
 }

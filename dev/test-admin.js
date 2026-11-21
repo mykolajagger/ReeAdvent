@@ -109,6 +109,12 @@ const ten = pr.find(p => p.code === 'TENOFF'); assert.equal(ten.paid_orders, 1);
 const cu = (await A('a', 'GET', '/api/admin/customers')).j.customers; assert(cu.find(c => c.email === 'a2@t.com').paid_kop === 36000);
 const csv = await call('a', 'GET', '/api/admin/customers.csv'); assert(csv.ct.includes('text/csv')); assert(csv.text.includes('email,імена'));
 assert(csv.text.includes("'=HYPERLINK"), 'CSV formula injection neutralised'); assert(!/(^|,)=HYPERLINK/m.test(csv.text));
+// ---- налаштування відсотків (форма в адмінці) ----
+assert.deepEqual((await A('a', 'GET', '/api/admin/settings')).j.settings, { fee_percent: 2, tax_percent: 5, military_percent: 1 }, 'defaults: fee from env, 5% + 1%');
+assert.equal((await A('a', 'POST', '/api/admin/settings', { fee_percent: 120 })).j.error, 'bad_percent');
+assert.equal((await A('a', 'POST', '/api/admin/settings', { tax_percent: 'abc' })).j.error, 'bad_percent');
+assert.deepEqual((await A('a', 'POST', '/api/admin/settings', { fee_percent: '2', tax_percent: '5', military_percent: '0' })).j.settings, { fee_percent: 2, tax_percent: 5, military_percent: 0 });
+assert.equal((await call('a', 'POST', '/api/admin/settings', { fee_percent: 1 })).j.error, 'csrf');
 // ---- дашборд ----
 const d = (await A('a', 'GET', '/api/admin/dashboard?days=30')).j.kpi;
 assert.equal(d.paid, 2); assert.equal(d.created, 3); assert.equal(d.revenue_kop, 76000); assert.equal(d.discount_kop, 4000); assert.equal(d.list_kop, 80000);

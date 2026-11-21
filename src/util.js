@@ -39,11 +39,11 @@ export function toDateStr(num) { const dt = new Date(num * 86400000); return `${
 export function fromDateStr(s) { const [y, m, d] = s.split('-').map(Number); return dayNum(y, m, d); }
 
 /** Завтрашня дата за Києвом (YYYY-MM-DD) */
-export function tomorrowStr(now) { const p = localParts(now); return toDateStr(dayNum(p.y, p.m, p.d) + 1); }
+export function tomorrowStr(now, tz = TZ) { const p = localParts(now, tz); return toDateStr(dayNum(p.y, p.m, p.d) + 1); }
 
 /** Який день календаря доступний зараз: 0 — ще не почався, 1..24 */
-export function todayIndex(startDate, now) {
-  const p = localParts(now);
+export function todayIndex(startDate, now, tz = TZ) {
+  const p = localParts(now, tz);
   const idx = dayNum(p.y, p.m, p.d) - fromDateStr(startDate) + 1 - (p.h < UNLOCK_HOUR ? 1 : 0);
   return Math.max(0, Math.min(DAYS, idx));
 }
@@ -51,4 +51,14 @@ export function todayIndex(startDate, now) {
 export function windowDates(startDate) {
   const s = fromDateStr(startDate);
   return Array.from({ length: DAYS }, (_, i) => { const dt = new Date((s + i) * 86400000); return { month: dt.getUTCMonth() + 1, day: dt.getUTCDate(), weekday: dt.getUTCDay() }; });
+}
+
+/** Номер дня календаря за ЛОКАЛЬНОЮ датою (без урахування години відкриття): 0 — день до старту, 1..24, >24 — після завершення. */
+export function localDayNumber(startDate, now, tz = TZ) { const p = localParts(now, tz); return dayNum(p.y, p.m, p.d) - fromDateStr(startDate) + 1; }
+/** Перевірка IANA-часового поясу. */
+export function validTz(tz) { try { new Intl.DateTimeFormat('en', { timeZone: tz }); return typeof tz === 'string' && tz.length < 64; } catch { return false; } }
+/** HMAC-SHA256 (base64url) для підписаних посилань (відписка тощо). */
+export async function hmac(secret, msg) {
+  const key = await crypto.subtle.importKey('raw', enc.encode(secret), { name: 'HMAC', hash: 'SHA-256' }, false, ['sign']);
+  return b64url(new Uint8Array(await crypto.subtle.sign('HMAC', key, enc.encode(msg))));
 }

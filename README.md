@@ -39,7 +39,13 @@ npm run dev                   # http://localhost:8788 — SQLite у пам'ят�
 
 **Вхідна пошта:** окремий Worker `workers/mail` (Cloudflare Email Routing → Worker → D1). Розгортання: Workers & Pages → Create → Import a repository → root directory `workers/mail`; потім Email Routing → Routing rules → `support@reeadvent.fun` → Send to a Worker → `reeadvent-inbox`. Резервна копія на пошту: змінна `FORWARD_TO` у Worker (адреса має бути підтверджена в Email Routing → Destination addresses).
 
-**Міграції:** `0003_admin.sql` (для D1 Console: `docs/d1-console-0003.sql`) — застосувати ДО деплою цієї версії.
+**Нагадування й очищення:** Worker `reeadvent-inbox` має Cron Trigger (щогодини), який викликає `POST /api/cron/daily` (заголовок `x-cron-secret` = секрет `CRON_SECRET`, однаковий на сайті й у Worker). Нагадування надсилаються з 09:01 до 21:00 за часом календаря (анкета; напередодні старту; нове вікно, якщо ще не відкрите); відписка за підписаним посиланням. Раз на добу (01:xx UTC) видаляються дані календарів старших за 12 місяців після завершення.
+
+**Вхід клієнтів:** за посиланням на пошту або через Google (`GOOGLE_CLIENT_ID`; у Google Cloud додайте origin сайту й опублікуйте екран згоди). Розділ «Історія» в застосунку показує всі вікна, питання й відповіді й після завершення календаря.
+
+**Повернення коштів:** з адмінки через Monobank API (`/api/merchant/invoice/cancel`) або лише відміткою; вебхук зі статусом `reversed` підтверджує повернення, зроблене в кабінеті банку.
+
+**Міграції:** `0004_reminders_settings.sql` (`docs/d1-console-0004.sql`), `0003_admin.sql` (для D1 Console: `docs/d1-console-0003.sql`) — застосувати ДО деплою цієї версії.
 
 ## Статус етапів
 - [x] 1. Каркас: лендинг, замовлення, D1, вхід за посиланням, перенесення логіки, дата старту

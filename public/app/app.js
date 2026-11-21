@@ -15,25 +15,45 @@ async function api(method, path, body) {
   return j;
 }
 function toast(t) { const el = $('#toast'); el.textContent = t; el.classList.add('show'); clearTimeout(toast.t); toast.t = setTimeout(() => el.classList.remove('show'), 3200); }
-async function logout() { try { await api('POST', '/api/auth/logout'); } catch {} showLogin(); }
+async function logout() { try { await api('POST', '/api/auth/logout'); } catch {} try { window.google?.accounts?.id?.disableAutoSelect(); } catch {} showLogin(); }
 
 /* ---------- Вхід (посилання на пошту) ---------- */
 function showLogin(msg) {
   app.innerHTML = `<section class="hero">
     <svg class="ico" viewBox="0 0 48 48"><path d="M24 4v40M4 24h40M10 10l28 28M38 10L10 38"/></svg>
     <div class="eyebrow">ReeAdvent</div><h1>Ваш <em>Адвент</em></h1>
-    <p class="muted">Введіть пошту, на яку ви отримали лист із доступом. Ми надішлемо посилання для входу.</p>
+    <p class="muted">Увійдіть через Google або отримайте посилання на пошту, на яку надійшло запрошення.</p>
+    <div id="gbtn" style="min-height:44px;display:flex;justify-content:center"></div>
+    <div class="muted" id="gor" hidden style="font-size:12px;letter-spacing:.2em;text-transform:uppercase">або</div>
     <form id="lf" style="display:grid;gap:12px;width:100%;max-width:360px">
       <input id="em" type="email" inputmode="email" autocomplete="email" placeholder="you@example.com" required style="padding:14px 16px;border-radius:12px;border:1px solid var(--line);background:#ffffff08;color:var(--ink);font:500 17px var(--body)">
       <button class="btn" id="sb">Надіслати посилання</button>
     </form>
     <p class="err" id="lm">${esc(msg || '')}</p>
   </section>`;
+  initGoogle();
   $('#lf').onsubmit = async e => {
     e.preventDefault(); $('#sb').disabled = true;
     try { await api('POST', '/api/auth/request', { email: $('#em').value }); $('#lf').outerHTML = '<p class="muted">Якщо ця пошта має доступ, лист уже в дорозі. Перевірте «Вхідні» і «Спам». Посилання діє 30 хвилин.</p>'; $('#lm').textContent = ''; }
     catch (er) { $('#lm').textContent = errText(er); $('#sb').disabled = false; }
   };
+}
+let gisLoaded = false;
+async function initGoogle() {
+  let cfg; try { cfg = await (await fetch('/api/config')).json(); } catch { return; }
+  if (!cfg.googleClientId || !$('#gbtn')) return;
+  const render = () => {
+    if (!window.google?.accounts?.id || !$('#gbtn')) return;
+    google.accounts.id.initialize({ client_id: cfg.googleClientId, auto_select: false, callback: async r => {
+      try { await api('POST', '/api/auth/google', { credential: r.credential }); boot(); }
+      catch (e) { $('#lm') && ($('#lm').textContent = e.code === 'no_access' ? 'Ця Google-пошта не є учасником календаря. Увійдіть за посиланням на пошту, на яку надійшло запрошення.' : errText(e)); }
+    } });
+    google.accounts.id.renderButton($('#gbtn'), { theme: 'filled_black', size: 'large', shape: 'pill', text: 'continue_with', locale: 'uk' });
+    $('#gor').hidden = false;
+  };
+  if (window.google?.accounts?.id) return render();
+  if (gisLoaded) return;
+  gisLoaded = true; const s = document.createElement('script'); s.src = 'https://accounts.google.com/gsi/client'; s.async = true; s.defer = true; s.onload = render; document.head.appendChild(s);
 }
 async function consumeLoginHash() {
   const m = location.hash.match(/login=([\w-]+)/); if (!m) return;
@@ -129,13 +149,33 @@ const fmtDate = dt => dt.toLocaleDateString('uk-UA', { day: 'numeric', month: 'l
 const fmtT = ms => { const s = Math.max(0, Math.floor(ms / 1000)), h = Math.floor(s / 3600), m = Math.floor(s % 3600 / 60), x = s % 60; const d = Math.floor(h / 24); return (d ? d + ' д ' : '') + [h % 24, m, x].map(n => String(n).padStart(2, '0')).join(':'); };
 
 let timerI;
+let tab = 'cal';
+const tabsHtml = () => `<div class="tabs"><button data-tab="cal" class="${tab === 'cal' ? 'on' : ''}">Календар</button><button data-tab="hist" class="${tab === 'hist' ? 'on' : ''}">Історія</button></div>`;
+app.addEventListener('click', e => { const b = e.target.closest('[data-tab]'); if (b && b.dataset.tab !== tab) { tab = b.dataset.tab; route(); } });
+const dtime = ms => new Date(ms).toLocaleString('uk-UA', { day: 'numeric', month: 'long', hour: '2-digit', minute: '2-digit' });
+
+async function showHistory() {
+  app.innerHTML = `${tabsHtml()}<div class="head"><div class="eyebrow">ReeAdvent</div><h1>Історія</h1><p class="muted">Усі ваші вікна, питання й відповіді${st.finished ? '. Календар завершено, але все збережено тут' : ''}</p></div><div class="center" style="min-height:30vh"><div class="spinner"></div></div>`;
+  let h; try { h = await api('GET', '/api/history'); } catch (e) { return handleErr(e); }
+  const items = h.days.map(d => `<article class="hist ${d.opened ? '' : 'new'}" data-d="${d.day}" tabindex="0" role="button" aria-label="Вікно ${d.day}">
+    <header><b>Вікно №${d.day}</b><span class="muted">${fmtDate(unlockDate(d.day))}${d.opened_at ? ' · відкрито ' + dtime(d.opened_at) : ''}</span></header>
+    <div class="q">${esc(d.question)}</div>
+    ${d.answered ? `<div class="ans"><span class="who">Ви</span><p>${esc(d.mine)}</p></div>${d.partner ? `<div class="ans them"><span class="who">${esc(h.partnerName)}</span><p>${esc(d.partner)}</p></div>` : `<div class="hint">${esc(h.partnerName)} ще не відповів(ла)</div>`}` : '<div class="muted" style="font-size:13px">Ще не відкрито. Торкніться, щоб відповісти й відкрити вікно.</div>'}
+    ${d.opened ? `<ul class="tasks"><li class="${d.done.gift ? 'done' : ''}">Подарунок: ${esc(d.gift)}</li><li class="${d.done.intim ? 'done' : ''}">Пригода: ${esc(d.intim)}</li><li class="${d.done.act ? 'done' : ''}">Активність: ${esc(d.act)}</li></ul>` : ''}</article>`).join('');
+  app.innerHTML = `${tabsHtml()}<div class="head"><div class="eyebrow">ReeAdvent</div><h1>Історія</h1><p class="muted">Усі ваші вікна, питання й відповіді${h.finished ? '. Календар завершено, але все збережено тут' : ''}</p></div>
+    <div class="histlist">${items || '<div class="muted" style="text-align:center">Тут з’являться відкриті вікна, щойно календар стартує.</div>'}</div><div class="tools"><button class="btn ghost sm" id="out">Вийти</button></div>`;
+  $('#out').onclick = logout;
+  const open = el => { const a = el.closest('.hist'); if (a) openDay(+a.dataset.d); };
+  $('.histlist') && ($('.histlist').onclick = e => open(e.target), $('.histlist').onkeydown = e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); open(e.target); } });
+}
+
 function showCalendar() {
   const opened = new Set(st.opened), today = st.today;
   const nextDay = today + 1, hasNext = nextDay <= st.totalDays;
-  app.innerHTML = `<div class="head">
+  app.innerHTML = `${tabsHtml()}<div class="head">
       <div class="eyebrow">ReeAdvent · 24 дні</div><h1>Ваш <em>Адвент</em></h1>
       <p class="muted">${today === 0 ? 'Календар відкриється ' + fmtDate(unlockDate(1)) + ' о ' + String(st.unlockHour).padStart(2, '0') + ':00' : 'Привіт, ' + esc(st.me.name) + '. Сьогодні — вікно №' + today}</p>
-      ${hasNext ? `<div class="timer" id="tm"></div><div class="eyebrow" style="color:var(--muted)">до вікна №${nextDay}</div>` : '<div class="timer">Усі вікна відкриті</div>'}
+      ${hasNext ? `<div class="timer" id="tm"></div><div class="eyebrow" style="color:var(--muted)">до вікна №${nextDay}</div>` : st.finished ? '<div class="timer" style="font-size:24px">Календар завершено</div><div class="muted" style="max-width:420px;margin:0 auto">Дякуємо, що були з нами. Усі вікна, питання й відповіді залишаються доступними в розділі «Історія».</div>' : '<div class="timer">Усі вікна відкриті</div>'}
       <div class="progress"><i style="width:${(opened.size / 24) * 100}%"></i></div>
       <div class="muted" style="font-size:12px;letter-spacing:.1em">відкрито ${opened.size} з 24</div>
     </div>
@@ -230,7 +270,7 @@ function tileBody(t, d) {
 
 /* ---------- Маршрутизація ---------- */
 function errText(e) {
-  return ({ auth: 'Сесія закінчилась — увійдіть знову', not_yet: 'Ще зарано', locked: 'Анкету вже не можна змінити', bad_name: 'Вкажіть ім’я', bad_email: 'Перевірте адресу пошти', bad_token: 'Посилання недійсне — запросіть нове', too_many: 'Забагато спроб. Спробуйте пізніше.', answer_short: 'Напишіть хоча б кілька слів', bad_day: 'Це вікно ще не відкрите' })[e.code] || 'Щось пішло не так. Спробуйте ще раз.';
+  return ({ auth: 'Сесія закінчилась — увійдіть знову', not_yet: 'Ще зарано', locked: 'Анкету вже не можна змінити', bad_name: 'Вкажіть ім’я', bad_email: 'Перевірте адресу пошти', bad_token: 'Посилання недійсне — запросіть нове', too_many: 'Забагато спроб. Спробуйте пізніше.', no_access: 'Цієї пошти немає серед учасників календаря', answer_short: 'Напишіть хоча б кілька слів', bad_day: 'Це вікно ще не відкрите' })[e.code] || 'Щось пішло не так. Спробуйте ще раз.';
 }
 function handleErr(e) {
   if (e.code === 'auth') return showLogin('Сесія закінчилась — увійдіть знову.');
@@ -240,6 +280,7 @@ function route() {
   clearTimeout(pollT); clearInterval(timerI);
   if (!st.myDone) { if (!ans.name) ans.name = st.me.suggestedName || ''; return showSurvey(); }
   if (!st.ready) return showWaiting();
+  if (tab === 'hist') return showHistory();
   showCalendar();
 }
 async function boot() {

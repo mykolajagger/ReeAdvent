@@ -1,0 +1,21 @@
+CREATE TABLE settings (
+  key TEXT PRIMARY KEY,
+  value TEXT NOT NULL,
+  updated_at INTEGER NOT NULL
+);
+CREATE TABLE reminders_sent (
+  member_id TEXT NOT NULL,
+  kind TEXT NOT NULL,
+  day INTEGER NOT NULL,
+  sent_at INTEGER NOT NULL,
+  PRIMARY KEY (member_id, kind, day)
+);
+ALTER TABLE progress ADD COLUMN opened_at INTEGER;
+ALTER TABLE members ADD COLUMN remind_off INTEGER NOT NULL DEFAULT 0;
+ALTER TABLE orders ADD COLUMN refund_status TEXT;
+ALTER TABLE orders ADD COLUMN refund_ref TEXT;
+ALTER TABLE orders ADD COLUMN lang TEXT NOT NULL DEFAULT 'uk';
+ALTER TABLE orders ADD COLUMN country TEXT;
+ALTER TABLE orders ADD COLUMN tz TEXT;
+ALTER TABLE calendars ADD COLUMN lang TEXT NOT NULL DEFAULT 'uk';
+ALTER TABLE calendars ADD COLUMN tz TEXT NOT NULL DEFAULT 'Europe/Kyiv';

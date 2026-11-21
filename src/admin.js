@@ -1,10 +1,12 @@
 // Адмін-API: /api/admin/*. Доступ лише за посиланням на пошту зі списку ADMIN_EMAILS.
 // Менеджер НЕ бачить відповідей анкет і особистих відповідей на питання дня (обіцяно в політиці конфіденційності).
 import { HttpError, json, randomToken, uid, sha256, parseCookies, EMAIL_RE, normEmail, cleanText, nowOf, todayIndex, windowDates, fromDateStr, localParts, toDateStr, tomorrowStr } from './util.js';
-import { sendEmail, loginEmail, welcomeEmail, supportReplyEmail } from './email.js';
+import { sendEmail, loginEmail, welcomeEmail, partnerInviteEmail, refundEmail, supportReplyEmail } from './email.js';
 import { rateLimit, CODE_RE, normCode, listPriceKop } from './promo.js';
 import { generateSchedule } from './logic.js';
 import { issueLoginLink, WELCOME_TTL_MS } from './api.js';
+import { getSettings, saveSettings } from './settings.js';
+import { cancelInvoice } from './payments.js';
 
 const ADMIN_LOGIN_TTL = 30 * 60e3, ADMIN_SESSION_TTL = 14 * 24 * 3600e3;
 const q1 = (env, sql, ...a) => env.DB.prepare(sql).bind(...a).first();
@@ -61,7 +63,9 @@ export async function handleAdmin(request, env, path, m) {
   const url = new URL(request.url);
   let r;
 
-  if (m === 'GET' && path === '/api/admin/me') return json({ ok: true, email: admin, fee: Number(env.ACQUIRING_FEE_PERCENT || 0), tax: Number(env.TAX_PERCENT || 0), price: Number(env.PRICE_UAH) });
+  if (m === 'GET' && path === '/api/admin/me') return json({ ok: true, email: admin, price: Number(env.PRICE_UAH) });
+  if (m === 'GET' && path === '/api/admin/settings') return json({ ok: true, settings: await getSettings(env), price: Number(env.PRICE_UAH) });
+  if (m === 'POST' && path === '/api/admin/settings') { const saved = await saveSettings(env, await readJson(request)); await audit(env, admin, 'settings', null, saved); return json({ ok: true, settings: await getSettings(env) }); }
   if (m === 'GET' && path === '/api/admin/dashboard') return json({ ok: true, ...(await dashboard(env, url.searchParams.get('days') || '30')) });
   if (m === 'GET' && path === '/api/admin/orders') return json({ ok: true, ...(await listOrders(env, url)) });
   if (m === 'GET' && (r = path.match(/^\/api\/admin\/orders\/([\w-]+)$/))) return json({ ok: true, ...(await orderDetail(env, r[1])) });
@@ -145,7 +149,7 @@ async function orderAction(request, env, admin, id, action) {
     for (const s of slots) {
       const mem = members[s], partner = members[1 - s];
       const link = await issueLoginLink(env, mem.id, WELCOME_TTL_MS);
-      const mail = welcomeEmail(env, mem.suggested_name, partner.suggested_name, cal.start_date, link);
+      const mail = s === 0 ? welcomeEmail(env, mem.suggested_name, partner.suggested_name, cal.start_date, link, cal.lang) : partnerInviteEmail(env, mem.suggested_name, partner.suggested_name, cal.start_date, link, cal.lang);
       await sendEmail(env, mem.email, mail.subject, mail.html, mail.text);
     }
     await audit(env, admin, 'resend_access', id, { slots });
@@ -156,10 +160,22 @@ async function orderAction(request, env, admin, id, action) {
     if (o.refunded_at) throw new HttpError(409, 'already_refunded');
     const amount = b.amountKop == null ? o.amount_kop : Math.round(Number(b.amountKop));
     if (!(amount >= 0 && amount <= o.amount_kop)) throw new HttpError(400, 'bad_amount');
-    await run(env, 'UPDATE orders SET refunded_at = ?, refund_kop = ? WHERE id = ?', Date.now(), amount, id);
+    // спосіб: автоматично через Monobank (за замовчуванням для платних замовлень) або лише відмітка
+    const auto = b.method !== 'manual' && env.PAYMENT_MODE === 'monobank' && amount > 0 && o.invoice_id && !String(o.invoice_id).startsWith('free_');
+    let refundStatus = 'manual', refundRef = null;
+    if (auto) {
+      refundRef = 'refund_' + o.id;
+      const r = await cancelInvoice(env, o.invoice_id, amount, refundRef);
+      if (!r.ok || r.status === 'failure') { const e = new HttpError(502, 'refund_failed'); e.detail = String(r.error || 'failure').slice(0, 200); throw e; }
+      refundStatus = r.status || 'processing';
+    }
+    await run(env, 'UPDATE orders SET refunded_at = ?, refund_kop = ?, refund_status = ?, refund_ref = ? WHERE id = ?', Date.now(), amount, refundStatus, refundRef, id);
     if (b.revoke !== false) for (const mem of members) await run(env, 'DELETE FROM sessions WHERE member_id = ?', mem.id); // доступ закривається
-    await audit(env, admin, 'refund', id, { amountKop: amount, revoke: b.revoke !== false, note: cleanText(b.note, 300) });
-    return { ok: true };
+    if (b.notify !== false && amount > 0) { // повідомлення покупцю (не критично, якщо не вдалось)
+      try { const mail = refundEmail(env, `${(amount / 100).toLocaleString('uk-UA', { minimumFractionDigits: amount % 100 ? 2 : 0 })} ₴`, o.lang || 'uk'); await sendEmail(env, o.payer_email || o.email_a, mail.subject, mail.html, mail.text); } catch (e) { console.error('refund email failed', e); }
+    }
+    await audit(env, admin, 'refund', id, { amountKop: amount, method: auto ? 'monobank_api' : 'manual', status: refundStatus, revoke: b.revoke !== false, note: cleanText(b.note, 300) });
+    return { ok: true, method: auto ? 'api' : 'manual', status: refundStatus };
   }
   // update: дата старту й контакти
   const patch = {};
@@ -197,7 +213,8 @@ async function orderAction(request, env, admin, id, action) {
         await run(env, 'UPDATE members SET email = ? WHERE id = ?', em, mem.id);
         await run(env, 'DELETE FROM sessions WHERE member_id = ?', mem.id); await run(env, 'DELETE FROM login_tokens WHERE member_id = ?', mem.id);
         const partner = members[1 - i], link = await issueLoginLink(env, mem.id, WELCOME_TTL_MS);
-        const mail = welcomeEmail(env, nm || mem.suggested_name, partner.suggested_name, newStart || cal.start_date, link);
+        const nameMe = nm || mem.suggested_name, namePartner = (i === 0 ? patch.name_b : patch.name_a) || partner.suggested_name;
+        const mail = i === 0 ? welcomeEmail(env, nameMe, namePartner, newStart || cal.start_date, link, cal.lang) : partnerInviteEmail(env, nameMe, namePartner, newStart || cal.start_date, link, cal.lang);
         await sendEmail(env, em, mail.subject, mail.html, mail.text);
         emailChanged.push(i);
       }
@@ -261,7 +278,7 @@ async function updatePromo(request, env, admin, id) {
 export async function dashboard(env, daysParam) {
   const days = daysParam === 'all' ? null : [7, 30, 90, 365].includes(Number(daysParam)) ? Number(daysParam) : 30;
   const now = Date.now(), since = days ? now - days * 864e5 : 0; // мітки часу замовлень — реальні, тому й «зараз» реальне
-  const feePct = Number(env.ACQUIRING_FEE_PERCENT || 0), taxPct = Number(env.TAX_PERCENT || 0);
+  const st = await getSettings(env), feePct = st.fee_percent, taxPct = st.tax_percent + st.military_percent;
   const created = await qa(env, 'SELECT id, status, paid_at, created_at FROM orders WHERE created_at >= ?', since);
   const paid = await qa(env, 'SELECT * FROM orders WHERE paid_at >= ? ORDER BY paid_at', since);
   const sum = (arr, f) => arr.reduce((s, x) => s + (f(x) || 0), 0);
@@ -308,7 +325,7 @@ export async function dashboard(env, daysParam) {
     period: days || 'all',
     kpi: { paid: paidCount, free: freeCount, created: created.length, conversion: created.length ? createdPaid / created.length : null, list_kop: list, discount_kop: discount, revenue_kop: revenue, refunds_kop: refunds, net_revenue_kop: netRevenue,
       avg_check_kop: paidCount - freeCount > 0 ? Math.round(sum(paid.filter(o => o.amount_kop > 0), o => o.amount_kop) / (paidCount - freeCount)) : 0,
-      fee_kop: fee, tax_kop: tax, profit_kop: netRevenue - fee - tax, fee_pct: feePct, tax_pct: taxPct, pending, abandoned, customers, inbox_open: inbox.open, inbox_unread: inbox.unread },
+      fee_kop: fee, tax_kop: tax, profit_kop: netRevenue - fee - tax, fee_pct: feePct, tax_pct: taxPct, tax_single_pct: st.tax_percent, tax_military_pct: st.military_percent, pending, abandoned, customers, inbox_open: inbox.open, inbox_unread: inbox.unread },
     series: fill, funnel, regions: byRegion, cities: byCity, promos: promoRows, upcoming_starts: starts
   };
 }

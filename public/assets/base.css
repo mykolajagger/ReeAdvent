@@ -125,3 +125,17 @@ textarea:focus{outline:none;border-color:var(--gold)}
 .ans p{margin:2px 0 0;white-space:pre-wrap;word-break:break-word}
 .ans.them{border-left-color:#e59a9f}
 .ans .who{font:600 11px var(--body);letter-spacing:.2em;text-transform:uppercase;color:var(--muted)}
+
+/* вкладки й історія */
+.tabs{display:flex;gap:6px;justify-content:center;margin:-18px auto 26px;border:1px solid var(--line);border-radius:999px;width:fit-content;padding:3px}
+.tabs button{appearance:none;border:0;background:transparent;color:var(--muted);padding:8px 20px;border-radius:999px;font:600 13px var(--body);cursor:pointer}
+.tabs button.on{background:var(--gold);color:#14110a}
+.histlist{display:grid;gap:12px}
+.hist{border:1px solid var(--line);border-radius:var(--r);padding:18px;background:var(--card);display:grid;gap:10px;cursor:pointer;transition:.2s}
+.hist:hover,.hist:focus-visible{border-color:var(--gold);outline:none}
+.hist.new{border-style:dashed}
+.hist header{display:flex;justify-content:space-between;gap:12px;flex-wrap:wrap;align-items:baseline}
+.hist header b{font:500 24px var(--head);color:var(--gold)}
+.hist .q{font:500 22px/1.2 var(--head)}
+.hist .tasks{margin:0;padding-left:18px;color:var(--muted);font-size:14px}
+.hist .tasks li.done{color:var(--ink)}.hist .tasks li.done::marker{content:"✓ "}

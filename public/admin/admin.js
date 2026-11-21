@@ -13,11 +13,11 @@ let me = null, view = 'dashboard', period = '30', inboxFilter = 'open', inboxSel
 async function api(method, path, body) {
   const r = await fetch(path, { method, credentials: 'same-origin', headers: { ...(body ? { 'Content-Type': 'application/json' } : {}), ...(method !== 'GET' ? { 'X-Admin': '1' } : {}) }, body: body ? JSON.stringify(body) : undefined });
   let j = {}; try { j = await r.json(); } catch {}
-  if (!r.ok || j.ok === false) { const e = new Error(j.error || 'server_error'); e.code = j.error || 'server_error'; if (e.code === 'admin_auth') { me = null; showLogin(); } throw e; }
+  if (!r.ok || j.ok === false) { const e = new Error(j.error || 'server_error'); e.code = j.error || 'server_error'; e.detail = j.detail; if (e.code === 'admin_auth') { me = null; showLogin(); } throw e; }
   return j;
 }
-const ERR = { admin_auth: 'Сесія закінчилась', code_exists: 'Такий код уже є', bad_code: 'Код: 3–32 символи (літери, цифри, - _)', bad_value: 'Невірне значення знижки', bad_max: 'Ліміт: ціле число від 1', bad_date: 'Невірна дата', already_started: 'Календар уже стартував: дату змінити не можна', same_email: 'Пошти мають бути різні', bad_email: 'Невірна пошта', bad_names: 'Вкажіть імена', not_paid: 'Замовлення не оплачене', already_refunded: 'Повернення вже оформлено', bad_amount: 'Сума більша за оплачену', empty: 'Напишіть текст відповіді', too_many: 'Забагато спроб', csrf: 'Помилка захисту, оновіть сторінку' };
-const errText = e => ERR[e.code] || 'Щось пішло не так: ' + (e.code || e.message);
+const ERR = { refund_failed: 'Monobank не виконав повернення. Замовлення не змінено', bad_percent: 'Відсоток: число від 0 до 100', admin_auth: 'Сесія закінчилась', code_exists: 'Такий код уже є', bad_code: 'Код: 3–32 символи (літери, цифри, - _)', bad_value: 'Невірне значення знижки', bad_max: 'Ліміт: ціле число від 1', bad_date: 'Невірна дата', already_started: 'Календар уже стартував: дату змінити не можна', same_email: 'Пошти мають бути різні', bad_email: 'Невірна пошта', bad_names: 'Вкажіть імена', not_paid: 'Замовлення не оплачене', already_refunded: 'Повернення вже оформлено', bad_amount: 'Сума більша за оплачену', empty: 'Напишіть текст відповіді', too_many: 'Забагато спроб', csrf: 'Помилка захисту, оновіть сторінку' };
+const errText = e => (ERR[e.code] || 'Щось пішло не так: ' + (e.code || e.message)) + (e.detail ? ` (${e.detail})` : '');
 function toast(t) { const el = $('#toast'); el.textContent = t; el.classList.add('show'); clearTimeout(toast.t); toast.t = setTimeout(() => el.classList.remove('show'), 2800); }
 
 /* ---------- Вхід ---------- */
@@ -38,7 +38,7 @@ async function consumeLogin() {
 }
 
 /* ---------- Каркас ---------- */
-const NAV = [['dashboard', 'Дашборд'], ['orders', 'Замовлення'], ['customers', 'Клієнти'], ['promos', 'Промокоди'], ['inbox', 'Підтримка'], ['audit', 'Журнал дій']];
+const NAV = [['dashboard', 'Дашборд'], ['orders', 'Замовлення'], ['customers', 'Клієнти'], ['promos', 'Промокоди'], ['inbox', 'Підтримка'], ['settings', 'Налаштування'], ['audit', 'Журнал дій']];
 async function shell() {
   root.innerHTML = `<div class="shell"><aside class="side"><div class="logo">Ree<em>Advent</em></div>
     <nav class="nav">${NAV.map(([k, t]) => `<a data-v="${k}" class="${view === k ? 'on' : ''}" href="#/${k}">${t}${k === 'inbox' ? '<span class="badge" id="ib" hidden></span>' : ''}</a>`).join('')}</nav>
@@ -49,7 +49,7 @@ async function route() {
   if (!me) return;
   view = (location.hash.match(/^#\/(\w+)/) || [])[1] || 'dashboard'; if (!NAV.some(n => n[0] === view)) view = 'dashboard';
   await shell();
-  const views = { dashboard, orders, customers, promos, inbox, audit };
+  const views = { dashboard, orders, customers, promos, inbox, settings, audit };
   try { await views[view](); } catch (e) { if (e.code !== 'admin_auth') $('#main').innerHTML = `<div class="empty">Помилка: ${esc(errText(e))}</div>`; }
   refreshBadge();
 }
@@ -105,7 +105,7 @@ async function dashboard() {
     <div class="card"><h2>Топ міст</h2><div style="margin-top:12px">${hbars(d.cities, r => r.orders, r => `${r.orders} · ${UAH(r.revenue_kop)}`)}</div></div>
   </div>
   <div class="card" style="margin-top:14px"><h2>Промокоди за період</h2><div class="tw" style="margin-top:12px"><table><thead><tr><th>Код</th><th class="num">Замовлень</th><th class="num">Знижок</th><th class="num">Виручка</th></tr></thead><tbody>${d.promos.map(p => `<tr><td><b>${esc(p.name)}</b></td><td class="num">${p.orders}</td><td class="num">−${UAH(p.discount_kop)}</td><td class="num">${UAH(p.revenue_kop)}</td></tr>`).join('') || '<tr><td colspan="4" class="empty">Промокодами ще не користувались</td></tr>'}</tbody></table></div></div>
-  <p class="muted" style="margin-top:16px;font-size:12px">Прибуток орієнтовний: комісія ${k.fee_pct}% і податки ${k.tax_pct}% задаються змінними <code>ACQUIRING_FEE_PERCENT</code> і <code>TAX_PERCENT</code>; ЄСВ та інші витрати не враховано. Звіряйте з бухгалтером.</p>`;
+  <p class="muted" style="margin-top:16px;font-size:12px">Прибуток орієнтовний: комісія ${k.fee_pct}% і податки ${k.tax_pct}% (${k.tax_single_pct}% єдиний податок + ${k.tax_military_pct}% військовий збір) задаються в розділі <a href="#/settings">Налаштування</a>; ЄСВ та інші витрати не враховано. Звіряйте з бухгалтером.</p>`;
   $('#seg').onclick = e => { const b = e.target.closest('[data-p]'); if (b) { period = b.dataset.p; dashboard(); } };
   const ab = $('#ab'); if (ab) ab.onclick = () => { ordersState = { status: 'abandoned', q: '', page: 1 }; };
   let table = false; $('#tg').onclick = () => { table = !table; $('#tg').textContent = table ? 'Графік' : 'Таблиця';
@@ -146,7 +146,7 @@ async function openOrder(id) {
   const started = cal && cal.today > 0;
   ov.innerHTML = `<div class="panel"><header><div><h2>Замовлення</h2><h1 style="font-size:26px">${esc(o.name_a)} і ${esc(o.name_b)}</h1><div class="muted mono">${esc(o.id)}</div></div><div class="row">${pill(o.status)}<button class="btn ghost sm" id="x">Закрити</button></div></header>
   <div class="card sec"><h2>Оплата</h2><dl class="kv"><dt>Створено</dt><dd>${dt(o.created_at)}</dd><dt>Оплачено</dt><dd>${dt(o.paid_at)}</dd><dt>Сума</dt><dd><b>${UAH(o.amount_kop)}</b>${o.discount_kop ? ` · за прайсом ${UAH(o.list_kop)}, знижка ${UAH(o.discount_kop)}${o.promo_code ? ` (<b>${esc(o.promo_code)}</b>)` : ''}` : ''}</dd>
-    ${o.refunded_at ? `<dt>Повернення</dt><dd>${UAH(o.refund_kop)} · ${dt(o.refunded_at)}</dd>` : ''}<dt>Інвойс</dt><dd class="mono">${esc(o.invoice_id || '—')}</dd></dl></div>
+    ${o.refunded_at ? `<dt>Повернення</dt><dd>${UAH(o.refund_kop)} · ${dt(o.refunded_at)} · ${({ manual: 'вручну', processing: 'Monobank: обробляється', success: 'Monobank: виконано' })[o.refund_status] || ''}</dd>` : ''}<dt>Інвойс</dt><dd class="mono">${esc(o.invoice_id || '—')}</dd></dl></div>
   <div class="card sec"><h2>Контакти й дата старту</h2><div class="form2">
     <label class="f">Ім'я 1<input id="nA" value="${esc(o.name_a)}" maxlength="30"></label><label class="f">Пошта 1<input id="eA" type="email" value="${esc(o.email_a)}"></label>
     <label class="f">Ім'я 2<input id="nB" value="${esc(o.name_b)}" maxlength="30"></label><label class="f">Пошта 2<input id="eB" type="email" value="${esc(o.email_b)}"></label>
@@ -161,8 +161,10 @@ async function openOrder(id) {
     ${o.paid_at && !o.refunded_at ? '<button class="btn danger" id="rf">Оформити повернення…</button>' : ''}
     ${r.threads.length ? `<a class="btn ghost" href="#/inbox" id="gi" style="text-decoration:none">Листування (${r.threads.length})</a>` : ''}</div>
     ${o.paid_at && !o.refunded_at ? `<div id="rfbox" hidden class="sec"><div class="form2"><label class="f">Сума повернення, грн<input id="ra" type="number" step="0.01" min="0" max="${o.amount_kop / 100}" value="${o.amount_kop / 100}"></label><label class="f">Коментар<input id="rn" maxlength="300"></label></div>
+      <label class="f">Спосіб<select id="rm"><option value="auto">Автоматично через Monobank</option><option value="manual">Я вже повернув(ла) кошти вручну (лише відмітка)</option></select></label>
       <label class="row muted"><input type="checkbox" id="rv" checked> закрити клієнтам доступ до календаря</label>
-      <div class="muted">Це лише відмітка в системі. Саме повернення коштів треба зробити в кабінеті Monobank.</div><div><button class="btn danger" id="rfok">Підтвердити повернення</button></div></div>` : ''}</div>
+      <label class="row muted"><input type="checkbox" id="rnf" checked> надіслати покупцю лист про повернення</label>
+      <div class="muted">«Автоматично»: гроші повертає Monobank на картку покупця (зазвичай до 10 банківських днів). Для безкоштовних замовлень API не викликається.</div><div><button class="btn danger" id="rfok">Підтвердити повернення</button></div></div>` : ''}</div>
   <div class="card sec"><h2>Нотатка менеджера</h2><textarea id="nt" rows="3" maxlength="1000">${esc(o.note || '')}</textarea><div><button class="btn ghost sm" id="ns">Зберегти нотатку</button></div></div>
   <div class="card sec"><h2>Історія дій</h2><div class="log">${r.log.map(l => `<div>${dt(l.at)} · ${esc(l.admin_email)} · <b>${esc(l.action)}</b> ${l.detail ? esc(l.detail) : ''}</div>`).join('') || 'Дій ще не було'}</div></div></div>`;
   document.body.appendChild(ov);
@@ -171,7 +173,7 @@ async function openOrder(id) {
   $('#sv', ov).onclick = () => act('update', { nameA: $('#nA', ov).value, nameB: $('#nB', ov).value, emailA: $('#eA', ov).value, emailB: $('#eB', ov).value, ...(started ? {} : { startDate: $('#sd', ov).value }) }, res => res.changed.length ? 'Збережено' : 'Змін немає');
   const rs = $('#rs', ov); if (rs) rs.onclick = () => confirm('Надіслати обом новий лист із доступом?') && act('resend', {}, () => 'Листи надіслано');
   const rf = $('#rf', ov); if (rf) { rf.onclick = () => { $('#rfbox', ov).hidden = false; };
-    $('#rfok', ov).onclick = () => confirm('Позначити замовлення як повернене?') && act('refund', { amountKop: Math.round(Number($('#ra', ov).value) * 100), note: $('#rn', ov).value, revoke: $('#rv', ov).checked }, () => 'Повернення відмічено'); }
+    $('#rfok', ov).onclick = () => confirm('Позначити замовлення як повернене?') && act('refund', { amountKop: Math.round(Number($('#ra', ov).value) * 100), note: $('#rn', ov).value, revoke: $('#rv', ov).checked, notify: $('#rnf', ov).checked, method: $('#rm', ov).value }, res => res.method === 'api' ? 'Повернення відправлено в Monobank' : 'Повернення відмічено'); }
   $('#ns', ov).onclick = () => act('note', { note: $('#nt', ov).value }, () => 'Нотатку збережено');
   const gi = $('#gi', ov); if (gi) gi.onclick = () => { inboxSel = r.threads[0].email; close(); };
 }
@@ -232,6 +234,23 @@ async function inbox() {
   };
   $('.threads').onclick = e => { const t = e.target.closest('.thread'); if (t) open(t.dataset.e); };
   if (inboxSel) open(inboxSel).catch(() => {});
+}
+
+/* ---------- Налаштування (відсотки для дашборда) ---------- */
+async function settings() {
+  const r = await api('GET', '/api/admin/settings'), v = r.settings;
+  $('#main').innerHTML = `<div class="top"><div><h2>Фінанси</h2><h1>Налаштування</h1></div></div>
+  <div class="card sec" style="max-width:620px"><h2>Відсотки для розрахунку прибутку</h2>
+    <div class="muted">Ці відсотки використовує лише дашборд для орієнтовного чистого прибутку. На ціну для клієнтів і на самі платежі вони не впливають.</div>
+    <form id="sf" class="grid" style="gap:12px">
+      <label class="f">Комісія еквайрингу Monobank, %<input id="s1" type="number" step="0.01" min="0" max="100" value="${v.fee_percent}" required></label>
+      <label class="f">Єдиний податок, % від доходу<input id="s2" type="number" step="0.01" min="0" max="100" value="${v.tax_percent}" required></label>
+      <label class="f">Військовий збір, % від доходу<input id="s3" type="number" step="0.01" min="0" max="100" value="${v.military_percent}" required></label>
+    </form>
+    <div class="muted">Орієнтовні значення: ЄП 3 група 5% і військовий збір 1%, комісію візьміть із договору з банком. ЄСВ (фіксована сума) не враховується. Уточніть у бухгалтера.</div>
+    <div><button class="btn" id="ss">Зберегти</button></div></div>
+  <div class="card sec" style="max-width:620px;margin-top:14px"><h2>Ціна</h2><div>Поточна ціна: <b>${r.price} ₴</b>. Змінюється змінною <code>PRICE_UAH</code> у <code>wrangler.toml</code> (потрібен новий деплой).</div></div>`;
+  $('#ss').onclick = async () => { if (!$('#sf').reportValidity()) return; try { await api('POST', '/api/admin/settings', { fee_percent: $('#s1').value, tax_percent: $('#s2').value, military_percent: $('#s3').value }); toast('Збережено'); } catch (e) { toast(errText(e)); } };
 }
 
 /* ---------- Журнал ---------- */
