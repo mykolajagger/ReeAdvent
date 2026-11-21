@@ -1,4 +1,4 @@
-// Версія наповнення бази закладів: 5 (діагностика Overpass, таймаут запиту 40 с). Зміна цього рядка перезбирає Worker після правок у ../../src.
+// Версія наповнення бази закладів: 6 (пауза, статус Overpass). Зміна цього рядка перезбирає Worker після правок у ../../src.
 import PostalMime from 'postal-mime';
 import { saveInbound } from './ingest.js';
 import { runVenuesLogged } from '../../../src/venues.js';

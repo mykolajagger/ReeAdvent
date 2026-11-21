@@ -112,12 +112,13 @@ export async function overpassProbe(fetchImpl = fetch) {
   const one = async (url, q) => {
     const t = Date.now();
     try {
-      const r = await fetchImpl(url, { method: 'POST', headers: { 'User-Agent': UA, 'content-type': 'application/x-www-form-urlencoded' }, body: 'data=' + encodeURIComponent(q), signal: AbortSignal.timeout(35000) });
+      const r = await fetchImpl(url, { method: 'POST', headers: { 'User-Agent': UA, 'content-type': 'application/x-www-form-urlencoded' }, body: 'data=' + encodeURIComponent(q), signal: AbortSignal.timeout(20000) });
       const txt = await r.text(); let j = null; try { j = JSON.parse(txt); } catch {}
       return { status: r.status, ms: Date.now() - t, bytes: txt.length, n: j && j.elements ? j.elements.length : null, note: j && j.remark ? String(j.remark).slice(0, 80) : (r.ok ? '' : txt.replace(/\s+/g, ' ').slice(0, 80)) };
     } catch (e) { return { error: String(e && e.message || e).slice(0, 80), ms: Date.now() - t }; }
   };
-  return Promise.all(OVERPASS.map(async url => ({ mirror: new URL(url).host, small: await one(url, small), group1: await one(url, big) })));
+  const status = async url => { const t = Date.now(); try { const r = await fetchImpl(url.replace('/interpreter', '/status'), { headers: { 'User-Agent': UA }, signal: AbortSignal.timeout(10000) }); return { status: r.status, ms: Date.now() - t, note: (await r.text()).replace(/\s+/g, ' ').slice(0, 220) }; } catch (e) { return { error: String(e && e.message || e).slice(0, 60), ms: Date.now() - t }; } };
+  return Promise.all(OVERPASS.map(async url => ({ mirror: new URL(url).host, status: await status(url), small: await one(url, small), group1: await one(url, big) })));
 }
 const RE_CACHE = new Map(), reOf = src => { let r = RE_CACHE.get(src); if (!r) RE_CACHE.set(src, r = new RegExp(`^(${src})$`)); return r; };
 const tagMatch = (t, f) => { for (const k in f) { const v = f[k], x = t[k], not = typeof v === 'string' && v.charCodeAt(0) === 33; if (x == null) { if (!not) return false; continue; } if (Array.isArray(v) ? !v.includes(x) : not ? reOf(v.slice(1)).test(x) : x !== v) return false; } return true; };
@@ -197,7 +198,11 @@ async function nextCity(env, now) {
   return null;
 }
 /** За запуск обробляється VENUES_PER_RUN міст (за замовчуванням 1, максимум 10), але не довше budgetMs (HTTP — 25 с; Worker за розкладом — 100 с). */
+export async function venuesPaused(env) { const r = await env.DB.prepare("SELECT value FROM settings WHERE key = 'venues_paused'").first(); return !!r && r.value === '1'; }
+export async function setVenuesPaused(env, on) { await env.DB.prepare("INSERT INTO settings (key, value, updated_at) VALUES ('venues_paused', ?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value, updated_at = excluded.updated_at").bind(on ? '1' : '0', Date.now()).run(); }
+
 export async function runVenues(env, { fetchImpl = fetch, now = Date.now(), budgetMs = 25000, onCity = null } = {}) {
+  if (await venuesPaused(env)) return { paused: true };
   const seeded = await seedTop(env), per = Math.min(10, Math.max(1, parseInt(env.VENUES_PER_RUN, 10) || 1)), t0 = Date.now(), done = [];
   while (done.length < per && (done.length === 0 || Date.now() - t0 < budgetMs)) {
     const c = await nextCity(env, now); if (!c) break;
@@ -236,7 +241,7 @@ export async function venueStats(env) {
   const r = await env.DB.prepare("SELECT COUNT(*) AS cities, SUM(status = 'ready') AS ready, SUM(status = 'pending') AS pending, SUM(status = 'working') AS working, SUM(status = 'failed') AS failed FROM venue_cities WHERE alias_of IS NULL").first();
   const v = await env.DB.prepare('SELECT COUNT(*) AS n FROM venues').first(), rt = await env.DB.prepare('SELECT COUNT(*) AS n FROM venue_ratings').first();
   const lastRow = await env.DB.prepare("SELECT value FROM settings WHERE key = 'venues_last'").first(); let last = null; try { last = lastRow ? JSON.parse(lastRow.value) : null; } catch {}
-  return { cities: r.cities || 0, ready: r.ready || 0, pending: r.pending || 0, working: r.working || 0, failed: r.failed || 0, venues: v.n, ratings: rt.n, last };
+  return { paused: await venuesPaused(env), cities: r.cities || 0, ready: r.ready || 0, pending: r.pending || 0, working: r.working || 0, failed: r.failed || 0, venues: v.n, ratings: rt.n, last };
 }
 
 // ---------- Видача рекомендацій і оцінки ----------

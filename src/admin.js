@@ -8,7 +8,7 @@ import { issueLoginLink, issueLoginCode, WELCOME_TTL_MS } from './api.js';
 import { getSettings, saveSettings, getPriceUah } from './settings.js';
 import { getFx, refreshFx } from './currency.js';
 import { placesUsage } from './places.js';
-import { venueStats, venueProblems, retryCities, queueCity, overpassProbe } from './venues.js';
+import { venueStats, venueProblems, retryCities, queueCity, overpassProbe, setVenuesPaused } from './venues.js';
 import { cancelInvoice } from './payments.js';
 
 const ADMIN_LOGIN_TTL = 30 * 60e3, ADMIN_SESSION_TTL = 14 * 24 * 3600e3;
@@ -69,6 +69,7 @@ export async function handleAdmin(request, env, path, m) {
   if (m === 'GET' && path === '/api/admin/me') return json({ ok: true, email: admin, price: await getPriceUah(env) });
   if (m === 'GET' && path === '/api/admin/settings') { const fx = await getFx(env); return json({ ok: true, settings: await getSettings(env), places: { enabled: !!env.GOOGLE_PLACES_KEY, used: await placesUsage(env) }, venues: { ...(await venueStats(env)), problems: await venueProblems(env) }, fx: fx ? { updated: fx.updated, usd: fx.rates.USD ? Math.round(1 / fx.rates.USD * 100) / 100 : null, eur: fx.rates.EUR ? Math.round(1 / fx.rates.EUR * 100) / 100 : null, count: Object.keys(fx.rates).length, mono: fx.sources ? fx.sources.mono : null } : null }); }
   if (m === 'POST' && path === '/api/admin/venues/retry') { const b = await readJson(request); const n = await retryCities(env, b.id ? Number(b.id) : null); await audit(env, admin, 'venues_retry', b.id || 'all', { n }); return json({ ok: true, n }); }
+  if (m === 'POST' && path === '/api/admin/venues/pause') { const b = await readJson(request); await setVenuesPaused(env, !!b.paused); await audit(env, admin, 'venues_pause', null, { paused: !!b.paused }); return json({ ok: true, paused: !!b.paused }); }
   if (m === 'POST' && path === '/api/admin/venues/test') return json({ ok: true, probe: await overpassProbe() });
   if (m === 'POST' && path === '/api/admin/venues/add') { const b = await readJson(request); if (!(await queueCity(env, b.country, b.name))) throw new HttpError(400, 'bad_city'); await audit(env, admin, 'venues_add', null, { country: b.country, name: b.name }); return json({ ok: true }); }
   if (m === 'POST' && path === '/api/admin/fx/refresh') { const r = await refreshFx(env, { force: true }); await audit(env, admin, 'fx_refresh', null, r); if (!r.ok) throw Object.assign(new HttpError(502, 'fx_failed'), { detail: r.error }); return json({ ok: true, ...r }); }

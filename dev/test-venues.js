@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import path from 'node:path'; import { fileURLToPath } from 'node:url';
 import { makeDb } from './d1.js';
 import { handle } from '../src/api.js';
-import { runVenues, venuePicks, rateVenue, ensureCity, catOfQuery, catOfGift, formatHours, cityKey, overpassProbe, overpassQueries, CAT_GROUPS, pickVenues, venueStats, CATS } from '../src/venues.js';
+import { runVenues, venuePicks, rateVenue, ensureCity, catOfQuery, catOfGift, formatHours, cityKey, overpassProbe, setVenuesPaused, overpassQueries, CAT_GROUPS, pickVenues, venueStats, CATS } from '../src/venues.js';
 import { TOP_CITIES } from '../src/top_cities.js';
 const root = path.join(path.dirname(fileURLToPath(import.meta.url)), '..');
 const db = makeDb(root), raw = db._raw;
@@ -119,4 +119,5 @@ assert.match(raw.prepare("SELECT error FROM venue_cities WHERE key = 'UA|кос�
 const pr2 = await overpassProbe(async (u, i) => String(u).includes('kumi') ? new Response('Too Many Requests', { status: 429 }) : new Response(JSON.stringify({ elements: [1, 2, 3] }), { status: 200 }));
 assert.equal(pr2.length, 3); assert.equal(pr2.find(x => x.mirror.includes('kumi')).small.status, 429); assert.equal(pr2.find(x => x.mirror.includes('overpass-api')).group1.n, 3);
 const adminHit = await handle(new Request('http://x/api/admin/venues/test', { method: 'POST', headers: { 'x-admin': '1' } }), env); assert([401, 403].includes(adminHit.status), 'лише для адміністраторів: ' + adminHit.status);
+await setVenuesPaused(env, true); assert.equal((await runVenues(env, { fetchImpl: mockFetch })).paused, true); assert.equal((await venueStats(env)).paused, true); await setVenuesPaused(env, false); assert.equal((await venueStats(env)).paused, false);
 console.log('VENUES OK');
