@@ -1,5 +1,6 @@
 // Налаштування, які власник змінює в адмінці: ціна календаря й відсотки для дашборда.
-export const DEFAULTS = { fee_percent: 0, tax_percent: 5, military_percent: 1 };
+// fee_percent: комісія Monobank з українських карток (1,3%), fee_foreign_percent: з іноземних (2%).
+export const DEFAULTS = { fee_percent: 1.3, fee_foreign_percent: 2, tax_percent: 5, military_percent: 1 };
 const PERCENT_KEYS = Object.keys(DEFAULTS), KEYS = [...PERCENT_KEYS, 'price_uah', 'usd_rate'];
 export { KEYS };
 
@@ -7,7 +8,7 @@ const bad = code => { const e = new Error(code); e.status = 400; e.code = code; 
 
 export async function getSettings(env) {
   const rows = (await env.DB.prepare('SELECT key, value FROM settings').all()).results;
-  const out = { ...DEFAULTS, fee_percent: Number(env.ACQUIRING_FEE_PERCENT ?? DEFAULTS.fee_percent) || 0, price_uah: Number(env.PRICE_UAH) || 0, usd_rate: Number(env.USD_RATE) || 41 };
+  const out = { ...DEFAULTS, ...(env.ACQUIRING_FEE_PERCENT !== undefined ? { fee_percent: Number(env.ACQUIRING_FEE_PERCENT) || 0 } : {}), price_uah: Number(env.PRICE_UAH) || 0, usd_rate: Number(env.USD_RATE) || 41 };
   for (const r of rows) if (KEYS.includes(r.key) && isFinite(Number(r.value))) out[r.key] = Number(r.value);
   return out;
 }

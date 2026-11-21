@@ -278,15 +278,23 @@ async function updatePromo(request, env, admin, id) {
 export async function dashboard(env, daysParam) {
   const days = daysParam === 'all' ? null : [7, 30, 90, 365].includes(Number(daysParam)) ? Number(daysParam) : 30;
   const now = Date.now(), since = days ? now - days * 864e5 : 0; // мітки часу замовлень — реальні, тому й «зараз» реальне
-  const st = await getSettings(env), feePct = st.fee_percent, taxPct = st.tax_percent + st.military_percent;
+  const st = await getSettings(env), taxPct = st.tax_percent + st.military_percent;
   const created = await qa(env, 'SELECT id, status, paid_at, created_at FROM orders WHERE created_at >= ?', since);
   const paid = await qa(env, 'SELECT * FROM orders WHERE paid_at >= ? ORDER BY paid_at', since);
   const sum = (arr, f) => arr.reduce((s, x) => s + (f(x) || 0), 0);
   const list = sum(paid, o => o.list_kop ?? o.amount_kop), discount = sum(paid, o => o.discount_kop), revenue = sum(paid, o => o.amount_kop);
   const refunds = sum(paid.filter(o => o.refunded_at), o => o.refund_kop);
   const netRevenue = revenue - refunds;
-  const cardRevenue = sum(paid.filter(o => o.amount_kop > 0), o => o.amount_kop - (o.refund_kop || 0));
-  const fee = Math.round(cardRevenue * feePct / 100), tax = Math.round(netRevenue * taxPct / 100);
+  // Комісія Monobank: 1,3% з українських карток, 2% з іноземних (країну замовлення беремо як ознаку). Повернення в день оплати комісію знімає;
+  // повернення в інший день комісію НЕ повертає (покупець отримує повну суму, комісію несемо ми).
+  const kyivDay = ms => { const p = localParts(new Date(ms)); return `${p.y}-${p.m}-${p.d}`; };
+  let fee = 0;
+  for (const o of paid) {
+    if (o.amount_kop <= 0) continue;
+    if (o.refunded_at && kyivDay(o.paid_at) === kyivDay(o.refunded_at)) continue;
+    fee += Math.round(o.amount_kop * ((o.country && o.country !== 'UA') ? st.fee_foreign_percent : st.fee_percent) / 100);
+  }
+  const tax = Math.round(netRevenue * taxPct / 100);
   const paidCount = paid.length, freeCount = paid.filter(o => o.amount_kop === 0).length;
   const createdPaid = created.filter(o => o.paid_at).length;
   const pending = created.filter(o => !o.paid_at && now - o.created_at <= 3600e3).length, abandoned = created.filter(o => !o.paid_at && now - o.created_at > 3600e3).length;
@@ -325,7 +333,7 @@ export async function dashboard(env, daysParam) {
     period: days || 'all',
     kpi: { paid: paidCount, free: freeCount, created: created.length, conversion: created.length ? createdPaid / created.length : null, list_kop: list, discount_kop: discount, revenue_kop: revenue, refunds_kop: refunds, net_revenue_kop: netRevenue,
       avg_check_kop: paidCount - freeCount > 0 ? Math.round(sum(paid.filter(o => o.amount_kop > 0), o => o.amount_kop) / (paidCount - freeCount)) : 0,
-      fee_kop: fee, tax_kop: tax, profit_kop: netRevenue - fee - tax, fee_pct: feePct, tax_pct: taxPct, tax_single_pct: st.tax_percent, tax_military_pct: st.military_percent, pending, abandoned, customers, inbox_open: inbox.open, inbox_unread: inbox.unread },
+      fee_kop: fee, tax_kop: tax, profit_kop: netRevenue - fee - tax, fee_pct: st.fee_percent, fee_foreign_pct: st.fee_foreign_percent, tax_pct: taxPct, tax_single_pct: st.tax_percent, tax_military_pct: st.military_percent, pending, abandoned, customers, inbox_open: inbox.open, inbox_unread: inbox.unread },
     series: fill, funnel, regions: byRegion, cities: byCity, promos: promoRows, upcoming_starts: starts
   };
 }

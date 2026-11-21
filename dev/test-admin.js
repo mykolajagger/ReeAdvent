@@ -110,10 +110,10 @@ const cu = (await A('a', 'GET', '/api/admin/customers')).j.customers; assert(cu.
 const csv = await call('a', 'GET', '/api/admin/customers.csv'); assert(csv.ct.includes('text/csv')); assert(csv.text.includes('email,імена'));
 assert(csv.text.includes("'=HYPERLINK"), 'CSV formula injection neutralised'); assert(!/(^|,)=HYPERLINK/m.test(csv.text));
 // ---- налаштування відсотків (форма в адмінці) ----
-assert.deepEqual((await A('a', 'GET', '/api/admin/settings')).j.settings, { fee_percent: 2, tax_percent: 5, military_percent: 1, price_uah: 400, usd_rate: 41 }, 'defaults: fee from env, 5% + 1%, price from env');
+assert.deepEqual((await A('a', 'GET', '/api/admin/settings')).j.settings, { fee_percent: 2, fee_foreign_percent: 2, tax_percent: 5, military_percent: 1, price_uah: 400, usd_rate: 41 }, 'defaults: fee from env, 5% + 1%, price from env');
 assert.equal((await A('a', 'POST', '/api/admin/settings', { fee_percent: 120 })).j.error, 'bad_percent');
 assert.equal((await A('a', 'POST', '/api/admin/settings', { tax_percent: 'abc' })).j.error, 'bad_percent');
-assert.deepEqual((await A('a', 'POST', '/api/admin/settings', { fee_percent: '2', tax_percent: '5', military_percent: '0' })).j.settings, { fee_percent: 2, tax_percent: 5, military_percent: 0, price_uah: 400, usd_rate: 41 });
+assert.deepEqual((await A('a', 'POST', '/api/admin/settings', { fee_percent: '2', tax_percent: '5', military_percent: '0' })).j.settings, { fee_percent: 2, fee_foreign_percent: 2, tax_percent: 5, military_percent: 0, price_uah: 400, usd_rate: 41 });
 // ціна з адмінки
 assert.equal((await A('a', 'POST', '/api/admin/settings', { price_uah: 0 })).j.error, 'bad_price'); assert.equal((await A('a', 'POST', '/api/admin/settings', { price_uah: 'x' })).j.error, 'bad_price');
 assert.equal((await call('x', 'GET', '/api/config')).j.price, 400);
@@ -123,11 +123,20 @@ assert.equal((await call('x', 'POST', '/api/promo/check', { code: 'tenoff' })).j
 const oNew = (await call('x', 'POST', '/api/orders', { nameA: 'А', nameB: 'Б', emailA: 'np1@t.com', emailB: 'np2@t.com', city: 'Львів', region: 'Львівська', startDate: '2026-12-01', age18: true, terms: true })).j; assert.equal(oNew.amountKop, 54950, 'new order uses new price'); raw.prepare('DELETE FROM orders WHERE id = ?').run(oNew.orderId);
 assert((await A('a', 'POST', '/api/admin/settings', { price_uah: 400 })).j.ok);
 assert.equal((await call('a', 'POST', '/api/admin/settings', { fee_percent: 1 })).j.error, 'csrf');
+// ---- комісія: українські та іноземні картки, повернення не в день оплати ----
+assert((await A('a', 'POST', '/api/admin/settings', { fee_percent: 1.3, fee_foreign_percent: 2 })).j.ok);
+{ const base = (await A('a', 'GET', '/api/admin/dashboard?days=30')).j.kpi.fee_kop;
+  raw.prepare("UPDATE orders SET country = 'DE' WHERE id = ?").run(o2.orderId); // o2: 36000 * 2% (іноземна) замість 1,3%
+  const foreign = (await A('a', 'GET', '/api/admin/dashboard?days=30')).j.kpi.fee_kop; assert.equal(foreign, 720, '2% foreign card'); assert.equal(base, Math.round(36000 * 1.3 / 100), '1.3% Ukrainian card');
+  raw.prepare('UPDATE orders SET refunded_at = ? WHERE id = ?').run(Date.now() + 3 * 864e5, o1.orderId); // повернення не в день оплати: комісія лишається
+  const later = (await A('a', 'GET', '/api/admin/dashboard?days=30')).j.kpi.fee_kop; assert.equal(later, 720 + Math.round(40000 * 1.3 / 100), 'fee is kept when refunded on another day');
+  raw.prepare('UPDATE orders SET refunded_at = paid_at WHERE id = ?').run(o1.orderId); raw.prepare("UPDATE orders SET country = NULL WHERE id = ?").run(o2.orderId);
+  assert((await A('a', 'POST', '/api/admin/settings', { fee_percent: 2, fee_foreign_percent: 2 })).j.ok); }
 // ---- дашборд ----
 const d = (await A('a', 'GET', '/api/admin/dashboard?days=30')).j.kpi;
 assert.equal(d.paid, 2); assert.equal(d.created, 3); assert.equal(d.revenue_kop, 76000); assert.equal(d.discount_kop, 4000); assert.equal(d.list_kop, 80000);
 assert.equal(d.refunds_kop, 10000); assert.equal(d.net_revenue_kop, 66000);
-assert.equal(d.fee_kop, 1320, '2% of net card revenue'); assert.equal(d.tax_kop, 3300, '5% of net revenue'); assert.equal(d.profit_kop, 66000 - 1320 - 3300);
+assert.equal(d.fee_kop, 720, 'o1 refunded the same day: no fee; o2 (UA card, 2% from env): 36000 * 2%'); assert.equal(d.tax_kop, 3300, '5% of net revenue'); assert.equal(d.profit_kop, 66000 - 720 - 3300);
 assert.equal(d.abandoned, 0); assert.equal(d.pending, 1); assert(Math.abs(d.conversion - 2 / 3) < 1e-9);
 const dash = (await A('a', 'GET', '/api/admin/dashboard?days=30')).j;
 assert.equal(dash.series.length, 30); assert.equal(dash.series.reduce((s, x) => s + x.revenue_kop, 0), 66000);

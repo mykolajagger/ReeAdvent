@@ -82,7 +82,7 @@ async function dashboard() {
     ${k.abandoned ? `<a class="pill abandoned" href="#/orders" id="ab">Неоплачених (>1 год): ${k.abandoned}</a>` : ''}
   </div>
   <div class="grid kpis">
-    <div class="kpi hero"><h2>Чистий прибуток ≈</h2><div class="v">${UAH(k.profit_kop)}</div><div class="s">після комісії ${k.fee_pct}% і податків ${k.tax_pct}%</div></div>
+    <div class="kpi hero"><h2>Чистий прибуток ≈</h2><div class="v">${UAH(k.profit_kop)}</div><div class="s">після комісії банку (${k.fee_pct}% / ${k.fee_foreign_pct}%) і податків ${k.tax_pct}%</div></div>
     <div class="kpi"><h2>Виручка (нетто)</h2><div class="v">${UAH(k.net_revenue_kop)}</div><div class="s">після знижок і повернень</div></div>
     <div class="kpi"><h2>Оплачено</h2><div class="v">${k.paid}</div><div class="s">з них безкоштовних: ${k.free}</div></div>
     <div class="kpi"><h2>Конверсія</h2><div class="v">${pct(k.conversion)}</div><div class="s">${k.created} створено → оплачено</div></div>
@@ -105,7 +105,7 @@ async function dashboard() {
     <div class="card"><h2>Топ міст</h2><div style="margin-top:12px">${hbars(d.cities, r => r.orders, r => `${r.orders} · ${UAH(r.revenue_kop)}`)}</div></div>
   </div>
   <div class="card" style="margin-top:14px"><h2>Промокоди за період</h2><div class="tw" style="margin-top:12px"><table><thead><tr><th>Код</th><th class="num">Замовлень</th><th class="num">Знижок</th><th class="num">Виручка</th></tr></thead><tbody>${d.promos.map(p => `<tr><td><b>${esc(p.name)}</b></td><td class="num">${p.orders}</td><td class="num">−${UAH(p.discount_kop)}</td><td class="num">${UAH(p.revenue_kop)}</td></tr>`).join('') || '<tr><td colspan="4" class="empty">Промокодами ще не користувались</td></tr>'}</tbody></table></div></div>
-  <p class="muted" style="margin-top:16px;font-size:12px">Прибуток орієнтовний: комісія ${k.fee_pct}% і податки ${k.tax_pct}% (${k.tax_single_pct}% єдиний податок + ${k.tax_military_pct}% військовий збір) задаються в розділі <a href="#/settings">Налаштування</a>; ЄСВ та інші витрати не враховано. Звіряйте з бухгалтером.</p>`;
+  <p class="muted" style="margin-top:16px;font-size:12px">Прибуток орієнтовний: комісія Monobank ${k.fee_pct}% (українські картки) і ${k.fee_foreign_pct}% (іноземні), податки ${k.tax_pct}% (${k.tax_single_pct}% єдиний податок + ${k.tax_military_pct}% військовий збір) задаються в розділі <a href="#/settings">Налаштування</a>; ЄСВ та інші витрати не враховано. Звіряйте з бухгалтером.</p>`;
   $('#seg').onclick = e => { const b = e.target.closest('[data-p]'); if (b) { period = b.dataset.p; dashboard(); } };
   const ab = $('#ab'); if (ab) ab.onclick = () => { ordersState = { status: 'abandoned', q: '', page: 1 }; };
   let table = false; $('#tg').onclick = () => { table = !table; $('#tg').textContent = table ? 'Графік' : 'Таблиця';
@@ -164,7 +164,7 @@ async function openOrder(id) {
       <label class="f">Спосіб<select id="rm"><option value="auto">Автоматично через Monobank</option><option value="manual">Я вже повернув(ла) кошти вручну (лише відмітка)</option></select></label>
       <label class="row muted"><input type="checkbox" id="rv" checked> закрити клієнтам доступ до календаря</label>
       <label class="row muted"><input type="checkbox" id="rnf" checked> надіслати покупцю лист про повернення</label>
-      <div class="muted">«Автоматично»: гроші повертає Monobank на картку покупця (зазвичай до 10 банківських днів). Для безкоштовних замовлень API не викликається.</div><div><button class="btn danger" id="rfok">Підтвердити повернення</button></div></div>` : ''}</div>
+      <div class="muted">«Автоматично»: гроші повертає Monobank на картку покупця (до 3 робочих днів, залежить також від банку клієнта). Повернення в день оплати комісію банку не стягує, в інший день комісію банк не повертає. Для безкоштовних замовлень API не викликається.</div><div><button class="btn danger" id="rfok">Підтвердити повернення</button></div></div>` : ''}</div>
   <div class="card sec"><h2>Нотатка менеджера</h2><textarea id="nt" rows="3" maxlength="1000">${esc(o.note || '')}</textarea><div><button class="btn ghost sm" id="ns">Зберегти нотатку</button></div></div>
   <div class="card sec"><h2>Історія дій</h2><div class="log">${r.log.map(l => `<div>${dt(l.at)} · ${esc(l.admin_email)} · <b>${esc(l.action)}</b> ${l.detail ? esc(l.detail) : ''}</div>`).join('') || 'Дій ще не було'}</div></div></div>`;
   document.body.appendChild(ov);
@@ -249,15 +249,16 @@ async function settings() {
   <div class="card sec" style="max-width:620px;margin-top:14px"><h2>Відсотки для розрахунку прибутку</h2>
     <div class="muted">Ці відсотки використовує лише дашборд для орієнтовного чистого прибутку. На ціну для клієнтів і на самі платежі вони не впливають.</div>
     <form id="sf" class="grid" style="gap:12px">
-      <label class="f">Комісія еквайрингу Monobank, %<input id="s1" type="number" step="0.01" min="0" max="100" value="${v.fee_percent}" required></label>
+      <label class="f">Комісія Monobank з українських карток, %<input id="s1" type="number" step="0.01" min="0" max="100" value="${v.fee_percent}" required></label>
+      <label class="f">Комісія Monobank з іноземних карток, %<input id="s1f" type="number" step="0.01" min="0" max="100" value="${v.fee_foreign_percent}" required></label>
       <label class="f">Єдиний податок, % від доходу<input id="s2" type="number" step="0.01" min="0" max="100" value="${v.tax_percent}" required></label>
       <label class="f">Військовий збір, % від доходу<input id="s3" type="number" step="0.01" min="0" max="100" value="${v.military_percent}" required></label>
     </form>
-    <div class="muted">Орієнтовні значення: ЄП 3 група 5% і військовий збір 1%, комісію візьміть із договору з банком. ЄСВ (фіксована сума) не враховується. Уточніть у бухгалтера.</div>
+    <div class="muted">За даними Monobank: 1,3% з українських карток і 2% з іноземних (країну беремо із замовлення). Повернення в день оплати комісію не стягує, в інший день комісія не повертається. ЄП 3 група 5% і військовий збір 1%: уточніть у бухгалтера. ЄСВ (фіксована сума) не враховується.</div>
     <div><button class="btn" id="ss">Зберегти</button></div></div>
 `;
   $('#sp').onclick = async () => { const el = $('#s0'); if (!el.reportValidity()) return; try { if (!$('#s00').reportValidity()) return; await api('POST', '/api/admin/settings', { price_uah: el.value, usd_rate: $('#s00').value }); toast('Збережено: ' + UAH(Math.round(Number(el.value) * 100))); } catch (e) { toast(errText(e)); } };
-  $('#ss').onclick = async () => { if (!$('#sf').reportValidity()) return; try { await api('POST', '/api/admin/settings', { fee_percent: $('#s1').value, tax_percent: $('#s2').value, military_percent: $('#s3').value }); toast('Збережено'); } catch (e) { toast(errText(e)); } };
+  $('#ss').onclick = async () => { if (!$('#sf').reportValidity()) return; try { await api('POST', '/api/admin/settings', { fee_percent: $('#s1').value, fee_foreign_percent: $('#s1f').value, tax_percent: $('#s2').value, military_percent: $('#s3').value }); toast('Збережено'); } catch (e) { toast(errText(e)); } };
 }
 
 /* ---------- Журнал ---------- */
