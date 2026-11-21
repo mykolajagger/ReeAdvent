@@ -79,9 +79,12 @@ async function geocode(name, country, fetchImpl) {
   const lat = Number(j[0].lat), lon = Number(j[0].lon); return isFinite(lat) && isFinite(lon) ? { lat, lon } : null;
 }
 const flt = f => Object.entries(f).map(([k, v]) => Array.isArray(v) ? `["${k}"~"^(${v.join('|')})$"]` : String(v).startsWith('!') ? `["${k}"!~"^(${v.slice(1)})$"]` : `["${k}"="${v}"]`).join('');
-export function overpassQuery(lat, lon) {
-  const sets = Object.values(CATS).map(fs => `(${fs.map(f => `nwr${flt(f)}["name"](around:${RADIUS},${lat},${lon});`).join('')});out center tags ${PER_SET};`);
-  return `[out:json][timeout:60][maxsize:67108864];${sets.join('')}`;
+// Запити діляться на групи (великі міста типу Києва не витримують одного запиту на 33 категорії) і йдуть за прямокутником — це швидше за «around»
+export const CAT_GROUPS = [['cafe', 'restaurant', 'bar', 'pastry'], ['cinema', 'theatre', 'museum', 'park', 'viewpoint', 'garden', 'castle', 'church', 'market'],
+  ['bowling', 'billiards', 'pool', 'spa', 'rink', 'climbing', 'yoga', 'shelter'], ['books', 'florist', 'gift', 'coffee', 'tea', 'wine', 'beer', 'cheese', 'photo', 'jewelry', 'toys', 'beauty']];
+export function overpassQueries(lat, lon) {
+  const dLat = RADIUS / 111200, dLon = RADIUS / (111200 * Math.cos(lat * Math.PI / 180)), bbox = [lat - dLat, lon - dLon, lat + dLat, lon + dLon].map(x => x.toFixed(5)).join(',');
+  return CAT_GROUPS.map(g => `[out:json][timeout:30][maxsize:67108864];${g.map(cat => `(${CATS[cat].map(f => `nwr${flt(f)}["name"](${bbox});`).join('')});out center tags ${PER_SET};`).join('')}`);
 }
 async function overpass(query, fetchImpl) {
   let last;
@@ -126,13 +129,17 @@ async function fillCity(env, c, fetchImpl) {
       if (twin) { await env.DB.prepare("UPDATE venue_cities SET priority = 1 WHERE id = ? AND status = 'pending'").bind(twin.id).run(); await env.DB.prepare("UPDATE venue_cities SET alias_of = ?, lat = ?, lon = ?, status = 'ready', fetched_at = ? WHERE id = ?").bind(twin.id, lat, lon, now, c.id).run(); return { city: c.key, status: 'alias' }; }
       await env.DB.prepare('UPDATE venue_cities SET lat = ?, lon = ? WHERE id = ?').bind(lat, lon, c.id).run();
     }
-    const data = await overpass(overpassQuery(lat, lon), fetchImpl);
-    const rows = pickVenues(data.elements, lat, lon);
+    const els = [], failed = []; let lastErr;
+    for (const [i, q] of overpassQueries(lat, lon).entries()) {
+      try { els.push(...((await overpass(q, fetchImpl)).elements || [])); } catch (e) { failed.push(i + 1); lastErr = e; }
+    }
+    if (failed.length === CAT_GROUPS.length) throw lastErr;     // не відповіла жодна група — повтор пізніше
+    const rows = pickVenues(els, lat, lon);
     const st = rows.map(v => env.DB.prepare('INSERT INTO venues (city_id, osm, cat, name, address, lat, lon, prior, hours, seen_at) VALUES (?,?,?,?,?,?,?,?,?,?) ON CONFLICT(city_id, osm, cat) DO UPDATE SET name = excluded.name, address = excluded.address, lat = excluded.lat, lon = excluded.lon, prior = excluded.prior, hours = excluded.hours, seen_at = excluded.seen_at').bind(c.id, v.osm, v.cat, v.name, v.address, v.lat, v.lon, v.prior, v.hours, now));
     for (let i = 0; i < st.length; i += 100) await env.DB.batch(st.slice(i, i + 100));
     if (rows.length) await env.DB.prepare('DELETE FROM venues WHERE city_id = ? AND seen_at < ? AND r_cnt = 0').bind(c.id, now).run(); // зниклі з OSM без оцінок прибираємо
-    await env.DB.prepare("UPDATE venue_cities SET status = 'ready', venues_count = ?, fetched_at = ?, attempts = 0, error = NULL WHERE id = ?").bind(rows.length, now, c.id).run();
-    return { city: c.key, status: 'ready', venues: rows.length };
+    await env.DB.prepare("UPDATE venue_cities SET status = 'ready', venues_count = ?, fetched_at = ?, attempts = 0, error = ? WHERE id = ?").bind(rows.length, now, failed.length ? 'partial: групи ' + failed.join(',') : null, c.id).run();
+    return { city: c.key, status: 'ready', venues: rows.length, ...(failed.length ? { failedGroups: failed } : {}) };
   } catch (e) {
     const failed = c.attempts + 1 >= 3;
     await env.DB.prepare('UPDATE venue_cities SET attempts = attempts + 1, status = ?, error = ?, fetched_at = ? WHERE id = ?').bind(failed ? 'failed' : (c.prev === 'ready' ? 'ready' : 'pending'), String(e.message || e).slice(0, 120), now, c.id).run();

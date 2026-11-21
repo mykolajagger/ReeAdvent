@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import path from 'node:path'; import { fileURLToPath } from 'node:url';
 import { makeDb } from './d1.js';
 import { handle } from '../src/api.js';
-import { runVenues, venuePicks, rateVenue, ensureCity, catOfQuery, catOfGift, formatHours, cityKey, overpassQuery, pickVenues, venueStats, CATS } from '../src/venues.js';
+import { runVenues, venuePicks, rateVenue, ensureCity, catOfQuery, catOfGift, formatHours, cityKey, overpassQueries, CAT_GROUPS, pickVenues, venueStats, CATS } from '../src/venues.js';
 import { TOP_CITIES } from '../src/top_cities.js';
 const root = path.join(path.dirname(fileURLToPath(import.meta.url)), '..');
 const db = makeDb(root), raw = db._raw;
@@ -13,7 +13,7 @@ assert.equal(catOfQuery('кав’ярня Львів'), 'cafe'); assert.equal(c
 assert.equal(catOfQuery('майстер-клас кераміка X'), null); assert.equal(catOfQuery('ліс X прогулянка'), 'park'); assert.equal(catOfQuery('жива музика X'), 'bar');
 assert.equal(cityKey('ua', 'Ľviv'), 'UA|lviv'); assert(TOP_CITIES.length > 280 && TOP_CITIES.filter(c => c[0] === 'UA').length >= 24);
 assert(!TOP_CITIES.some(c => ['Donetsk', 'Luhansk', 'Simferopol'].includes(c[1])), 'окуповані міста не в базі');
-const q = overpassQuery(49.84, 24.03); assert(q.includes('"amenity"="cafe"') && q.includes('around:8000,49.84,24.03') && q.includes('"access"!~'), q.slice(0, 200));
+const qs = overpassQueries(49.84, 24.03), q = qs.join('\n'); assert.equal(qs.length, 4); assert(q.includes('"amenity"="cafe"') && q.includes('"access"!~') && q.includes('timeout:30') && !q.includes('around'), q.slice(0, 300)); assert.deepEqual([...CAT_GROUPS.flat()].sort(), Object.keys(CATS).sort(), 'кожна категорія входить рівно в одну групу');
 
 // ----- подарунки: де купити; години роботи
 assert.equal(catOfGift('обсмажка кави {city}'), 'coffee'); assert.equal(catOfGift('винна крамниця {city}'), 'wine'); assert.equal(catOfGift('срібний кулон'), 'jewelry'); assert.equal(catOfGift('кав’ярня {city}'), 'cafe'); assert.equal(catOfGift('плед флісовий'), null);
@@ -109,4 +109,10 @@ for (const n of ['Яремче', 'Косів']) { await ensureCity(env, 'UA', n)
 const par = await Promise.all([runVenues(env, { fetchImpl: mockFetch }), runVenues(env, { fetchImpl: mockFetch })]);
 assert.deepEqual(par.map(x => x.city).sort(), ['UA|косів', 'UA|яремче'], JSON.stringify(par));
 assert.equal(raw.prepare("SELECT COUNT(*) AS n FROM venue_cities WHERE status = 'working'").get().n, 0, 'захоплення знято');
+// ----- часткова відповідь: одна група запитів не відповіла, місто все одно готове
+raw.prepare("UPDATE venue_cities SET status = 'ready', fetched_at = ?").run(Date.now() + 864e5 * 400);
+await ensureCity(env, 'UA', 'Косів2'); raw.prepare("UPDATE venue_cities SET lat = 48.3, lon = 25.0 WHERE key = ?").run(cityKey('UA', 'Косів2'));
+let n = 0; const flaky = async (url, init) => String(url).includes('overpass') && ++n >= 3 && n <= 4 ? new Response('x', { status: 504 }) : mockFetch(url, init); // 3-й і 4-й виклики: група 3 (обидва дзеркала)
+const part = await runVenues(env, { fetchImpl: flaky }); assert.equal(part.status, 'ready'); assert.deepEqual(part.failedGroups, [3], JSON.stringify(part));
+assert.match(raw.prepare("SELECT error FROM venue_cities WHERE key = 'UA|косів2'").get().error, /partial/);
 console.log('VENUES OK');
