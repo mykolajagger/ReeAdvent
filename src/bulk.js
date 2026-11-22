@@ -12,6 +12,11 @@ export function osmiumExpressions() {
   return Object.entries(m).map(([k, set]) => `nwr/${k}=${[...set].join(',')}`);
 }
 
+/** Країни, які Geofabrik віддає у спільних або по-іншому названих вигрузках (id вигрузки в каталозі). */
+export const GEOFABRIK_ALIAS = { AE: 'gcc-states', SA: 'gcc-states', QA: 'gcc-states', KW: 'gcc-states', BH: 'gcc-states', OM: 'gcc-states', IL: 'israel-and-palestine', PS: 'israel-and-palestine',
+  MY: 'malaysia-singapore-brunei', SG: 'malaysia-singapore-brunei', BN: 'malaysia-singapore-brunei', MK: 'macedonia', BA: 'bosnia-herzegovina', SN: 'senegal-and-gambia', GM: 'senegal-and-gambia',
+  TW: 'taiwan', CZ: 'czech-republic', GB: 'united-kingdom', IE: 'ireland-and-northern-ireland', KR: 'south-korea', ZA: 'south-africa', NZ: 'new-zealand', DO: 'haiti-and-domrep', HT: 'haiti-and-domrep',
+  TL: 'east-timor', MM: 'myanmar', LA: 'laos', KH: 'cambodia', RS: 'serbia', XK: 'kosovo', LK: 'sri-lanka', CD: 'congo-democratic-republic', CG: 'congo-brazzaville', CI: 'ivory-coast', SZ: 'swaziland' };
 const slug = s => String(s || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
 const codesOf = p => { const out = []; for (const [k, v] of Object.entries(p)) if (/alpha2|iso3166-1/i.test(k)) for (const x of [].concat(v)) if (typeof x === 'string') out.push(x.toUpperCase()); return out; };
 /** Знаходить вигрузку країни в індексі Geofabrik (index-v1-nogeom.json): за кодом ISO (найвужча вигрузка перемагає), а якщо поля з кодами немає, за назвою країни. */
@@ -19,6 +24,8 @@ export function findPbf(index, cc, countryName = null) {
   const props = ((index && index.features) || []).map(f => f.properties).filter(p => p && p.urls && p.urls.pbf);
   const byCode = props.filter(p => codesOf(p).includes(cc)).sort((a, b) => codesOf(a).length - codesOf(b).length || String(a.id).length - String(b.id).length)[0];
   if (byCode) return { id: byCode.id, url: byCode.urls.pbf, shared: codesOf(byCode).length > 1 };
+  const al = GEOFABRIK_ALIAS[cc], byAlias = al && props.find(p => String(p.id) === al || String(p.id).split('/').pop() === al);
+  if (byAlias) return { id: byAlias.id, url: byAlias.urls.pbf, shared: true };
   if (countryName) {                                                         // запасний варіант: назва країни = назва вигрузки (Ukraine → ukraine)
     const want = slug(countryName), byName = props.find(p => slug(p.name) === want || String(p.id).split('/').pop() === want);
     if (byName) return { id: byName.id, url: byName.urls.pbf, shared: false };
@@ -83,4 +90,10 @@ export async function queueCountries(env, now = Date.now()) {
 export async function queueCities(env, cc, now = Date.now()) {
   const { results } = await env.DB.prepare(`SELECT * FROM venue_cities WHERE country = ?4 AND ${NEED} ORDER BY priority DESC, requested_at`).bind(...needArgs(now), cc).all();
   return results;
+}
+
+/** Варіанти адреси файлу: з каталогу (europe/ukraine/ukraine-latest…) і «пласка» (europe/ukraine-latest…). Geofabrik інколи віддає лише одну з них. */
+export function urlVariants(url) {
+  const m = String(url).match(/^(.*)\/([^/]+)\/\2-latest\.osm\.pbf$/);
+  return m ? [url, `${m[1]}/${m[2]}-latest.osm.pbf`] : [url];
 }

@@ -6,7 +6,7 @@ import fs from 'node:fs'; import path from 'node:path'; import os from 'node:os'
 import { spawnSync } from 'node:child_process';
 import { makeRestDb } from './d1-rest.mjs';
 import { pickVenues, storeCityVenues, resolveCoords } from '../src/venues.js';
-import { osmiumExpressions, findPbf, describeIndex, parseFeature, CityIndex, queueCountries, queueCities } from '../src/bulk.js';
+import { osmiumExpressions, findPbf, describeIndex, urlVariants, parseFeature, CityIndex, queueCountries, queueCities } from '../src/bulk.js';
 
 const { CLOUDFLARE_API_TOKEN: token, CLOUDFLARE_ACCOUNT_ID: accountId, D1_DATABASE_ID: databaseId } = process.env;
 if (!token || !accountId || !databaseId) { console.error('Потрібні CLOUDFLARE_API_TOKEN, CLOUDFLARE_ACCOUNT_ID, D1_DATABASE_ID'); process.exit(1); }
@@ -62,13 +62,16 @@ async function processCountry(cc) {
   let cname = null; try { cname = new Intl.DisplayNames(['en'], { type: 'region' }).of(cc); } catch {}
   const pbf = findPbf(idx, cc, cname);
   if (!pbf) { log('УВАГА: у каталозі Geofabrik немає країни', cc, cname, '|', describeIndex(idx)); await skipCountry(cc, 'немає вигрузки Geofabrik', 1); return; }
-  const head = await fetchRetry(pbf.url, { method: 'HEAD' }); const gb = Number(head.headers.get('content-length') || 0) / 1e9;
+  let url = null, gb = 0, herr;
+  for (const u of urlVariants(pbf.url)) { try { const head = await fetchRetry(u, { method: 'HEAD' }, 3); url = u; gb = Number(head.headers.get('content-length') || 0) / 1e9; break; } catch (e) { herr = e; log('адреса не відповідає:', u); } }
+  if (!url) throw herr || new Error('вигрузка недоступна');
+  pbf.url = url;
   log(`вигрузка ${pbf.id}: ${gb.toFixed(2)} ГБ`, pbf.shared ? '(спільна для кількох країн)' : '');
   if (gb > MAX_GB) { await skipCountry(cc, `файл ${gb.toFixed(1)} ГБ більший за ліміт ${MAX_GB} ГБ`, 30); return; }
 
   const f = n => path.join(WORK, `${cc}-${n}`), inPbf = f('in.osm.pbf'), outPbf = f('f.osm.pbf'), seq = f('out.geojsonseq');
   try {
-    run('curl', ['-L', '--fail', '--retry', '3', '--retry-delay', '10', '-sS', '-o', inPbf, pbf.url]);
+    run('curl', ['-L', '--fail', '--retry', '5', '--retry-delay', '20', '--retry-all-errors', '--connect-timeout', '60', '-sS', '-o', inPbf, pbf.url]);
     log(`завантажено ${fileGB(inPbf).toFixed(2)} ГБ за ${Math.round((Date.now() - t1) / 1000)} с`);
     run('osmium', ['tags-filter', inPbf, ...osmiumExpressions(), '-o', outPbf, '--overwrite']); fs.rmSync(inPbf);
     run('osmium', ['export', outPbf, '-f', 'geojsonseq', '--add-unique-id=type_id', '-o', seq, '--overwrite']); fs.rmSync(outPbf);
@@ -99,6 +102,7 @@ while (Date.now() - T0 < BUDGET) {
   const cc = forced.length ? forced.shift() : (process.argv.length > 2 ? null : await pickCountry(done));
   if (!cc) { log('черга порожня'); break; }
   done.add(cc);
+  if (done.size > 1) await sleep(20000);   // пауза між країнами: Geofabrik обмежує частоту завантажень
   try { await processCountry(cc); await unskipCountry(cc); await save({ at: Date.now(), out: { bulk: cc, status: 'done' } }); }
   catch (e) { log('ПОМИЛКА', cc, String(e && e.stack || e).slice(0, 500)); await skipCountry(cc, String(e && e.message || e).slice(0, 120), 0.25); await save({ at: Date.now(), error: `bulk ${cc}: ${String(e && e.message || e).slice(0, 200)}` }); }
 }

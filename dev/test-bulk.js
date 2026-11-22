@@ -2,7 +2,7 @@
 import assert from 'node:assert/strict';
 import path from 'node:path'; import { fileURLToPath } from 'node:url';
 import { makeDb } from './d1.js';
-import { osmiumExpressions, findPbf, describeIndex, centerOf, parseFeature, CityIndex, queueCountries, queueCities } from '../src/bulk.js';
+import { osmiumExpressions, findPbf, describeIndex, urlVariants, centerOf, parseFeature, CityIndex, queueCountries, queueCities } from '../src/bulk.js';
 import { pickVenues, storeCityVenues, venuePicks, cityKey, dist } from '../src/venues.js';
 const root = path.join(path.dirname(fileURLToPath(import.meta.url)), '..'), db = makeDb(root), raw = db._raw, env = { DB: db };
 
@@ -25,6 +25,10 @@ assert.equal(findPbf(idx, 'ZZ'), null); assert.equal(findPbf({ features: [{ prop
 assert.equal(findPbf({ features: [{ properties: { id: 'ukraine', 'iso3166-1:alpha2': 'UA', urls: { pbf: 'https://x/u2.pbf' } } }] }, 'UA').url, 'https://x/u2.pbf', 'код рядком, а не масивом'); assert.equal(findPbf(idx, 'FR'), null); assert.equal(findPbf({}, 'UA'), null);
 
 assert(describeIndex(idx).includes('з pbf 4'), describeIndex(idx));
+const gccIdx = { features: [{ properties: { id: 'gcc-states', name: 'GCC States', urls: { pbf: 'https://x/asia/gcc-states-latest.osm.pbf' } } }, { properties: { id: 'israel-and-palestine', name: 'Israel and Palestine', urls: { pbf: 'https://x/asia/israel-and-palestine-latest.osm.pbf' } } }] };
+assert.equal(findPbf(gccIdx, 'AE', 'United Arab Emirates').id, 'gcc-states'); assert.equal(findPbf(gccIdx, 'SA').id, 'gcc-states'); assert.equal(findPbf(gccIdx, 'IL', 'Israel').id, 'israel-and-palestine'); assert.equal(findPbf(gccIdx, 'AE').shared, true);
+assert.deepEqual(urlVariants('https://d/europe/ukraine/ukraine-latest.osm.pbf'), ['https://d/europe/ukraine/ukraine-latest.osm.pbf', 'https://d/europe/ukraine-latest.osm.pbf']);
+assert.deepEqual(urlVariants('https://d/asia/gcc-states-latest.osm.pbf'), ['https://d/asia/gcc-states-latest.osm.pbf']);
 
 // ----- розбір рядків geojsonseq
 assert.deepEqual(centerOf({ type: 'Point', coordinates: [24, 49] }), [24, 49]);
