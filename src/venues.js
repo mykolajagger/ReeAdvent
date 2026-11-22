@@ -128,6 +128,12 @@ export const dist = (a, b, c, d) => Math.hypot((a - c) * 111.2, (b - d) * 111.2 
 
 const parseDate = s => { if (!s) return 0; const m = String(s).match(/^(\d{4})(?:-(\d{2}))?(?:-(\d{2}))?$/); if (m) return Date.UTC(+m[1], m[2] ? +m[2] - 1 : 0, m[3] ? +m[3] : 1); const t = Date.parse(s); return isFinite(t) ? t : 0; };
 const YEAR = 365.25 * 864e5;
+/** Прибирає дублі: однакова назва (без регістру й розділових знаків) і відстань до 80 м — лишається перший (список має бути впорядкований за пріоритетом). */
+export function dedupeByName(list) {
+  const key = v => String(v.name || '').toLowerCase().replace(/[^\p{L}\p{N}]+/gu, ''), kept = [];
+  for (const v of list) if (!kept.some(k => key(k) === key(v) && dist(k.lat, k.lon, v.lat, v.lon) < 0.08)) kept.push(v);
+  return kept;
+}
 /** Ознаки, що заклад закритий: disused/abandoned/closed, opening_hours=off, end_date у минулому. */
 export const isClosedTags = (t, now = Date.now()) => t.disused === 'yes' || t.abandoned === 'yes' || t.closed === 'yes' || t.opening_hours === 'off' || t.opening_hours === 'closed' || (!!t.end_date && parseDate(t.end_date) > 0 && parseDate(t.end_date) < now);
 /** Перетворює відповідь Overpass на рядки для БД: до KEEP найкращих у кожній категорії за «багатством» тегів і близькістю до центру. */
@@ -153,7 +159,7 @@ export function pickVenues(elements, lat, lon) {
       (byCat[cat] ||= []).push({ osm, cat, name, address, lat: la, lon: lo, prior: Math.round(prior * 100) / 100, hours: t.opening_hours ? String(t.opening_hours).slice(0, 120) : null, edited: fresh || null });
     }
   }
-  return Object.values(byCat).flatMap(a => a.sort((x, y) => y.prior - x.prior).slice(0, KEEP));
+  return Object.values(byCat).flatMap(a => dedupeByName(a.sort((x, y) => y.prior - x.prior)).slice(0, KEEP));
 }
 
 // ---------- Наповнення одного міста ----------
@@ -295,7 +301,7 @@ export async function venuePicks(env, { country, city, cat, seedKey, lang = 'uk'
   // «Немає в Overture» відсікаємо, якщо є хоча б 3 підтверджені, але не чіпаємо заклади, які нещодавно (до ~14 міс.) редагували або перевіряли в OSM: це можуть бути нові заклади
   const recent = v => v.edited && Date.now() - v.edited < 14 * 30.4 * 864e5, solid = ok.filter(v => v.ov_state !== 'miss' || recent(v)), pool = solid.length >= 3 ? solid : ok;
   pool.sort((a, b) => score(b) - score(a));
-  const top = pool.slice(0, 12).map(v => ({ v, k: hash(seedKey + ':' + v.id) })).sort((a, b) => a.k - b.k).slice(0, 3).map(x => x.v);
+  const top = dedupeByName(pool).slice(0, 12).map(v => ({ v, k: hash(seedKey + ':' + v.id) })).sort((a, b) => a.k - b.k).slice(0, 3).map(x => x.v);
   return top.sort((a, b) => bayes(b) - bayes(a)).map(v => ({ id: v.id, name: v.name, address: v.address || '', km: c.lat != null && v.lat != null ? Math.round(dist(v.lat, v.lon, c.lat, c.lon) * 10) / 10 : null, hours: formatHours(v.hours, lang), rating: v.r_cnt >= 3 ? Math.round(v.r_sum / v.r_cnt * 10) / 10 : null, count: v.r_cnt,
     url: mapUrl(v, city), source: 'osm' }));
 }

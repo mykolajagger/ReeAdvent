@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import path from 'node:path'; import { fileURLToPath } from 'node:url';
 import { makeDb } from './d1.js';
 import { handle } from '../src/api.js';
-import { runVenues, venuePicks, rateVenue, ensureCity, catOfQuery, catOfGift, formatHours, cityKey, overpassProbe, setVenuesPaused, catalogCountries, catalogCities, catalogCity, reportVenue, setVenueHidden, mapUrl, isClosedTags, overpassQueries, CAT_GROUPS, pickVenues, venueStats, CATS } from '../src/venues.js';
+import { runVenues, venuePicks, rateVenue, ensureCity, catOfQuery, catOfGift, formatHours, cityKey, overpassProbe, setVenuesPaused, catalogCountries, catalogCities, catalogCity, dedupeByName, reportVenue, setVenueHidden, mapUrl, isClosedTags, overpassQueries, CAT_GROUPS, pickVenues, venueStats, CATS } from '../src/venues.js';
 import { TOP_CITIES } from '../src/top_cities.js';
 const root = path.join(path.dirname(fileURLToPath(import.meta.url)), '..');
 const db = makeDb(root), raw = db._raw;
@@ -150,4 +150,9 @@ assert.equal((await reportVenue(env, { memberId: 'r3', country: 'PL', city: 'Now
 await setVenueHidden(env, rv.id, false); assert.equal(raw.prepare('SELECT closed_reports AS n, hidden FROM venues WHERE id = ?').get(rv.id).n, 0, 'повернення скидає скарги');
 await setVenueHidden(env, rv.id, true); assert(!(await shown()).includes(rv.id), 'прихований адміном не показується'); await setVenueHidden(env, rv.id, false);
 assert((await catalogCity(env, raw.prepare('SELECT city_id AS c FROM venues WHERE id = ?').get(rv.id).c)).venues.every(v => 'hidden' in v && 'closed_reports' in v && 'edited' in v), 'каталог віддає прапорці');
+// ----- дублі (точка й будівля того самого закладу)
+const dd = dedupeByName([{ name: 'Lab Pub', lat: 48.6208, lon: 22.2879 }, { name: 'LAB  pub', lat: 48.6209, lon: 22.2880 }, { name: 'Lab Pub', lat: 48.7, lon: 22.4 }, { name: 'Labda', lat: 48.6208, lon: 22.2879 }]);
+assert.deepEqual(dd.map(x => x.name), ['Lab Pub', 'Lab Pub', 'Labda'], 'близький дубль прибрано, однойменний далеко залишено');
+const dupRows = pickVenues([{ type: 'node', id: 1, lat: 48.6208, lon: 22.2879, tags: { amenity: 'pub', name: 'Lab Pub', website: 'x' } }, { type: 'way', id: 2, center: { lat: 48.62082, lon: 22.28792 }, tags: { amenity: 'pub', name: 'Lab Pub' } }], 48.62, 22.29);
+assert.equal(dupRows.length, 1); assert.equal(dupRows[0].osm, 'n1', 'лишається запис із вищим пріоритетом');
 console.log('VENUES OK');
