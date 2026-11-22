@@ -170,12 +170,17 @@ $('#of').addEventListener('submit', async e => {
 });
 })();
 
-/* ---------- Стрічка Instagram (з сервера; якщо акаунт не підключено, секція прихована) ---------- */
+/* ---------- Стрічка Instagram: або картинки з API, або вбудовані пости (embed); без обох секція прихована ---------- */
 (async () => {
   try {
-    const r = await fetch('/api/instagram'), j = await r.json(); if (!j.ok || !j.posts || !j.posts.length) return;
+    const r = await fetch('/api/instagram'), j = await r.json(); if (!j.ok) return;
     const grid = document.getElementById('ig-grid'), sec = document.getElementById('ig'); if (!grid || !sec) return;
-    grid.innerHTML = j.posts.map(p => `<a class="ig-post" href="${encodeURI(p.link)}" target="_blank" rel="noopener noreferrer" aria-label="Instagram"><img src="${encodeURI(p.img)}" alt="${String(p.alt || 'Instagram').replace(/"/g, '&quot;').replace(/</g, '&lt;')}" loading="lazy" decoding="async" referrerpolicy="no-referrer"></a>`).join('');
+    if (j.posts && j.posts.length) {
+      grid.innerHTML = j.posts.map(p => `<a class="ig-post" href="${encodeURI(p.link)}" target="_blank" rel="noopener noreferrer" aria-label="Instagram"><img src="${encodeURI(p.img)}" alt="${String(p.alt || 'Instagram').replace(/"/g, '&quot;').replace(/</g, '&lt;')}" loading="lazy" decoding="async" referrerpolicy="no-referrer"></a>`).join('');
+    } else if (j.embeds && j.embeds.length) {
+      grid.classList.add('ig-embeds');
+      grid.innerHTML = j.embeds.filter(e => /^(p|reel|tv)$/.test(e.t) && /^[A-Za-z0-9_-]{5,20}$/.test(e.c)).map(e => `<iframe class="ig-embed" src="https://www.instagram.com/${e.t}/${e.c}/embed/" title="Instagram" loading="lazy" scrolling="no" allowtransparency="true" sandbox="allow-scripts allow-same-origin allow-popups allow-popups-to-escape-sandbox"></iframe>`).join('');
+    } else return;
     sec.hidden = false;
   } catch { /* стрічка необов'язкова */ }
 })();

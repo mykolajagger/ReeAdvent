@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import path from 'node:path'; import { fileURLToPath } from 'node:url';
 import { makeDb } from './d1.js';
 import { handle } from '../src/api.js';
-import { mapPosts, instagramFeed, saveToken, refreshToken, igStatus, disconnect, getToken, IG_URL, IG_HANDLE } from '../src/instagram.js';
+import { mapPosts, parseEmbeds, saveEmbeds, getEmbeds, embedsText, instagramFeed, saveToken, refreshToken, igStatus, disconnect, getToken, IG_URL, IG_HANDLE } from '../src/instagram.js';
 const root = path.join(path.dirname(fileURLToPath(import.meta.url)), '..'), db = makeDb(root), env = { DB: db, DEV: '1', CRON_SECRET: 'c'.repeat(24), BASE_URL: 'http://x', PAYMENT_MODE: 'stub', EMAIL_MODE: 'stub', PRICE_UAH: '400' };
 assert.equal(IG_HANDLE, 'reeadvent'); assert.equal(IG_URL, 'https://www.instagram.com/reeadvent/');
 
@@ -58,8 +58,14 @@ st = await igStatus(env, T0 + 400 * 864e5); assert.deepEqual([st.connected, st.n
 ok = true; calls = 0; calledUrls.length = 0; const fbPosts = await instagramFeed(env, { fetchImpl: fakeFetch, now: T0 + 5 }); assert.equal(fbPosts.length, 6); assert(calledUrls.some(u => u.startsWith('https://graph.facebook.com/v23.0/17841400000000000/media?')), calledUrls.join(' '));
 assert.equal((await refreshToken(env, { fetchImpl: fakeFetch, now: T0 + 90 * 864e5 })).refreshed, false, 'токен без терміну дії не продовжується');
 await disconnect(env);
+// вбудовані пости (без токена)
+const em = parseEmbeds('https://www.instagram.com/p/ABCDEFG12345/\nhttps://instagram.com/reel/Zz-_9yyyyy/?igsh=abc, https://www.instagram.com/p/ABCDEFG12345/ https://evil.example/p/XXXXXXXXXX/ https://www.instagram.com/reeadvent/ javascript:alert(1) https://www.instagram.com/tv/abcd');
+assert.deepEqual(em, [{ t: 'p', c: 'ABCDEFG12345' }, { t: 'reel', c: 'Zz-_9yyyyy' }], JSON.stringify(em));
+assert.equal(parseEmbeds(Array.from({ length: 9 }, (_, i) => `https://www.instagram.com/p/CODE${i}abcde/`).join('\n')).length, 6, 'не більше 6');
+assert.deepEqual(await getEmbeds(env), []); await saveEmbeds(env, 'https://www.instagram.com/p/ABCDEFG12345/'); assert.equal(embedsText(await getEmbeds(env)), 'https://www.instagram.com/p/ABCDEFG12345/'); assert.equal((await igStatus(env)).embeds, 1);
+const pubE = await (await handle(new Request('http://x/api/instagram'), env)).json(); assert.deepEqual(pubE.embeds, [{ t: 'p', c: 'ABCDEFG12345' }]);
 // публічний API й захист адмінки
 const pub = await handle(new Request('http://x/api/instagram'), env); const pj = await pub.json();
 assert.equal(pub.status, 200); assert.deepEqual([pj.ok, pj.handle, pj.posts], [true, 'reeadvent', []]); assert.match(pub.headers.get('cache-control'), /max-age=600/);
-for (const [m, p, b] of [['GET', '/api/admin/instagram'], ['POST', '/api/admin/instagram/token', { token: GOOD }], ['POST', '/api/admin/instagram/disconnect', {}]]) assert([401, 403].includes((await handle(new Request('http://x' + p, { method: m, headers: { 'x-admin': '1', 'content-type': 'application/json' }, body: b ? JSON.stringify(b) : undefined }), env)).status), p);
+for (const [m, p, b] of [['GET', '/api/admin/instagram'], ['POST', '/api/admin/instagram/token', { token: GOOD }], ['POST', '/api/admin/instagram/disconnect', {}], ['POST', '/api/admin/instagram/embeds', { text: 'x' }]]) assert([401, 403].includes((await handle(new Request('http://x' + p, { method: m, headers: { 'x-admin': '1', 'content-type': 'application/json' }, body: b ? JSON.stringify(b) : undefined }), env)).status), p);
 console.log('INSTAGRAM OK');

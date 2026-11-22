@@ -1,6 +1,6 @@
 import { GIFTS, INTIMATE, ACTIVITIES, QUESTIONS, REGIONS, generateSchedule, sanitizeSurvey, giftView, intimView, actView, questionText, placesQuery } from './logic.js';
 import { recommend } from './places.js';
-import { instagramFeed, IG_HANDLE } from './instagram.js';
+import { instagramFeed, getEmbeds, IG_HANDLE } from './instagram.js';
 import { ensureCity, runVenuesLogged as runVenues, venuePicks, rateVenue, reportVenue, catOfQuery, catOfGift } from './venues.js';
 import { createInvoice, verifyPaid, invoiceStatus } from './payments.js';
 import { verifyTurnstile } from './turnstile.js';
@@ -28,7 +28,7 @@ export async function handle(request, env) {
     const path = url.pathname.replace(/\/+$/, '');
     const m = request.method;
     if (m === 'GET' && path === '/api/config') return await configResponse(request, env);
-    if (m === 'GET' && path === '/api/instagram') return json({ ok: true, handle: IG_HANDLE, posts: await instagramFeed(env) }, 200, { 'cache-control': 'public, max-age=600' });
+    if (m === 'GET' && path === '/api/instagram') return json({ ok: true, handle: IG_HANDLE, posts: await instagramFeed(env), embeds: await getEmbeds(env) }, 200, { 'cache-control': 'public, max-age=600' });
     if (m === 'POST' && path === '/api/orders') return await createOrder(request, env);
     if (m === 'POST' && path === '/api/promo/check') return await promoCheck(request, env);
     let r;

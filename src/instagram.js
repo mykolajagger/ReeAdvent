@@ -53,8 +53,8 @@ export async function saveToken(env, token, { igId = '', fetchImpl = fetch, now 
 export async function disconnect(env) { for (const k of ['ig_token', 'ig_meta', 'ig_cache', 'ig_mode', 'ig_id']) await setSetting(env, k, ''); }
 
 export async function igStatus(env, now = Date.now()) {
-  const meta = parse(await getSetting(env, 'ig_meta')), token = await getToken(env);
-  return { connected: !!token, viaSecret: !(await getSetting(env, 'ig_token')) && !!env.INSTAGRAM_TOKEN, username: meta ? meta.username : null, expiresAt: meta ? meta.expires_at : null, neverExpires: !!(meta && meta.never), daysLeft: meta && meta.expires_at ? Math.max(0, Math.floor((meta.expires_at - now) / DAY)) : null };
+  const meta = parse(await getSetting(env, 'ig_meta')), token = await getToken(env), embeds = await getEmbeds(env);
+  return { embeds: embeds.length, embedsText: embedsText(embeds), connected: !!token, viaSecret: !(await getSetting(env, 'ig_token')) && !!env.INSTAGRAM_TOKEN, username: meta ? meta.username : null, expiresAt: meta ? meta.expires_at : null, neverExpires: !!(meta && meta.never), daysLeft: meta && meta.expires_at ? Math.max(0, Math.floor((meta.expires_at - now) / DAY)) : null };
 }
 
 /** Раз на 7 днів продовжує довгоживучий токен (діє 60 днів). Викликається щогодини з cron, але працює лише коли настав час. */
@@ -70,3 +70,15 @@ export async function refreshToken(env, { fetchImpl = fetch, now = Date.now() } 
     return { refreshed: true };
   } catch { return { refreshed: false, error: 'unreachable' }; }
 }
+
+// ---------- Вбудовані пости (без API): адмін вставляє посилання на пости, на сайті показуються офіційні embed-блоки Instagram ----------
+const EMBED_RE = /^https:\/\/(?:www\.)?instagram\.com\/(p|reel|tv)\/([A-Za-z0-9_-]{5,20})\/?(?:\?.*)?$/;
+/** Розбирає текст (посилання по одному в рядку) у список { t, c }: тип і короткий код поста; до 6 унікальних. */
+export function parseEmbeds(text) {
+  const out = [], seen = new Set();
+  for (const line of String(text || '').split(/[\s,]+/)) { const m = line.trim().match(EMBED_RE); if (m && !seen.has(m[2])) { seen.add(m[2]); out.push({ t: m[1], c: m[2] }); } if (out.length >= 6) break; }
+  return out;
+}
+export async function getEmbeds(env) { return parse(await getSetting(env, 'ig_embeds')) || []; }
+export async function saveEmbeds(env, text) { const list = parseEmbeds(text); await setSetting(env, 'ig_embeds', JSON.stringify(list)); return list; }
+export const embedsText = list => (list || []).map(e => `https://www.instagram.com/${e.t}/${e.c}/`).join('\n');
