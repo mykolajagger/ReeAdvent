@@ -15,6 +15,36 @@ export async function loadManifest(fetchImpl = fetch, site = SITE) {
 }
 export async function pubState(env) { const s = parse(await getSetting(env, 'ig_pub')) || {}; return { done: s.done || {}, err: s.err || null, auto: (await getSetting(env, 'ig_auto')) === '1' }; }
 export const setAuto = (env, on) => setSetting(env, 'ig_auto', on ? '1' : '0');
+const emptyPlan = () => ({ order: [], posts: {} });
+export async function getPlan(env) { const p = parse(await getSetting(env, 'ig_plan')) || {}; return { order: Array.isArray(p.order) ? p.order : [], posts: p.posts && typeof p.posts === 'object' ? p.posts : {} }; }
+const savePlan = (env, plan) => setSetting(env, 'ig_plan', JSON.stringify(plan));
+/** Маніфест + правки адміна: порядок, свій підпис, запланований час. */
+export function effective(man, plan) {
+  const byId = Object.fromEntries(man.map(p => [p.id, p])), ids = [...plan.order.filter(i => byId[i]), ...man.map(p => p.id).filter(i => !plan.order.includes(i))];
+  return ids.map(id => { const p = byId[id], o = plan.posts[id] || {}; return { ...p, defaultCaption: p.caption, caption: typeof o.caption === 'string' ? o.caption : p.caption, at: Number.isFinite(o.at) ? o.at : null }; });
+}
+export const MAX_CAPTION = 2200;
+/** Зберігає правки одного поста: caption (рядок або null = стандартний), at (мс або null). Опубліковані пости не змінюються. */
+export async function editPost(env, id, { caption, at } = {}, man) {
+  const st = await pubState(env); if (!man.find(p => p.id === id)) return { ok: false, error: 'Немає такого поста' };
+  if (st.done[id]) return { ok: false, error: 'Пост уже опубліковано, його не можна змінити' };
+  const plan = await getPlan(env), o = plan.posts[id] = plan.posts[id] || {};
+  if (caption !== undefined) { if (caption === null) delete o.caption; else { caption = String(caption).replace(/\r/g, '').trim(); if (!caption || caption.length > MAX_CAPTION) return { ok: false, error: 'Підпис: від 1 до 2200 символів' }; if ((caption.match(/#[^\s#]+/g) || []).length > 30) return { ok: false, error: 'Не більше 30 хештегів' }; o.caption = caption; } }
+  if (at !== undefined) { if (at === null) delete o.at; else { at = Number(at); if (!Number.isFinite(at) || at < Date.now() - 864e5 || at > Date.now() + 400 * 864e5) return { ok: false, error: 'Некоректна дата' }; o.at = Math.round(at / 6e4) * 6e4; } }
+  await savePlan(env, plan); return { ok: true };
+}
+export async function setOrder(env, order, man) {
+  const ids = man.map(p => p.id); if (!Array.isArray(order) || order.length !== ids.length || !ids.every(i => order.includes(i))) return { ok: false, error: 'Некоректний порядок' };
+  const plan = await getPlan(env); plan.order = order; await savePlan(env, plan); return { ok: true };
+}
+/** Розставляє незаплановані й заплановані неопубліковані пости по одному на кожні N днів від заданого часу, у поточному порядку. */
+export async function spread(env, startMs, everyDays, man) {
+  startMs = Number(startMs); everyDays = Math.max(1, Math.min(14, Math.round(Number(everyDays) || 1)));
+  if (!Number.isFinite(startMs) || startMs < Date.now() - 36e5) return { ok: false, error: 'Оберіть початок у майбутньому' };
+  const st = await pubState(env), plan = await getPlan(env); let k = 0;
+  for (const p of effective(man, plan)) if (!st.done[p.id]) { (plan.posts[p.id] = plan.posts[p.id] || {}).at = Math.round((startMs + k * everyDays * DAY) / 6e4) * 6e4; k++; }
+  await savePlan(env, plan); return { ok: true, n: k };
+}
 const saveState = (env, st) => setSetting(env, 'ig_pub', JSON.stringify({ done: st.done, err: st.err }));
 
 async function call(fetchImpl, method, url, params) {
@@ -58,21 +88,22 @@ export async function publishPost(env, post, { fetchImpl = fetch, site = SITE, d
 export async function publishNext(env, { only = null, fetchImpl = fetch, site = SITE, now = Date.now(), delay = 3000 } = {}) {
   const st = await pubState(env); let man;
   try { man = await loadManifest(fetchImpl, site); } catch (e) { return { ok: false, error: 'Не вдалося прочитати список постів: ' + e.message }; }
-  const post = only ? man.find(p => p.id === only) : man.find(p => !st.done[p.id]);
+  const eff = effective(man, await getPlan(env)), post = only ? eff.find(p => p.id === only) : eff.find(p => !st.done[p.id]);
   if (!post) return { ok: false, error: only ? 'Немає такого поста' : 'Усі пости вже опубліковано' };
   if (st.done[post.id]) return { ok: false, error: 'Цей пост уже опубліковано' };
   try { const r = await publishPost(env, post, { fetchImpl, site, delay }); st.done[post.id] = { at: now, ...r }; st.err = null; await saveState(env, st); await setSetting(env, 'ig_cache', ''); return { ok: true, id: post.id, link: r.link }; }
   catch (e) { st.err = { at: now, id: post.id, error: String(e.message || e).slice(0, 240) }; await saveState(env, st); return { ok: false, error: st.err.error }; }
 }
-/** Автопублікація: раз на добу, після 18:00 за Києвом (UTC+2/+3, беремо 16 UTC), якщо ввімкнена й минуло ≥20 год від останньої. */
+/** Автопублікація за розкладом: якщо ввімкнена, публікуємо найраніший пост, час якого настав (раз на запуск). Після помилки пауза 6 год. */
 export async function runAutoPublish(env, { now = Date.now(), ...rest } = {}) {
   const st = await pubState(env); if (!st.auto) return { skipped: 'off' };
-  if (new Date(now).getUTCHours() < 16) return { skipped: 'early' };
-  const last = Math.max(0, ...Object.values(st.done).map(d => d.at || 0)); if (now - last < 20 * 36e5) return { skipped: 'recent' };
   if (st.err && st.err.at && now - st.err.at < 6 * 36e5) return { skipped: 'error_cooldown' };
-  return publishNext(env, { now, ...rest });
+  let man; try { man = await loadManifest(rest.fetchImpl || fetch, rest.site || SITE); } catch { return { skipped: 'manifest' }; }
+  const due = effective(man, await getPlan(env)).filter(p => !st.done[p.id] && p.at && p.at <= now).sort((a, b) => a.at - b.at)[0];
+  if (!due) return { skipped: 'none_due' };
+  return publishNext(env, { now, only: due.id, ...rest });
 }
 export async function publishStatus(env, fetchImpl = fetch, site = SITE) {
   const st = await pubState(env); let man = []; try { man = await loadManifest(fetchImpl, site); } catch {}
-  return { auto: st.auto, err: st.err, posts: man.map(p => ({ id: p.id, type: p.type, n: p.files.length, title: (p.caption || '').split('\n')[0].slice(0, 70), done: st.done[p.id] || null })) };
+  return { auto: st.auto, err: st.err, now: Date.now(), posts: effective(man, await getPlan(env)).map(p => ({ id: p.id, type: p.type, files: p.files, cover: p.cover || null, caption: p.caption, defaultCaption: p.defaultCaption, edited: p.caption !== p.defaultCaption, at: p.at, done: st.done[p.id] || null })) };
 }

@@ -279,6 +279,66 @@ async function inbox() {
 }
 
 /* ---------- Налаштування (відсотки для дашборда) ---------- */
+
+/* ---------- Instagram: редактор публікацій (перегляд, підпис, розклад, порядок) ---------- */
+let igSel = null, igSlide = 0;
+const igMedia = f => '/social/' + encodeURIComponent(f);
+const dtLocal = t => t ? new Date(t - new Date(t).getTimezoneOffset() * 6e4).toISOString().slice(0, 16) : '';
+const igTitle = p => String(p.caption || '').split('\n')[0].slice(0, 48);
+const igKind = p => p.type === 'REELS' ? 'Reel' : p.type === 'CAROUSEL' ? 'Карусель · ' + p.files.length : 'Фото';
+const igCaptionHtml = c => String(c).split(/(#[^\s#]+)/).map(t => t.length > 1 && t[0] === '#' ? `<span style="color:#7aa7ff">${esc(t)}</span>` : esc(t)).join('').replace(/\n/g, '<br>');
+function igMediaHtml(p) {
+  if (p.type === 'REELS') return `<video src="${igMedia(p.files[0])}" poster="${p.cover ? igMedia(p.cover) : ''}" controls playsinline preload="metadata" style="width:100%;display:block;background:#000;aspect-ratio:9/16;max-height:420px;object-fit:contain"></video>`;
+  const n = p.files.length, i = Math.min(igSlide, n - 1);
+  return `<div style="position:relative;background:#000"><img src="${igMedia(p.files[i])}" alt="" style="width:100%;display:block;aspect-ratio:4/5;object-fit:cover">${n > 1 ? `<button type="button" class="btn sm" id="igprev" style="position:absolute;left:6px;top:45%">‹</button><button type="button" class="btn sm" id="ignext" style="position:absolute;right:6px;top:45%">›</button><div style="position:absolute;right:8px;top:8px;background:#000a;color:#fff;border-radius:10px;padding:2px 8px;font-size:12px">${i + 1}/${n}</div><div style="text-align:center;position:absolute;left:0;right:0;bottom:6px;color:#fff;font-size:18px;letter-spacing:3px">${p.files.map((_, k) => k === i ? '●' : '○').join('')}</div>` : ''}</div>`;
+}
+function renderIgPlan(pb, ig) {
+  const host = $('#igplan'); if (!host) return;
+  if (!pb || !pb.posts || !pb.posts.length) { host.innerHTML = '<h2>Публікації Instagram</h2><div class="muted">Список постів поки недоступний (файл /social/posts.json). Спробуйте оновити сторінку після розгортання сайту.</div>'; return; }
+  if (!pb.posts.find(p => p.id === igSel)) { igSel = (pb.posts.find(p => !p.done) || pb.posts[0]).id; igSlide = 0; }
+  const P = pb.posts, p = P.find(x => x.id === igSel), now = Date.now();
+  const status = x => x.done ? `<span style="color:#27ae60">✅ ${esc(fdate(x.done.at))}</span>` : x.at ? `<span style="color:${x.at < now ? '#eb5757' : '#2f80ed'}">🕒 ${esc(fdate(x.at))}</span>` : '<span class="muted">без дати</span>';
+  host.innerHTML = `<h2>Публікації Instagram</h2>
+  <div class="muted">Перегляньте пост, відредагуйте підпис і призначте дату й час (ваш місцевий час). З увімкненою автопублікацією пост виходить сам у призначений час (перевірка щогодини).</div>
+  <div style="display:flex;gap:18px;flex-wrap:wrap;align-items:flex-start">
+   <div style="flex:1 1 300px;min-width:260px;display:grid;gap:8px" id="iglist">${P.map((x, i) => `<div class="card" data-id="${esc(x.id)}" style="padding:8px;display:flex;gap:10px;align-items:center;cursor:pointer;${x.id === igSel ? 'border-color:var(--accent);box-shadow:0 0 0 1px var(--accent)' : ''}">
+      <img src="${igMedia(x.type === 'REELS' ? x.cover : x.files[0])}" alt="" style="width:48px;height:60px;object-fit:cover;border-radius:6px;flex:none">
+      <div style="flex:1;min-width:0"><div style="font-weight:600;font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${i + 1}. ${esc(igTitle(x))}</div><div class="muted" style="font-size:12px">${igKind(x)}${x.edited ? ' · змінено' : ''} · ${status(x)}</div></div>
+      ${x.done ? '' : `<div style="display:grid;gap:2px"><button type="button" class="btn ghost sm igup" data-i="${i}" ${i === 0 ? 'disabled' : ''}>↑</button><button type="button" class="btn ghost sm igdn" data-i="${i}" ${i === P.length - 1 ? 'disabled' : ''}>↓</button></div>`}</div>`).join('')}
+    <div class="card" style="padding:10px;display:grid;gap:8px"><b style="font-size:13px">Розставити по днях</b>
+     <div class="row" style="flex-wrap:wrap;gap:8px"><label class="f" style="margin:0">Перший пост<input type="datetime-local" id="igsp0"></label><label class="f" style="margin:0">Кожні, днів<input type="number" id="igspn" min="1" max="14" value="1" style="width:80px"></label></div>
+     <button type="button" class="btn ghost sm" id="igspread">Призначити час усім неопублікованим за порядком</button></div>
+    <label class="muted" style="display:flex;gap:6px;align-items:center"><input type="checkbox" id="igauto" ${pb.auto ? 'checked' : ''}> Автопублікація за розкладом ${ig && ig.connected ? '' : '(спершу підключіть Instagram)'}</label>
+    ${pb.err ? `<div class="muted" style="color:#eb5757">Остання помилка (${esc(fdate(pb.err.at))}, ${esc(pb.err.id)}): ${esc(pb.err.error)}</div>` : ''}
+   </div>
+   <div style="flex:1 1 330px;min-width:280px;display:grid;gap:10px">
+    <div class="card" style="padding:0;overflow:hidden;max-width:380px;background:#0e0f14;color:#f3efe6">
+     <div style="display:flex;gap:8px;align-items:center;padding:10px 12px"><div style="width:30px;height:30px;border-radius:50%;background:linear-gradient(135deg,#d6b46a,#8a6a2a)"></div><b style="font-size:13px">reeadvent</b><span style="margin-left:auto;opacity:.6">···</span></div>
+     ${igMediaHtml(p)}
+     <div style="padding:10px 12px;font-size:13px;line-height:1.45;max-height:230px;overflow:auto"><b>reeadvent</b> <span id="igprevcap">${igCaptionHtml(p.caption)}</span></div></div>
+    <label class="f">Підпис (${p.done ? 'опубліковано, лише перегляд' : 'можна редагувати'})<textarea id="igcap" rows="9" ${p.done ? 'disabled' : ''}>${esc(p.caption)}</textarea></label>
+    <div class="muted" id="igcnt"></div>
+    ${p.done ? `<div class="muted">Опубліковано ${esc(fdate(p.done.at))}${p.done.link ? ` · <a href="${esc(p.done.link)}" target="_blank" rel="noopener">відкрити в Instagram</a>` : ''}</div>` : `
+    <label class="f">Дата й час публікації<input type="datetime-local" id="igat" value="${dtLocal(p.at)}"></label>
+    <div class="row" style="flex-wrap:wrap;gap:8px"><button class="btn" id="igsave" type="button">Зберегти</button><button class="btn ghost" id="igreset" type="button" ${p.edited ? '' : 'disabled'}>Стандартний підпис</button><button class="btn ghost" id="igclear" type="button" ${p.at ? '' : 'disabled'}>Зняти дату</button><button class="btn ghost" id="igpub" type="button" ${ig && ig.connected ? '' : 'disabled'}>Опублікувати зараз</button></div>
+    <div class="muted">Reel обробляється до 3 хвилин, під час публікації не закривайте сторінку.</div>`}
+   </div></div>`;
+  const apply = x => { Object.assign(pb, x); renderIgPlan(pb, ig); };
+  const post = async (path, body, okMsg) => { try { const x = await api('POST', '/api/admin/instagram/' + path, body); if (x.ok === false) { toast(x.error || 'Не вийшло'); return null; } if (okMsg) toast(okMsg); apply(x); return x; } catch (e) { toast(errText(e)); return null; } };
+  const count = () => { const c = $('#igcap').value, tags = (c.match(/#[^\s#]+/g) || []).length; $('#igcnt').innerHTML = `${c.length}/2200 символів · ${tags}/30 хештегів` + (c.length > 2200 || tags > 30 ? ' <b style="color:#eb5757">перевищено</b>' : ''); $('#igprevcap').innerHTML = igCaptionHtml(c); };
+  count(); $('#igcap').oninput = count;
+  host.querySelectorAll('#iglist [data-id]').forEach(el => el.onclick = e => { if (e.target.closest('button')) return; igSel = el.dataset.id; igSlide = 0; renderIgPlan(pb, ig); });
+  const move = (i, d) => { const ids = P.map(x => x.id); [ids[i], ids[i + d]] = [ids[i + d], ids[i]]; post('plan', { order: ids }); };
+  host.querySelectorAll('.igup').forEach(b => b.onclick = () => move(+b.dataset.i, -1)); host.querySelectorAll('.igdn').forEach(b => b.onclick = () => move(+b.dataset.i, 1));
+  if ($('#igprev')) { $('#igprev').onclick = () => { igSlide = (igSlide + p.files.length - 1) % p.files.length; renderIgPlan(pb, ig); }; $('#ignext').onclick = () => { igSlide = (igSlide + 1) % p.files.length; renderIgPlan(pb, ig); }; }
+  const at = () => { const v = $('#igat').value; return v ? new Date(v).getTime() : null; };
+  if ($('#igsave')) $('#igsave').onclick = () => post('plan', { id: p.id, caption: $('#igcap').value, at: at() }, 'Збережено');
+  if ($('#igreset')) $('#igreset').onclick = () => { if (confirm('Повернути стандартний підпис?')) post('plan', { id: p.id, caption: null }, 'Підпис скинуто'); };
+  if ($('#igclear')) $('#igclear').onclick = () => post('plan', { id: p.id, at: null }, 'Дату знято');
+  if ($('#igpub')) $('#igpub').onclick = async () => { if (!confirm('Опублікувати цей пост в Instagram зараз?')) return; const b = $('#igpub'); b.disabled = true; b.textContent = 'Публікуємо… (до 3 хв)'; try { const cap = $('#igcap').value; if (cap !== p.caption) { const s0 = await api('POST', '/api/admin/instagram/plan', { id: p.id, caption: cap }); Object.assign(pb, s0); } const x = await api('POST', '/api/admin/instagram/publish', { id: p.id }); toast(x.ok ? 'Опубліковано ✅' : 'Не вийшло: ' + x.error); Object.assign(pb, x); } catch (e) { toast(errText(e)); } renderIgPlan(pb, ig); };
+  $('#igspread').onclick = () => { const v = $('#igsp0').value; if (!v) return toast('Оберіть дату й час першого поста'); post('plan', { spread: true, start: new Date(v).getTime(), everyDays: +$('#igspn').value || 1 }, 'Час призначено'); };
+  $('#igauto').onchange = async () => { try { const x = await api('POST', '/api/admin/instagram/auto', { on: $('#igauto').checked }); Object.assign(pb, x); toast($('#igauto').checked ? 'Автопублікацію ввімкнено' : 'Автопублікацію вимкнено'); } catch (e) { toast(errText(e)); } };
+}
 async function settings() {
   const r = await api('GET', '/api/admin/settings'), v = r.settings, ig = await api('GET', '/api/admin/instagram').catch(() => ({ connected: false })), pb = await api('GET', '/api/admin/instagram/publish').catch(() => null);
   $('#main').innerHTML = `<div class="top"><div><h2>Фінанси</h2><h1>Налаштування</h1></div></div>
@@ -296,12 +356,8 @@ async function settings() {
     <label class="f">ID акаунта Instagram (лише для токена системного користувача)<input id="igid" inputmode="numeric" autocomplete="off" placeholder="Наприклад 17841400000000000"></label>
     <label class="f">Пости для головної (вбудовування, без токена): посилання на пости, по одному в рядок, до 6<textarea id="ige" rows="4" placeholder="https://www.instagram.com/p/XXXXXXXXXXX/&#10;https://www.instagram.com/reel/YYYYYYYYYYY/">${esc(ig.embedsText || '')}</textarea></label>
     <div class="row"><button class="btn" id="igse" type="button">Зберегти пости</button><span class="muted">Посилання беріть у Instagram: пост → «···» → «Копіювати посилання». Акаунт має бути публічним.</span></div>
-    ${pb && pb.posts.length ? `<h3 style="margin:18px 0 6px;font-size:16px">Публікація постів</h3>
-    ${pb.err ? `<div class="muted" style="color:#eb5757">Помилка публікації (${esc(fdate(pb.err.at))}, ${esc(pb.err.id)}): ${esc(pb.err.error)}</div>` : ''}
-    <div class="muted">${pb.posts.map((p, i) => `${i + 1}. ${p.done ? '✅' : '⏳'} ${esc(p.title)} <i>(${p.type === 'REELS' ? 'Reel' : p.type === 'CAROUSEL' ? 'карусель ' + p.n : 'фото'})</i>${p.done && p.done.link ? ` <a href="${esc(p.done.link)}" target="_blank" rel="noopener">відкрити</a>` : ''}`).join('<br>')}</div>
-    <div class="row"><button class="btn" id="igpub" type="button" ${ig.connected ? '' : 'disabled'}>Опублікувати наступний</button><label class="muted" style="display:flex;gap:6px;align-items:center"><input type="checkbox" id="igauto" ${pb.auto ? 'checked' : ''}> Автопублікація: по одному посту на день, ввечері за Києвом</label></div>
-    <div class="muted">Reel обробляється до 3 хвилин, не закривайте сторінку. Для публікації токен має мати дозвіл instagram_content_publish.</div>` : ''}
     <div class="row"><button class="btn" id="igs" type="button">Підключити</button>${ig.connected ? '<button class="btn ghost" id="igtest" type="button">Перевірити зараз</button>' : ''}${ig.connected && !ig.viaSecret ? '<button class="btn ghost" id="igd" type="button">Відключити</button>' : ''}</div></div>
+  <div class="card sec" id="igplan" style="max-width:1000px;margin-top:14px"></div>
   <div class="card sec" style="max-width:620px;margin-top:14px"><h2>База закладів (OpenStreetMap)</h2>
     <div class="muted">Безкоштовна власна база: ${r.venues.withData} із ${r.venues.cities} міст мають заклади (оновлені за новими правилами: ${r.venues.ready}), у черзі ${r.venues.pending}, в обробці ${r.venues.working}, з помилкою ${r.venues.failed}. Закладів: <b>${r.venues.venues}</b>, оцінок користувачів: <b>${r.venues.ratings}</b>. Нові міста наповнюються за 20–40 хв, оновлення щотижня вночі. Дані © OpenStreetMap contributors.</div>
     <div class="muted" style="margin-top:8px;font-size:13px">${r.venues.paused ? '<b>⏸ Наповнення призупинено.</b> ' : ''}Останній запуск наповнення: ${r.venues.last ? `<b>${new Date(r.venues.last.at).toLocaleString('uk-UA')}</b> — ${r.venues.last.error ? 'помилка: ' + esc(r.venues.last.error) : esc(JSON.stringify(r.venues.last.out))}` : 'ще не було (запуск за розкладом Worker не відбувся)'}</div>
@@ -329,8 +385,7 @@ async function settings() {
   if ($('#vra')) $('#vra').onclick = async () => { try { const x = await api('POST', '/api/admin/venues/retry', {}); toast('Повернуто в чергу: ' + x.n); settings(); } catch (e) { toast(errText(e)); } };
   $('#va').onclick = async () => { try { await api('POST', '/api/admin/venues/add', { country: $('#vc').value, name: $('#vn').value }); toast('Додано в чергу'); settings(); } catch (e) { toast(errText(e)); } };
   $('#igse').onclick = async () => { try { const x = await api('POST', '/api/admin/instagram/embeds', { text: $('#ige').value }); toast(x.embeds ? `Збережено постів: ${x.embeds}` : 'Збережено: список порожній'); settings(); } catch (e) { toast(errText(e)); } };
-  if ($('#igpub')) $('#igpub').onclick = async () => { const b = $('#igpub'); if (!confirm('Опублікувати наступний пост в Instagram зараз?')) return; b.disabled = true; b.textContent = 'Публікуємо… (до 3 хв)'; try { const x = await api('POST', '/api/admin/instagram/publish', {}); toast(x.ok ? 'Опубліковано ✅' : 'Не вийшло: ' + x.error); } catch (e) { toast(errText(e)); } settings(); };
-  if ($('#igauto')) $('#igauto').onchange = async () => { try { await api('POST', '/api/admin/instagram/auto', { on: $('#igauto').checked }); toast($('#igauto').checked ? 'Автопублікацію ввімкнено' : 'Автопублікацію вимкнено'); } catch (e) { toast(errText(e)); } };
+  renderIgPlan(pb, ig);
   if ($('#igtest')) $('#igtest').onclick = async () => { const b = $('#igtest'); b.disabled = true; try { const x = await api('POST', '/api/admin/instagram/test', {}); toast(x.ok ? (x.count ? `Instagram віддав постів: ${x.count}. Вони з'являться на головній` : `Підключення працює, але Instagram повернув 0 публікацій (${x.raw || 0} у відповіді). Перевірте, чи є в акаунті пости й чи має токен доступ до медіа`) : 'Помилка: ' + x.error); settings(); } catch (e) { toast(errText(e)); b.disabled = false; } };
   $('#igs').onclick = async () => { const t = $('#igt').value.trim(); if (!t) return toast('Вставте токен'); try { const x = await api('POST', '/api/admin/instagram/token', { token: t, igId: $('#igid').value.trim() }); toast('Підключено: @' + x.username); settings(); } catch (e) { toast(e.code === 'token_rejected' ? 'Instagram не прийняв токен' : e.code === 'bad_token' ? 'Токен має неправильний вигляд' : errText(e)); } };
   if ($('#igd')) $('#igd').onclick = async () => { if (!confirm('Відключити Instagram? Стрічку з головної буде прибрано.')) return; try { await api('POST', '/api/admin/instagram/disconnect', {}); toast('Відключено'); settings(); } catch (e) { toast(errText(e)); } };

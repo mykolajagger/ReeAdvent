@@ -26,13 +26,30 @@ let st = await publishStatus(env, f); assert(st.posts.every(p => p.done) && st.p
 // помилка: пост не позначається опублікованим
 await set('ig_pub', ''); fail = true; r = await publishNext(env, o); assert.equal(r.ok, false); assert.match(r.error, /Permissions/); st = await pubState(env); assert.deepEqual(st.done, {}); assert.equal(st.err.id, 'a');
 fail = null;
-// автопублікація
-await setAuto(env, false); assert.equal((await runAutoPublish(env, { ...o, now: Date.UTC(2026, 11, 1, 17) })).skipped, 'off');
-await setAuto(env, true); await set('ig_pub', '');
-assert.equal((await runAutoPublish(env, { ...o, now: Date.UTC(2026, 11, 1, 9) })).skipped, 'early');
-r = await runAutoPublish(env, { ...o, now: Date.UTC(2026, 11, 1, 17) }); assert.equal(r.ok, true);
-assert.equal((await runAutoPublish(env, { ...o, now: Date.UTC(2026, 11, 1, 18) })).skipped, 'recent');
-r = await runAutoPublish(env, { ...o, now: Date.UTC(2026, 11, 2, 17) }); assert.equal(r.id, 'b');
+// правки: підпис, час, порядок, розкладка
+import { editPost, setOrder, spread, getPlan, effective } from '../src/igpublish.js';
+await set('ig_pub', ''); await set('ig_plan', '');
+assert.equal((await editPost(env, 'a', { caption: 'x'.repeat(2201) }, man)).ok, false);
+assert.equal((await editPost(env, 'a', { caption: Array.from({ length: 31 }, (_, i) => '#t' + i).join(' ') }, man)).ok, false);
+assert.equal((await editPost(env, 'zzz', { caption: 'q' }, man)).ok, false);
+assert.equal((await editPost(env, 'a', { caption: '  Свій підпис #один  ' }, man)).ok, true);
+let ef = effective(man, await getPlan(env)); assert.equal(ef[0].caption, 'Свій підпис #один'); assert.equal(ef[0].defaultCaption, 'A');
+assert.equal((await editPost(env, 'a', { caption: null }, man)).ok, true); assert.equal(effective(man, await getPlan(env))[0].caption, 'A');
+assert.equal((await setOrder(env, ['c', 'a', 'b'], man)).ok, true); assert.deepEqual(effective(man, await getPlan(env)).map(p => p.id), ['c', 'a', 'b']);
+assert.equal((await setOrder(env, ['a', 'b'], man)).ok, false); assert.equal((await setOrder(env, ['a', 'a', 'b'], man)).ok, false);
+const t0 = Date.now() + 864e5; assert.equal((await spread(env, t0, 2, man)).n, 3); ef = effective(man, await getPlan(env)); assert.equal(ef[1].at - ef[0].at, 2 * 864e5);
+assert.equal((await spread(env, Date.now() - 864e5 * 5, 1, man)).ok, false);
+// автопублікація за розкладом: першим іде той, чий час настав; змінений підпис публікується
+await setAuto(env, false); assert.equal((await runAutoPublish(env, { ...o, now: t0 + 6e4 })).skipped, 'off');
+await setAuto(env, true); assert.equal((await runAutoPublish(env, { ...o, now: t0 - 5e5 })).skipped, 'none_due');
+await editPost(env, 'c', { caption: 'Мій Reel' }, man);
+log = []; r = await runAutoPublish(env, { ...o, now: t0 + 6e4 }); assert.equal(r.ok, true, JSON.stringify(r)); assert.equal(r.id, 'c'); assert.equal(log.find(l => l.body && l.body.media_type === 'REELS').body.caption, 'Мій Reel');
+assert.equal((await runAutoPublish(env, { ...o, now: t0 + 2 * 36e5 })).skipped, 'none_due');
+r = await runAutoPublish(env, { ...o, now: t0 + 2 * 864e5 + 6e4 }); assert.equal(r.id, 'a');
+assert.equal((await editPost(env, 'a', { caption: 'нова' }, man)).ok, false);   // опублікований не змінюється
+// помилка → пауза 6 год
+await set('ig_pub', ''); fail = true; r = await runAutoPublish(env, { ...o, now: t0 + 9 * 864e5 }); assert.equal(r.ok, false); fail = null;
+assert.equal((await runAutoPublish(env, { ...o, now: t0 + 9 * 864e5 + 36e5 })).skipped, 'error_cooldown');
 // без токена
 await set('ig_token', ''); await set('ig_pub', ''); delete env.INSTAGRAM_TOKEN; r = await publishNext(env, { ...o, only: 'a' }); assert.equal(r.ok, false); assert.match(r.error, /не підключено/);
 console.log('OK igpublish');
