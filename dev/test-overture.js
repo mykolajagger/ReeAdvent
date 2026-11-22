@@ -52,6 +52,14 @@ assert(shown.has('Pub House') && shown.has('Ungweiser') && shown.has('Belfast Pu
 const shownCafe = new Set(); for (const s of Array.from({ length: 20 }, (_, i) => 'c' + i)) for (const p of await venuePicks(env, { country: 'UA', city: 'Uzhgorod', cat: 'cafe', seedKey: s })) shownCafe.add(p.name);
 assert(!shownCafe.has('Bloom Cafe'), 'закритий за Overture не показується');
 
+// заклад OSM без пари в Overture, але нещодавно редагований, лишається в видачі (може бути новим)
+raw.prepare("UPDATE venues SET edited = ? WHERE osm = 'n2'").run(Date.now() - 30 * 864e5);
+const shown2 = new Set(); for (const s of Array.from({ length: 40 }, (_, i) => 'q' + i)) for (const p of await venuePicks(env, { country: 'UA', city: 'Uzhgorod', cat: 'bar', seedKey: s })) shown2.add(p.name);
+assert(shown2.has('Клепач'), 'свіжо відредагований заклад без пари не відсікається: ' + [...shown2].join('|'));
+raw.prepare("UPDATE venues SET edited = ? WHERE osm = 'n2'").run(Date.now() - 6 * 365 * 864e5);
+const shown3 = new Set(); for (const s of Array.from({ length: 40 }, (_, i) => 'w' + i)) for (const p of await venuePicks(env, { country: 'UA', city: 'Uzhgorod', cat: 'bar', seedKey: s })) shown3.add(p.name);
+assert(!shown3.has('Клепач'), 'давній без пари відсікається');
+
 // оновлення з OSM не видаляє заклади з Overture й не стирає їхні позначки
 await storeCityVenues(env, city, [{ osm: 'n1', cat: 'bar', name: 'Pub House', address: '', lat: 48.6210, lon: 22.2881, prior: 3, hours: null }], null, now + 100000);
 assert.equal(raw.prepare("SELECT COUNT(*) AS n FROM venues WHERE osm = 'ov:a3'").get().n, 1, 'ov-заклад пережив оновлення OSM'); assert.equal(st('n1').s, 'match', 'позначка збереглась');

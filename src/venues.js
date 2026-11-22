@@ -289,10 +289,11 @@ export const mapUrl = (v, city) => v.lat != null && v.lon != null
 /** До 3 закладів категорії: найкращі за (оцінки користувачів + повнота даних OSM), з варіативністю за учасником/днем. Порожньо, якщо база міста ще не готова. */
 export async function venuePicks(env, { country, city, cat, seedKey, lang = 'uk' }) {
   const c = await cityId(env, country, city); if (!c || !cat || (c.status !== 'ready' && !(c.n > 0))) return [];
-  const { results } = await env.DB.prepare('SELECT id, name, address, prior, r_sum, r_cnt, lat, lon, hours, ov_conf, ov_state FROM venues WHERE city_id = ? AND cat = ? AND hidden = 0 AND closed_reports < 2 AND (ov_state IS NULL OR ov_state != \'closed\')').bind(c.id, cat).all();
+  const { results } = await env.DB.prepare('SELECT id, name, address, prior, r_sum, r_cnt, lat, lon, hours, ov_conf, ov_state, edited FROM venues WHERE city_id = ? AND cat = ? AND hidden = 0 AND closed_reports < 2 AND (ov_state IS NULL OR ov_state != \'closed\')').bind(c.id, cat).all();
   const ok = results.filter(v => !(v.r_cnt >= 5 && v.r_sum / v.r_cnt < 3));
   const score = v => bayes(v) + v.prior * 0.35 + ovAdj(v);
-  const solid = ok.filter(v => v.ov_state !== 'miss'), pool = solid.length >= 3 ? solid : ok;   // «немає в Overture» відсікаємо, якщо є хоча б 3 підтверджені
+  // «Немає в Overture» відсікаємо, якщо є хоча б 3 підтверджені, але не чіпаємо заклади, які нещодавно (до ~14 міс.) редагували або перевіряли в OSM: це можуть бути нові заклади
+  const recent = v => v.edited && Date.now() - v.edited < 14 * 30.4 * 864e5, solid = ok.filter(v => v.ov_state !== 'miss' || recent(v)), pool = solid.length >= 3 ? solid : ok;
   pool.sort((a, b) => score(b) - score(a));
   const top = pool.slice(0, 12).map(v => ({ v, k: hash(seedKey + ':' + v.id) })).sort((a, b) => a.k - b.k).slice(0, 3).map(x => x.v);
   return top.sort((a, b) => bayes(b) - bayes(a)).map(v => ({ id: v.id, name: v.name, address: v.address || '', km: c.lat != null && v.lat != null ? Math.round(dist(v.lat, v.lon, c.lat, c.lon) * 10) / 10 : null, hours: formatHours(v.hours, lang), rating: v.r_cnt >= 3 ? Math.round(v.r_sum / v.r_cnt * 10) / 10 : null, count: v.r_cnt,
