@@ -7,7 +7,7 @@ import { rateLimit } from './promo.js';
 const UA = 'ReeAdvent/1.0 (+https://reeadvent.fun; support@reeadvent.fun)';
 const OVERPASS = ['https://overpass-api.de/api/interpreter', 'https://overpass.kumi.systems/api/interpreter', 'https://overpass.private.coffee/api/interpreter'];
 const MAX_CONCURRENT = 2; // одночасно не більше двох міст у роботі: публічний Overpass має обмежену кількість «слотів»
-export const RADIUS = 6000, PER_SET = 400, KEEP = 20, REFRESH_MS = 7 * 864e5, VER = '2'; // VER: версія схеми/категорій; зміна ставить готові міста на повторне наповнення
+export const RADIUS = 6000, PER_SET = 400, KEEP = 40, REFRESH_MS = 7 * 864e5, VER = '2'; // VER: версія схеми/категорій; зміна ставить готові міста на повторне наповнення
 
 /** Категорії закладів → теги OSM (значення: рядок, масив варіантів або '!a|b' — «крім»). */
 export const CATS = {
@@ -126,6 +126,10 @@ const tagMatch = (t, f) => { for (const k in f) { const v = f[k], x = t[k], not 
 const KEY_CATS = {}; for (const [cat, fs] of Object.entries(CATS)) for (const f of fs) for (const k of Object.keys(f)) (KEY_CATS[k] ||= new Set()).add(cat);
 export const dist = (a, b, c, d) => Math.hypot((a - c) * 111.2, (b - d) * 111.2 * Math.cos(a * Math.PI / 180)); // км, наближено
 
+const parseDate = s => { if (!s) return 0; const m = String(s).match(/^(\d{4})(?:-(\d{2}))?(?:-(\d{2}))?$/); if (m) return Date.UTC(+m[1], m[2] ? +m[2] - 1 : 0, m[3] ? +m[3] : 1); const t = Date.parse(s); return isFinite(t) ? t : 0; };
+const YEAR = 365.25 * 864e5;
+/** Ознаки, що заклад закритий: disused/abandoned/closed, opening_hours=off, end_date у минулому. */
+export const isClosedTags = (t, now = Date.now()) => t.disused === 'yes' || t.abandoned === 'yes' || t.closed === 'yes' || t.opening_hours === 'off' || t.opening_hours === 'closed' || (!!t.end_date && parseDate(t.end_date) > 0 && parseDate(t.end_date) < now);
 /** Перетворює відповідь Overpass на рядки для БД: до KEEP найкращих у кожній категорії за «багатством» тегів і близькістю до центру. */
 export function pickVenues(elements, lat, lon) {
   const byCat = {}, seen = new Set();
@@ -135,12 +139,18 @@ export function pickVenues(elements, lat, lon) {
     const cands = new Set(); for (const k in t) { const sc = KEY_CATS[k]; if (sc) for (const c of sc) cands.add(c); }
     let matched = null; for (const cat of cands) if (CATS[cat].some(f => tagMatch(t, f))) (matched ||= []).push(cat);
     if (!matched) continue;
+    const now = Date.now(); if (isClosedTags(t, now)) continue;                    // закриті й занедбані не беремо
+    // «Свіжість»: остання правка об'єкта в OSM і дата перевірки (check_date, survey:date); нові заклади (start_date) отримують бонус
+    const edited = parseDate(e.timestamp), checked = Math.max(parseDate(t.check_date), parseDate(t['survey:date']), parseDate(t['check_date:opening_hours'])), fresh = Math.max(edited, checked), age = fresh ? (now - fresh) / YEAR : null;
+    const opened = parseDate(t.start_date), isNew = opened > 0 && opened <= now && now - opened < 2 * YEAR;
+    const livenessBonus = age == null ? 0 : age <= 1 ? 1.2 : age <= 2.5 ? 0.6 : age > 6 && !(t.website || t.phone || t['contact:website']) ? -0.8 : age > 6 ? -0.3 : 0;
     const prior = (t.website || t['contact:website'] ? 1 : 0) + (t.opening_hours ? 1 : 0) + (t.wikidata || t.wikipedia ? 2 : 0) + (t.phone || t['contact:phone'] ? 0.5 : 0) + (t.cuisine || t['name:en'] ? 0.3 : 0)
-      + (t['addr:street'] ? 0.3 : 0) + Math.max(0, 1 - dist(la, lo, lat, lon) / (RADIUS / 1000)) * 1.5;
+      + (t['addr:street'] ? 0.3 : 0) + (t.brand ? 0.5 : 0) + Math.min(Object.keys(t).length, 24) / 24 * 0.8 + livenessBonus + (isNew ? 1.5 : 0)
+      + Math.max(0, 1 - dist(la, lo, lat, lon) / (RADIUS / 1000)) * 1.5;
     const address = [t['addr:street'], t['addr:housenumber']].filter(Boolean).join(' ').slice(0, 80);
     for (const cat of matched) {
       const osm = `${e.type[0]}${e.id}`, k = osm + cat; if (seen.has(k)) continue; seen.add(k);
-      (byCat[cat] ||= []).push({ osm, cat, name, address, lat: la, lon: lo, prior: Math.round(prior * 100) / 100, hours: t.opening_hours ? String(t.opening_hours).slice(0, 120) : null });
+      (byCat[cat] ||= []).push({ osm, cat, name, address, lat: la, lon: lo, prior: Math.round(prior * 100) / 100, hours: t.opening_hours ? String(t.opening_hours).slice(0, 120) : null, edited: fresh || null });
     }
   }
   return Object.values(byCat).flatMap(a => a.sort((x, y) => y.prior - x.prior).slice(0, KEEP));
@@ -163,7 +173,7 @@ export async function resolveCoords(env, c, fetchImpl = fetch) {
 
 /** Записує заклади міста (upsert), прибирає зниклі з OSM без оцінок і позначає місто готовим. note — примітка про часткове наповнення. */
 export async function storeCityVenues(env, c, rows, note = null, now = Date.now()) {
-  const st = rows.map(v => env.DB.prepare('INSERT INTO venues (city_id, osm, cat, name, address, lat, lon, prior, hours, seen_at) VALUES (?,?,?,?,?,?,?,?,?,?) ON CONFLICT(city_id, osm, cat) DO UPDATE SET name = excluded.name, address = excluded.address, lat = excluded.lat, lon = excluded.lon, prior = excluded.prior, hours = excluded.hours, seen_at = excluded.seen_at').bind(c.id, v.osm, v.cat, v.name, v.address, v.lat, v.lon, v.prior, v.hours, now));
+  const st = rows.map(v => env.DB.prepare('INSERT INTO venues (city_id, osm, cat, name, address, lat, lon, prior, hours, edited, seen_at) VALUES (?,?,?,?,?,?,?,?,?,?,?) ON CONFLICT(city_id, osm, cat) DO UPDATE SET name = excluded.name, address = excluded.address, lat = excluded.lat, lon = excluded.lon, prior = excluded.prior, hours = excluded.hours, edited = excluded.edited, seen_at = excluded.seen_at').bind(c.id, v.osm, v.cat, v.name, v.address, v.lat, v.lon, v.prior, v.hours, v.edited ?? null, now));
   for (let i = 0; i < st.length; i += 100) await env.DB.batch(st.slice(i, i + 100));
   if (rows.length) await env.DB.prepare('DELETE FROM venues WHERE city_id = ? AND seen_at < ? AND r_cnt = 0').bind(c.id, now).run(); // зниклі з OSM без оцінок прибираємо
   await env.DB.prepare("UPDATE venue_cities SET status = 'ready', venues_count = ?, fetched_at = ?, attempts = 0, error = ? WHERE id = ?").bind(rows.length, now, note, c.id).run();
@@ -269,15 +279,20 @@ async function cityId(env, country, name) {
   return c ? { id: c.id, status: c.status, n: c.n, lat: c.lat, lon: c.lon } : null;
 }
 
+/** Посилання на пошук у Google Maps, прив'язаний до координат закладу (інакше Google підставляє однойменні заклади з інших місць). */
+export const mapUrl = (v, city) => v.lat != null && v.lon != null
+  ? `https://www.google.com/maps/search/${encodeURIComponent((v.name + ' ' + (v.address || '')).trim())}/@${Number(v.lat).toFixed(6)},${Number(v.lon).toFixed(6)},18z`
+  : `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(v.name + ' ' + city)}`;
+
 /** До 3 закладів категорії: найкращі за (оцінки користувачів + повнота даних OSM), з варіативністю за учасником/днем. Порожньо, якщо база міста ще не готова. */
 export async function venuePicks(env, { country, city, cat, seedKey, lang = 'uk' }) {
   const c = await cityId(env, country, city); if (!c || !cat || (c.status !== 'ready' && !(c.n > 0))) return [];
-  const { results } = await env.DB.prepare('SELECT id, name, address, prior, r_sum, r_cnt, lat, lon, hours FROM venues WHERE city_id = ? AND cat = ?').bind(c.id, cat).all();
+  const { results } = await env.DB.prepare('SELECT id, name, address, prior, r_sum, r_cnt, lat, lon, hours FROM venues WHERE city_id = ? AND cat = ? AND hidden = 0 AND closed_reports < 2').bind(c.id, cat).all();
   const ok = results.filter(v => !(v.r_cnt >= 5 && v.r_sum / v.r_cnt < 3));
   ok.sort((a, b) => (bayes(b) + b.prior * 0.35) - (bayes(a) + a.prior * 0.35));
-  const top = ok.slice(0, 9).map(v => ({ v, k: hash(seedKey + ':' + v.id) })).sort((a, b) => a.k - b.k).slice(0, 3).map(x => x.v);
+  const top = ok.slice(0, 12).map(v => ({ v, k: hash(seedKey + ':' + v.id) })).sort((a, b) => a.k - b.k).slice(0, 3).map(x => x.v);
   return top.sort((a, b) => bayes(b) - bayes(a)).map(v => ({ id: v.id, name: v.name, address: v.address || '', km: c.lat != null && v.lat != null ? Math.round(dist(v.lat, v.lon, c.lat, c.lon) * 10) / 10 : null, hours: formatHours(v.hours, lang), rating: v.r_cnt >= 3 ? Math.round(v.r_sum / v.r_cnt * 10) / 10 : null, count: v.r_cnt,
-    url: `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(v.name + ' ' + city)}`, source: 'osm' }));
+    url: mapUrl(v, city), source: 'osm' }));
 }
 
 /** Оцінка закладу від учасника (1–5); повторна оцінка замінює попередню. Лише для закладів міста календаря. */
@@ -306,6 +321,22 @@ export async function catalogCities(env, cc) {
 export async function catalogCity(env, id) {
   const city = await env.DB.prepare("SELECT id, country, name, status, venues_count, fetched_at, error, lat, lon, alias_of FROM venue_cities WHERE id = ?").bind(id).first(); if (!city) return null;
   const target = city.alias_of ? await env.DB.prepare('SELECT id, name FROM venue_cities WHERE id = ?').bind(city.alias_of).first() : null;
-  const { results } = await env.DB.prepare('SELECT id, cat, name, address, prior, r_sum, r_cnt, hours, lat, lon FROM venues WHERE city_id = ? ORDER BY cat, prior DESC LIMIT 1500').bind(target ? target.id : city.id).all();
+  const { results } = await env.DB.prepare('SELECT id, cat, name, address, prior, r_sum, r_cnt, hours, lat, lon, hidden, closed_reports, edited FROM venues WHERE city_id = ? ORDER BY cat, prior DESC LIMIT 2500').bind(target ? target.id : city.id).all();
   return { city, alias: target, venues: results };
+}
+
+/** Скарга користувача «заклад закрився / не існує»: одна на учасника; після 2 скарг заклад зникає з видачі. */
+export async function reportVenue(env, { memberId, country, city, venueId }) {
+  if (!(await rateLimit(env, 'vrep:' + memberId, 20, 86400))) return { ok: false, error: 'too_many' };
+  const c = await cityId(env, country, city), v = c && await env.DB.prepare('SELECT id FROM venues WHERE id = ? AND city_id = ?').bind(venueId, c.id).first();
+  if (!v) return { ok: false, error: 'not_found' };
+  const ins = await env.DB.prepare('INSERT INTO venue_reports (venue_id, member_id, created_at) VALUES (?,?,?) ON CONFLICT(venue_id, member_id) DO NOTHING').bind(venueId, memberId, Date.now()).run();
+  if (ins.meta && ins.meta.changes) await env.DB.prepare('UPDATE venues SET closed_reports = closed_reports + 1 WHERE id = ?').bind(venueId).run();
+  return { ok: true };
+}
+/** Ручне приховування закладу адміністратором (і повернення). */
+export async function setVenueHidden(env, id, hidden) {
+  const r = await env.DB.prepare('UPDATE venues SET hidden = ? WHERE id = ?').bind(hidden ? 1 : 0, id).run();
+  if (!hidden) await env.DB.prepare('UPDATE venues SET closed_reports = 0 WHERE id = ?').bind(id).run();
+  return r.meta ? r.meta.changes : 0;
 }

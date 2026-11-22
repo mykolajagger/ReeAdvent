@@ -8,7 +8,7 @@ import { issueLoginLink, issueLoginCode, WELCOME_TTL_MS } from './api.js';
 import { getSettings, saveSettings, getPriceUah } from './settings.js';
 import { getFx, refreshFx } from './currency.js';
 import { placesUsage } from './places.js';
-import { venueStats, venueProblems, retryCities, queueCity, overpassProbe, setVenuesPaused, catalogCountries, catalogCities, catalogCity } from './venues.js';
+import { venueStats, venueProblems, retryCities, queueCity, overpassProbe, setVenuesPaused, catalogCountries, catalogCities, catalogCity, setVenueHidden, mapUrl } from './venues.js';
 import { cancelInvoice } from './payments.js';
 
 const ADMIN_LOGIN_TTL = 30 * 60e3, ADMIN_SESSION_TTL = 14 * 24 * 3600e3;
@@ -73,6 +73,7 @@ export async function handleAdmin(request, env, path, m) {
   if (m === 'GET' && path === '/api/admin/venues/countries') return json({ ok: true, countries: await catalogCountries(env) });
   if (m === 'GET' && path === '/api/admin/venues/cities') return json({ ok: true, cities: await catalogCities(env, new URL(request.url).searchParams.get('country')) });
   if (m === 'GET' && (r = path.match(/^\/api\/admin\/venues\/city\/(\d+)$/))) { const x = await catalogCity(env, +r[1]); if (!x) throw new HttpError(404, 'not_found'); return json({ ok: true, ...x }); }
+  if (m === 'POST' && path === '/api/admin/venues/hide') { const b = await readJson(request); const n = await setVenueHidden(env, Number(b.id), !!b.hidden); await audit(env, admin, b.hidden ? 'venue_hide' : 'venue_show', String(b.id), {}); return json({ ok: true, n }); }
   if (m === 'POST' && path === '/api/admin/venues/test') return json({ ok: true, probe: await overpassProbe() });
   if (m === 'POST' && path === '/api/admin/venues/add') { const b = await readJson(request); if (!(await queueCity(env, b.country, b.name))) throw new HttpError(400, 'bad_city'); await audit(env, admin, 'venues_add', null, { country: b.country, name: b.name }); return json({ ok: true }); }
   if (m === 'POST' && path === '/api/admin/fx/refresh') { const r = await refreshFx(env, { force: true }); await audit(env, admin, 'fx_refresh', null, r); if (!r.ok) throw Object.assign(new HttpError(502, 'fx_failed'), { detail: r.error }); return json({ ok: true, ...r }); }

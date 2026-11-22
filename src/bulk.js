@@ -57,7 +57,7 @@ export function parseFeature(line) {
   const t = f && f.properties, id = String(f && f.id || '').match(/^([nwra])(\d+)$/);
   if (!t || !t.name || !f.geometry || !id) return null;
   const c = centerOf(f.geometry); if (!c || !isFinite(c[0]) || !isFinite(c[1])) return null;
-  return { type: { n: 'node', w: 'way', r: 'relation', a: 'way' }[id[1]], id: Number(id[2]), tags: t, lat: c[1], lon: c[0] };
+  return { type: { n: 'node', w: 'way', r: 'relation', a: 'way' }[id[1]], id: Number(id[2]), tags: t, lat: c[1], lon: c[0], timestamp: t['@timestamp'] || null };
 }
 
 /** Розкладає об'єкти по містах, до яких вони близько (радіус пошуку як в Overpass-версії). */

@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import path from 'node:path'; import { fileURLToPath } from 'node:url';
 import { makeDb } from './d1.js';
 import { handle } from '../src/api.js';
-import { runVenues, venuePicks, rateVenue, ensureCity, catOfQuery, catOfGift, formatHours, cityKey, overpassProbe, setVenuesPaused, catalogCountries, catalogCities, catalogCity, overpassQueries, CAT_GROUPS, pickVenues, venueStats, CATS } from '../src/venues.js';
+import { runVenues, venuePicks, rateVenue, ensureCity, catOfQuery, catOfGift, formatHours, cityKey, overpassProbe, setVenuesPaused, catalogCountries, catalogCities, catalogCity, reportVenue, setVenueHidden, mapUrl, isClosedTags, overpassQueries, CAT_GROUPS, pickVenues, venueStats, CATS } from '../src/venues.js';
 import { TOP_CITIES } from '../src/top_cities.js';
 const root = path.join(path.dirname(fileURLToPath(import.meta.url)), '..');
 const db = makeDb(root), raw = db._raw;
@@ -49,7 +49,7 @@ const lv = raw.prepare("SELECT * FROM venue_cities WHERE key = 'UA|lviv'").get()
 const zh = raw.prepare("SELECT * FROM venue_cities WHERE key = 'UA|жовква'").get();
 if (zh.alias_of) { assert.equal(zh.alias_of, lv.id); assert.equal(lv.priority, 1); assert.equal((await venuePicks(env, { country: 'UA', city: 'Жовква', cat: 'cafe', seedKey: 's' })).length, 0, 'ціль ще не готова'); }
 const r2 = await runVenues(env, { fetchImpl: mockFetch }); assert.equal(r2.city, 'UA|lviv'); assert.equal(r2.status, 'ready'); assert(r2.venues >= 21);
-assert(raw.prepare("SELECT COUNT(*) AS n FROM venues WHERE city_id = ? AND cat = 'cafe'").get(lv.id).n === 20, 'не більше 20 на категорію');
+assert(raw.prepare("SELECT COUNT(*) AS n FROM venues WHERE city_id = ? AND cat = 'cafe'").get(lv.id).n === 40, "не більше 40 на категорію");
 
 // ----- видача: аліас і місто-ціль
 let picks = await venuePicks(env, { country: 'UA', city: 'Жовква', cat: 'cafe', seedKey: 'm1:1' });
@@ -127,4 +127,27 @@ const withV = uaCities.find(x => x.venues_count > 0 && !x.alias_of), detail = aw
 assert.equal(await catalogCity(env, 99999999), null);
 const al = uaCities.find(x => x.alias_of); if (al) { const d2 = await catalogCity(env, al.id); assert(d2.alias && d2.alias.id === al.alias_of, 'аліас показує заклади цільового міста'); }
 for (const p of ['/api/admin/venues/countries', '/api/admin/venues/cities?country=UA', '/api/admin/venues/city/1']) assert([401, 403].includes((await handle(new Request('http://x' + p, { headers: { 'x-admin': '1' } }), env)).status), 'лише для адміністраторів: ' + p);
+// ----- закриті заклади, свіжість, нові; посилання; скарги; приховування
+const nowMs = Date.now(), iso = ms => new Date(ms).toISOString(), yr = 365.25 * 864e5, tcase = (id, tags, extra = {}) => ({ type: 'node', id, lat: 49.84, lon: 24.03, tags: { amenity: 'pub', name: 'Pub ' + id, ...tags }, ...extra });
+assert(isClosedTags({ disused: 'yes' }) && isClosedTags({ abandoned: 'yes' }) && isClosedTags({ opening_hours: 'off' }) && isClosedTags({ end_date: '2020-05-01' }) && !isClosedTags({ end_date: '2999-01-01' }) && !isClosedTags({ opening_hours: 'Mo-Su 10:00-22:00' }));
+const fr = pickVenues([tcase(1, { disused: 'yes' }), tcase(2, { opening_hours: 'off' }), tcase(3, { end_date: '2019' }),
+  tcase(10, { website: 'x' }, { timestamp: iso(nowMs - 0.3 * yr) }), tcase(11, { website: 'x' }, { timestamp: iso(nowMs - 8 * yr) }), tcase(12, { website: 'x', check_date: iso(nowMs - 0.5 * yr).slice(0, 10) }, { timestamp: iso(nowMs - 9 * yr) }),
+  tcase(13, { website: 'x', start_date: iso(nowMs - 0.4 * yr).slice(0, 7) }, { timestamp: iso(nowMs - 3 * yr) })], 49.84, 24.03);
+assert.deepEqual(fr.map(x => x.osm).sort(), ['n10', 'n11', 'n12', 'n13'], 'закриті відсіяні');
+const pri = Object.fromEntries(fr.map(x => [x.osm, x.prior])); assert(pri.n10 > pri.n11 + 1, 'нещодавно редагований вище за давній: ' + JSON.stringify(pri)); assert(pri.n12 > pri.n11 + 1, 'check_date рятує давній об\'єкт'); assert(pri.n13 > pri.n11 + 1, 'недавно відкритий (start_date) отримує бонус');
+assert.equal(fr.find(x => x.osm === 'n10').edited > 0, true);
+assert.equal(mapUrl({ name: 'Клепач', address: 'вул. Корзо 1', lat: 48.6208, lon: 22.2879 }, 'Ужгород'), 'https://www.google.com/maps/search/%D0%9A%D0%BB%D0%B5%D0%BF%D0%B0%D1%87%20%D0%B2%D1%83%D0%BB.%20%D0%9A%D0%BE%D1%80%D0%B7%D0%BE%201/@48.620800,22.287900,18z');
+assert(mapUrl({ name: 'X' }, 'Київ').includes('api=1&query='), 'без координат — запасне посилання');
+// скарги: після 2 різних користувачів заклад зникає з видачі; адмін може повернути
+const rv = raw.prepare("SELECT v.id AS id, c.country AS country, c.name AS city, v.cat AS cat FROM venues v JOIN venue_cities c ON c.id = v.city_id WHERE c.name = 'Lviv' OR c.name = 'Жовква' LIMIT 1").get() || raw.prepare("SELECT v.id AS id, c.country AS country, c.name AS city, v.cat AS cat FROM venues v JOIN venue_cities c ON c.id = v.city_id WHERE c.alias_of IS NULL AND v.hidden = 0 LIMIT 1").get();
+assert((await reportVenue(env, { memberId: 'r1', country: rv.country, city: rv.city, venueId: rv.id })).ok);
+assert((await reportVenue(env, { memberId: 'r1', country: rv.country, city: rv.city, venueId: rv.id })).ok, 'повторна скарга того самого — без ефекту');
+assert.equal(raw.prepare('SELECT closed_reports AS n FROM venues WHERE id = ?').get(rv.id).n, 1);
+assert((await reportVenue(env, { memberId: 'r2', country: rv.country, city: rv.city, venueId: rv.id })).ok); assert.equal(raw.prepare('SELECT closed_reports AS n FROM venues WHERE id = ?').get(rv.id).n, 2);
+const shown = async () => { const out = []; for (const s of ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h']) out.push(...(await venuePicks(env, { country: rv.country, city: rv.city, cat: rv.cat, seedKey: s })).map(p => p.id)); return out; };
+assert(!(await shown()).includes(rv.id), 'після двох скарг заклад не показується');
+assert.equal((await reportVenue(env, { memberId: 'r3', country: 'PL', city: 'Nowhere', venueId: rv.id })).error, 'not_found');
+await setVenueHidden(env, rv.id, false); assert.equal(raw.prepare('SELECT closed_reports AS n, hidden FROM venues WHERE id = ?').get(rv.id).n, 0, 'повернення скидає скарги');
+await setVenueHidden(env, rv.id, true); assert(!(await shown()).includes(rv.id), 'прихований адміном не показується'); await setVenueHidden(env, rv.id, false);
+assert((await catalogCity(env, raw.prepare('SELECT city_id AS c FROM venues WHERE id = ?').get(rv.id).c)).venues.every(v => 'hidden' in v && 'closed_reports' in v && 'edited' in v), 'каталог віддає прапорці');
 console.log('VENUES OK');

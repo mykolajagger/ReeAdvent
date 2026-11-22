@@ -17,4 +17,5 @@ DELETE FROM threads;
 UPDATE promo_codes SET used_count = 0;
 DELETE FROM audit_log;
 DELETE FROM venue_ratings;
+DELETE FROM venue_reports;
 UPDATE venues SET r_sum = 0, r_cnt = 0;

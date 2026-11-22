@@ -39,7 +39,7 @@ assert.equal(centerOf(null), null); assert.equal(centerOf({ coordinates: [] }), 
 const line = (id, tags, geometry) => JSON.stringify({ type: 'Feature', id, properties: tags, geometry });
 const pt = (lon, lat) => ({ type: 'Point', coordinates: [lon, lat] });
 let e = parseFeature('\x1e' + line('n42', { amenity: 'cafe', name: 'Копальня' }, pt(24.03, 49.84)) + '\n');
-assert.deepEqual([e.type, e.id, e.lat, e.lon, e.tags.name], ['node', 42, 49.84, 24.03, 'Копальня']);
+assert.deepEqual([e.type, e.id, e.lat, e.lon, e.tags.name], ['node', 42, 49.84, 24.03, 'Копальня']); assert.equal(parseFeature(line('n43', { amenity: 'cafe', name: 'T', '@timestamp': '2025-06-01T10:00:00Z' }, pt(1, 1))).timestamp, '2025-06-01T10:00:00Z');
 assert.equal(parseFeature(line('w7', { amenity: 'cafe', name: 'X' }, { type: 'Polygon', coordinates: [[[1, 1], [3, 1], [3, 3], [1, 1]]] })).type, 'way');
 assert.equal(parseFeature(line('a9', { shop: 'books', name: 'Y' }, pt(1, 1))).type, 'way');
 assert.equal(parseFeature(line('r5', { leisure: 'park', name: 'P' }, pt(1, 1))).type, 'relation');

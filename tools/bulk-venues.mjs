@@ -84,7 +84,9 @@ async function processCountry(cc) {
     downloaded += gb;
     log(`завантажено ${fileGB(inPbf).toFixed(2)} ГБ за ${Math.round((Date.now() - t1) / 1000)} с`);
     run('osmium', ['tags-filter', inPbf, ...osmiumExpressions(), '-o', outPbf, '--overwrite']); fs.rmSync(inPbf);
-    run('osmium', ['export', outPbf, '-f', 'geojsonseq', '--add-unique-id=type_id', '-o', seq, '--overwrite']); fs.rmSync(outPbf);
+    try { run('osmium', ['export', outPbf, '-f', 'geojsonseq', '--add-unique-id=type_id', '--attributes=timestamp', '-o', seq, '--overwrite']); }   // з часом останньої правки (свіжість даних)
+    catch { log('експорт з атрибутами не вдався, пробуємо без них'); run('osmium', ['export', outPbf, '-f', 'geojsonseq', '--add-unique-id=type_id', '-o', seq, '--overwrite']); }
+    fs.rmSync(outPbf);
     log(`експорт ${fileGB(seq).toFixed(2)} ГБ`);
 
     const index = new CityIndex(cities); let lines = 0, kept = 0;
@@ -106,6 +108,10 @@ async function processCountry(cc) {
 }
 
 // ---------- головний цикл ----------
+// Нова версія правил відбору (закриті, свіжість, 40 на категорію): готові міста ставимо на повторне наповнення
+const BULK_VER = '3';
+{ const v = await env.DB.prepare("SELECT value FROM settings WHERE key = 'bulk_ver'").first();
+  if (!v || v.value !== BULK_VER) { await env.DB.prepare("UPDATE venue_cities SET status = 'pending' WHERE status = 'ready' AND alias_of IS NULL").run(); await env.DB.prepare("INSERT INTO settings (key, value, updated_at) VALUES ('bulk_ver', ?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value, updated_at = excluded.updated_at").bind(BULK_VER, Date.now()).run(); log('нова версія правил: усі готові міста поставлено на повторне наповнення'); } }
 const forced = process.argv.slice(2).map(s => s.toUpperCase()).filter(s => /^[A-Z]{2}$/.test(s)), done = new Set();
 async function save(v) { await env.DB.prepare("INSERT INTO settings (key, value, updated_at) VALUES ('venues_last', ?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value, updated_at = excluded.updated_at").bind(JSON.stringify(v).slice(0, 900), Date.now()).run().catch(() => {}); }
 while (Date.now() - T0 < BUDGET) {

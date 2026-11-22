@@ -1,0 +1,30 @@
+name: Діагностика Overture Maps (лише читання)
+
+# Перевіряє, чи придатні відкриті дані Overture Maps для актуальності й популярності закладів. Нічого не змінює в базі.
+on:
+  workflow_dispatch:
+    inputs:
+      bbox:
+        description: 'Необов’язково: west south east north (за замовчуванням Ужгород)'
+        required: false
+        default: ''
+      needle:
+        description: 'Шматок назви для пошуку (за замовчуванням клепач)'
+        required: false
+        default: 'клепач'
+
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: pip install duckdb
+      - name: Подивитися дані
+        env:
+          BBOX: ${{ github.event.inputs.bbox }}
+          NEEDLE: ${{ github.event.inputs.needle }}
+        run: python tools/overture-probe.py $BBOX "$NEEDLE"

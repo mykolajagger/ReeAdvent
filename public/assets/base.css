@@ -159,3 +159,6 @@ textarea:focus{outline:none;border-color:var(--gold)}
 .plist .rate small{margin-right:6px}
 .plist .rate button{background:none;border:0;padding:2px 3px;font-size:18px;line-height:1;color:var(--line);cursor:pointer}
 .plist .rate button.on,.plist .rate button:hover{color:var(--gold)}
+
+.plist .rep{grid-column:1/-1;justify-self:start;background:none;border:0;padding:0;color:var(--muted);font:12px var(--body);text-decoration:underline;cursor:pointer}
+.plist .rep:hover{color:var(--gold2)}

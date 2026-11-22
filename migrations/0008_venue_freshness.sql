@@ -1,0 +1,4 @@
+ALTER TABLE venues ADD COLUMN closed_reports INTEGER NOT NULL DEFAULT 0;
+ALTER TABLE venues ADD COLUMN hidden INTEGER NOT NULL DEFAULT 0;
+ALTER TABLE venues ADD COLUMN edited INTEGER;
+CREATE TABLE venue_reports (venue_id INTEGER NOT NULL, member_id TEXT NOT NULL, created_at INTEGER NOT NULL, PRIMARY KEY (venue_id, member_id));

@@ -1,6 +1,6 @@
 import { GIFTS, INTIMATE, ACTIVITIES, QUESTIONS, REGIONS, generateSchedule, sanitizeSurvey, giftView, intimView, actView, questionText, placesQuery } from './logic.js';
 import { recommend } from './places.js';
-import { ensureCity, runVenuesLogged as runVenues, venuePicks, rateVenue, catOfQuery, catOfGift } from './venues.js';
+import { ensureCity, runVenuesLogged as runVenues, venuePicks, rateVenue, reportVenue, catOfQuery, catOfGift } from './venues.js';
 import { createInvoice, verifyPaid, invoiceStatus } from './payments.js';
 import { verifyTurnstile } from './turnstile.js';
 import { handleAdmin } from './admin.js';
@@ -55,6 +55,7 @@ export async function handle(request, env) {
     if (m === 'POST' && path === '/api/answer') return json(await saveAnswer(request, env, member));
     if (m === 'GET' && (r = path.match(/^\/api\/places\/(\d+)$/))) return json(await placesFor(env, member, +r[1], url.searchParams.get('k')));
     if (m === 'POST' && (r = path.match(/^\/api\/venues\/(\d+)\/rate$/))) { const b = await readJson(request); const out = await rateVenue(env, { memberId: member.id, country: member.country, city: member.city, venueId: +r[1], stars: Number(b.stars) }); if (!out.ok) throw new HttpError(out.error === 'too_many' ? 429 : out.error === 'not_found' ? 404 : 400, out.error); return json(out); }
+    if (m === 'POST' && (r = path.match(/^\/api\/venues\/(\d+)\/report$/))) { const out = await reportVenue(env, { memberId: member.id, country: member.country, city: member.city, venueId: +r[1] }); if (!out.ok) throw new HttpError(out.error === 'too_many' ? 429 : 404, out.error); return json(out); }
     if (m === 'GET' && path === '/api/history') return json(await history(env, member));
     if (m === 'POST' && path === '/api/mark') return json(await mark(request, env, member));
     throw new HttpError(404, 'not_found');
