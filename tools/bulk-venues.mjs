@@ -22,11 +22,12 @@ async function getSkip() { const r = await env.DB.prepare("SELECT value FROM set
 async function skipCountry(cc, why, days = 1) { const s = await getSkip(); s[cc] = { until: Date.now() + days * DAY, why }; await env.DB.prepare("INSERT INTO settings (key, value, updated_at) VALUES ('bulk_skip2', ?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value, updated_at = excluded.updated_at").bind(JSON.stringify(s), Date.now()).run(); log('пропускаємо', cc, 'на', days, 'дн.:', why); }
 
 // Мережеві запити до Geofabrik із повторами: «fetch failed» трапляється випадково
-async function fetchRetry(url, opts = {}, tries = 5) {
+const hostFails = new Map(); const hostOf = u => { try { return new URL(u).host; } catch { return u; } };
+async function fetchRetry(url, opts = {}, tries = 5, timeoutMs = 60000) {
   let last;
   for (let i = 0; i < tries; i++) {
-    try { const r = await fetch(url, { ...opts, signal: AbortSignal.timeout(60000) }); if (r.ok) return r; last = new Error('HTTP ' + r.status + ' ' + url); }
-    catch (e) { last = new Error(`${e.message}${e.cause ? ' (' + (e.cause.code || e.cause.message) + ')' : ''} ${url}`); }
+    try { const r = await fetch(url, { ...opts, signal: AbortSignal.timeout(timeoutMs) }); if (r.ok) return r; last = new Error('HTTP ' + r.status + ' ' + url); hostFails.set(hostOf(url), (hostFails.get(hostOf(url)) || 0) + 1); }
+    catch (e) { hostFails.set(hostOf(url), (hostFails.get(hostOf(url)) || 0) + 1); last = new Error(`${e.message}${e.cause ? ' (' + (e.cause.code || e.cause.message) + ')' : ''} ${url}`); }
     log('повтор', i + 1, 'з', tries, ':', last.message); await sleep(3000 * (i + 1));
   }
   throw last;
@@ -70,7 +71,8 @@ async function processCountry(cc) {
   const pbf = findPbf(idx, cc, cname);
   if (!pbf) { log('УВАГА: у каталозі Geofabrik немає країни', cc, cname, '|', describeIndex(idx)); await skipCountry(cc, 'немає вигрузки Geofabrik', 1); return; }
   let url = null, gb = 0, herr;
-  for (const u of urlVariants(pbf.url)) { try { const head = await fetchRetry(u, { method: 'HEAD', headers: { 'User-Agent': UA } }, 2); url = u; gb = Number(head.headers.get('content-length') || 0) / 1e9; break; } catch (e) { herr = e; log('адреса не відповідає:', u); } }
+  const variants = urlVariants(pbf.url).sort((a, b) => (hostFails.get(hostOf(a)) || 0) - (hostFails.get(hostOf(b)) || 0));   // хост без збоїв у цьому запуску — першим
+  for (const u of variants) { try { const head = await fetchRetry(u, { method: 'HEAD', headers: { 'User-Agent': UA } }, 1, 25000); url = u; gb = Number(head.headers.get('content-length') || 0) / 1e9; break; } catch (e) { herr = e; log('адреса не відповідає:', u); } }
   if (!url) throw herr || new Error('вигрузка недоступна');
   pbf.url = url;
   log(`вигрузка ${pbf.id}: ${gb.toFixed(2)} ГБ`, pbf.shared ? '(спільна для кількох країн)' : '');
@@ -78,7 +80,7 @@ async function processCountry(cc) {
 
   const f = n => path.join(WORK, `${cc}-${n}`), inPbf = f('in.osm.pbf'), outPbf = f('f.osm.pbf'), seq = f('out.geojsonseq');
   try {
-    run('curl', ['-L', '--fail', '--retry', '4', '--retry-delay', '20', '--retry-all-errors', '--connect-timeout', '60', '-A', UA, '-sS', '-o', inPbf, pbf.url]);
+    run('curl', ['-L', '--fail', '--retry', '4', '--retry-delay', '20', '--retry-all-errors', '--connect-timeout', '30', '--speed-limit', '200000', '--speed-time', '60', '-A', UA, '-sS', '-o', inPbf, pbf.url]);
     downloaded += gb;
     log(`завантажено ${fileGB(inPbf).toFixed(2)} ГБ за ${Math.round((Date.now() - t1) / 1000)} с`);
     run('osmium', ['tags-filter', inPbf, ...osmiumExpressions(), '-o', outPbf, '--overwrite']); fs.rmSync(inPbf);
