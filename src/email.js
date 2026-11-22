@@ -104,6 +104,18 @@ export function reminderEmail(env, kind, { name, day, startDate, link, unsubUrl,
   if (kind === 'survey') return build(lang, { subject: t.subject, title: t.title(name), paras: t.p(beforeStart, fmtDate(startDate, lang)), cta: t.cta, url: link, foot, footText });
   return build(lang, { subject: t.subject, title: t.title(name), paras: t.p(), cta: t.cta, url: link, foot, footText });
 }
+/** Нагадування про незавершену оплату: stage 1 (через ~2 год) і stage 2 (через добу). Не більше двох листів на замовлення. */
+export function recoveryEmail(env, { name, link, lang = 'uk', stage = 1 }) {
+  lang = L(lang);
+  const D = {
+    uk: { s1: 'Ви майже замовили ReeAdvent', s2: 'Ваш ReeAdvent ще чекає на вас', title: n => `${n}, лишився один крок`, cta: 'Завершити замовлення',
+      p: ['Ви почали оформлювати адвент-календар для двох, але оплата не завершилась.', 'Натисніть кнопку: ми відновимо замовлення, усе вже заповнено, лишилося оплатити. Відкриється нова сторінка оплати.', 'Якщо обрана вами дата старту вже мине, календар стартує наступного дня.'],
+      foot: 'Ми надішлемо не більше двох нагадувань про це замовлення. Якщо ви передумали, просто проігноруйте лист.' },
+    en: { s1: 'You almost ordered ReeAdvent', s2: 'Your ReeAdvent is still waiting', title: n => `${n}, one step left`, cta: 'Complete the order',
+      p: ['You started ordering an advent calendar for two, but the payment was not completed.', 'Press the button and we will restore the order: everything is filled in, you only need to pay. A new payment page will open.', 'If the start date you chose has already passed, the calendar starts the next day.'],
+      foot: 'We send no more than two reminders about this order. If you changed your mind, simply ignore this email.' } }[lang];
+  return build(lang, { subject: stage === 2 ? D.s2 : D.s1, title: D.title(name), paras: D.p, cta: D.cta, url: link, foot: D.foot, footText: D.foot });
+}
 export function refundEmail(env, amountText, lang = 'uk') {
   lang = L(lang); const t = T[lang].refund;
   return { subject: t.subject, html: `<div style="font:15px/1.6 sans-serif;color:#1d1a14;max-width:560px"><h2 style="font-weight:500">${t.title}</h2>${t.p(amountText, 10).map(p => `<p>${p}</p>`).join('')}<p style="color:#6b6a72;font-size:13px">${T[lang].brand}</p></div>`, text: `${t.title}\n\n${t.p(amountText, 10).map(strip).join('\n\n')}\n\n${T[lang].brand}` };

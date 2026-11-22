@@ -8,6 +8,7 @@ import { handleAdmin } from './admin.js';
 import { findPromo, priceWith, rateLimit, normCode } from './promo.js';
 import { getPriceUah, getSettings } from './settings.js';
 import { cleanUtm, publicTrackConfig } from './ads.js';
+import { resumeValid } from './recovery.js';
 import { getFx, priceCurrency } from './currency.js';
 const listKop = async env => Math.round((await getPriceUah(env)) * 100);
 import { sendEmail, welcomeEmail, partnerInviteEmail, loginEmail } from './email.js';
@@ -34,6 +35,7 @@ export async function handle(request, env) {
     if (m === 'POST' && path === '/api/orders') return await createOrder(request, env);
     if (m === 'POST' && path === '/api/promo/check') return await promoCheck(request, env);
     let r;
+    if (m === 'GET' && (r = path.match(/^\/api\/orders\/([\w-]+)\/resume$/))) return await resumeOrder(request, env, r[1]);
     if (m === 'GET' && (r = path.match(/^\/api\/orders\/([\w-]+)\/status$/))) return await orderStatus(env, r[1]);
     if (m === 'GET' && (r = path.match(/^\/api\/dev\/pay\/([\w-]+)$/))) return await devPay(env, r[1]);
     if (path.startsWith('/api/admin/') && path !== '/api/admin/outbox') return await handleAdmin(request, env, path, m);
@@ -176,10 +178,28 @@ async function devPay(env, id) {
   return new Response(null, { status: 302, headers: { Location: `/thanks.html?order=${id}` } });
 }
 
+/** Відновлення оплати за посиланням із листа: перевіряє підпис, створює новий інвойс і перенаправляє на сторінку оплати. */
+async function resumeOrder(request, env, id) {
+  const home = `${env.BASE_URL}/`, go = url => new Response(null, { status: 302, headers: { Location: url } });
+  const sig = new URL(request.url).searchParams.get('s') || '';
+  if (!(await resumeValid(env, id, sig))) return go(home);
+  const o = await q1(env, 'SELECT * FROM orders WHERE id = ?', id);
+  if (!o) return go(home);
+  if (o.status === 'paid') return go(`${env.BASE_URL}/thanks.html?order=${encodeURIComponent(id)}`);
+  if (o.status !== 'pending' || Date.now() - o.created_at > 7 * 864e5 || !(o.amount_kop > 0)) return go(home + '?resume=expired');
+  let inv; try { inv = await createInvoice(env, o); } catch { return go(home + '?resume=error'); }
+  await run(env, "UPDATE orders SET invoice_id = ? WHERE id = ? AND status = 'pending'", inv.invoiceId, id);
+  return go(inv.pageUrl);
+}
+
 async function monoWebhook(request, env) {
   const b = await readJson(request);
   const invoiceId = String(b.invoiceId || '');
-  const o = await q1(env, 'SELECT * FROM orders WHERE invoice_id = ?', invoiceId);
+  let o = await q1(env, 'SELECT * FROM orders WHERE invoice_id = ?', invoiceId);
+  if (!o && env.PAYMENT_MODE === 'monobank' && invoiceId) {   // замовлення могли відновити новим інвойсом: старий інвойс шукаємо за reference (id замовлення) зі статусу Monobank
+    const j = await invoiceStatus(env, invoiceId), o2 = j && j.reference ? await q1(env, 'SELECT * FROM orders WHERE id = ?', String(j.reference)) : null;
+    if (o2 && j.status === 'success' && Number(j.amount) === o2.amount_kop) { await run(env, 'UPDATE orders SET invoice_id = ? WHERE id = ?', invoiceId, o2.id); o = { ...o2, invoice_id: invoiceId }; }
+  }
   if (!o) return json({ ok: true }); // невідомий інвойс — ігноруємо, але відповідаємо 200
   if (o.status === 'paid') {
     // повернення коштів, зроблене в кабінеті банку чи нашим запитом: підтверджуємо статусом із Monobank

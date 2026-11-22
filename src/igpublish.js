@@ -20,7 +20,7 @@ export const FB_LINE = 'https://reeadvent.fun';
 export const setAuto = (env, on) => setSetting(env, 'ig_auto', on ? '1' : '0');
 export const isStory = p => !!p && (p.type === 'STORY' || p.type === 'STORY_VIDEO');
 export async function getPlan(env) { const p = parse(await getSetting(env, 'ig_plan')) || {}; return { order: Array.isArray(p.order) ? p.order : [], posts: p.posts && typeof p.posts === 'object' ? p.posts : {} }; }
-const savePlan = (env, plan) => setSetting(env, 'ig_plan', JSON.stringify(plan));
+export const savePlan = (env, plan) => setSetting(env, 'ig_plan', JSON.stringify(plan));
 /** Маніфест + правки адміна: порядок, свій підпис, запланований час. */
 export function effective(man, plan) {
   const byId = Object.fromEntries(man.map(p => [p.id, p])), ids = [...plan.order.filter(i => byId[i]), ...man.map(p => p.id).filter(i => !plan.order.includes(i))];
@@ -131,6 +131,25 @@ export async function publishNext(env, { only = null, fetchImpl = fetch, site = 
   if (hasFb && post.fb !== false && !st.fb[post.id]) { try { const r = await publishFb(env, post, { fetchImpl, site }); st.fb[post.id] = { at: now, ...r }; link.fb = r.link; await saveState(env, st); } catch (e) { errors.push('Facebook: ' + String(e.message || e).slice(0, 200)); } }
   st.err = errors.length ? { at: now, id: post.id, error: errors.join(' · ').slice(0, 400) } : null; await saveState(env, st);
   return errors.length ? { ok: false, id: post.id, error: st.err.error } : { ok: true, id: post.id, link: link.ig || link.fb };
+}
+/** Слоти за UTC: стрічка о 16:00 (18:00 за Києвом узимку), сторіс о 08:00 і 18:00 (10:00 і 20:00). */
+export const SLOTS = { post: [[16, 0]], story: [[8, 0], [18, 0]] };
+/** Призначає час усім неопублікованим публікаціям без дати: стрічка раз на день, сторіс двічі на день, з найближчого вільного слота (не раніше ніж за 2 год). Уже призначені не чіпає. */
+export async function fillQueue(env, { now = Date.now(), fetchImpl = fetch, site = SITE, man = null, lead = 2 * 36e5 } = {}) {
+  man = man || await loadManifest(fetchImpl, site);
+  const st = await pubState(env), plan = await getPlan(env), hasFb = !!(await getFbPage(env)), eff = effective(man, plan), out = { post: 0, story: 0, first: null, last: null };
+  for (const fmt of ['post', 'story']) {
+    const taken = eff.filter(p => p.format === fmt && p.at).map(p => p.at), todo = eff.filter(p => p.format === fmt && !p.at && !isComplete(st, p, hasFb));
+    let day = Math.floor((now + lead) / DAY), guard = 0;
+    for (const p of todo) {
+      let slot = null;
+      while (slot == null && guard++ < 800) { for (const [h, m] of SLOTS[fmt]) { const t = day * DAY + (h * 60 + m) * 6e4; if (t >= now + lead && !taken.some(x => Math.abs(x - t) < 30 * 6e4)) { slot = t; break; } } if (slot == null) day++; }
+      if (slot == null) break;
+      (plan.posts[p.id] = plan.posts[p.id] || {}).at = slot; taken.push(slot); out[fmt]++; out.first = out.first == null ? slot : Math.min(out.first, slot); out.last = Math.max(out.last || 0, slot);
+    }
+  }
+  if (out.post + out.story) await savePlan(env, plan);
+  return out;
 }
 /** Автопублікація за розкладом: якщо ввімкнена, публікуємо найраніший пост, час якого настав (раз на запуск). Після помилки пауза 6 год. */
 export async function runAutoPublish(env, { now = Date.now(), ...rest } = {}) {

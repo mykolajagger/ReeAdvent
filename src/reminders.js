@@ -5,6 +5,8 @@ import { issueLoginLink } from './api.js';
 import { refreshFx } from './currency.js';
 import { refreshToken as refreshInstagramToken } from './instagram.js';
 import { runAutoPublish } from './igpublish.js';
+import { runAgent } from './agent.js';
+import { runRecovery } from './recovery.js';
 import { nowOf, localParts, localDayNumber, hmac, toDateStr, fromDateStr, DAYS } from './util.js';
 
 const q = (env, sql, ...a) => env.DB.prepare(sql).bind(...a).all().then(r => r.results);
@@ -84,5 +86,7 @@ export async function runDaily(env) {
   let purge = null;
   if (nowOf(env).getUTCHours() === 1) purge = await purgeOld(env);
   let publish = null; try { publish = await runAutoPublish(env); } catch (e) { console.error('autopublish', e); }   // після нагадувань: публікація Reel може тривати кілька хвилин
-  return { reminders, purge, fx, publish: publish && (publish.skipped || (publish.ok ? 'ok:' + publish.id : 'err')) };
+  let recovery = null; try { recovery = await runRecovery(env); } catch (e) { console.error('recovery', e); }
+  let agent = null; try { agent = await runAgent(env); } catch (e) { console.error('agent', e); }
+  return { reminders, purge, fx, recovery: recovery && (recovery.skipped || recovery.sent), agent: agent && (agent.skipped || agent.mode), publish: publish && (publish.skipped || (publish.ok ? 'ok:' + publish.id : 'err')) };
 }

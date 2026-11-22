@@ -392,10 +392,49 @@ async function renderAds(days) {
   $('#adsdays').onchange = () => renderAds(+$('#adsdays').value);
 }
 
+/* ---------- Агент росту: щоденний звіт, поради, безпечні автодії ---------- */
+const AG_TYPE = { setup: 'Налаштування', fix: 'Виправити', schedule_queue: 'Черга публікацій', enable_recovery: 'Повернення оплат', pause: 'Пауза', scale: 'Масштаб', optimize: 'Оптимізація', budget: 'Бюджет', conv: 'Конверсія', content: 'Контент', geo: 'Географія', info: 'Інфо' };
+async function renderAgent(data) {
+  const host = $('#agentcard'); if (!host) return;
+  let d = data; if (!d) { try { d = await api('GET', '/api/admin/agent'); } catch (e) { host.innerHTML = '<h2>Агент росту</h2><div class="muted">Не вдалося завантажити: ' + esc(errText(e)) + '</div>'; return; } }
+  const f = d.flags, r = d.last, k = r && r.snapshot ? r.snapshot.kpis : null, m = r && r.snapshot ? r.snapshot.money : null, dl = r && r.snapshot ? r.snapshot.daysToLaunch : null;
+  const chip = (t, v) => `<div style="padding:8px 12px;border:1px solid var(--line2);border-radius:12px;min-width:92px"><div class="muted" style="font-size:11px">${t}</div><div style="font-weight:600;font-size:17px">${v}</div></div>`;
+  const tog = (id, on, label) => `<label class="muted" style="display:flex;gap:8px;align-items:flex-start"><input type="checkbox" id="${id}" ${on ? 'checked' : ''} style="margin-top:3px"><span>${label}</span></label>`;
+  host.innerHTML = `<h2>Агент росту</h2>
+  <div class="muted">${f.hasKey ? 'Режим: <b>Claude</b>: аналіз, ідеї й експерименти пише модель (до неї йдуть лише агреговані числа, без імен і пошт).' : 'Режим: <b>правила</b>. Додайте секрет <code>ANTHROPIC_API_KEY</code> у Cloudflare Pages, і аналіз, ідеї та експерименти писатиме Claude.'} Агент не витрачає гроші й не змінює рекламних кампаній: він радить, а безпечне робить сам.</div>
+  <div style="display:grid;gap:8px;margin:6px 0">
+   ${tog('ag-daily', f.daily, 'Щоденний звіт із порадами (приблизно о 9:00 за Києвом)')}
+   ${tog('ag-email', f.email, 'Надсилати дайджест на пошту адміністратора')}
+   ${tog('ag-autoq', f.autoq, 'Автопілот черги: самому призначати час новим публікаціям (стрічка щодня о 18:00, сторіс двічі на день)')}
+   ${tog('ag-rec', f.recovery, 'Нагадувати про незавершену оплату (до двох листів на замовлення: через 2 і 26 годин)')}</div>
+  <div class="row" style="flex-wrap:wrap;gap:10px;align-items:flex-end">
+   <label class="f" style="margin:0">ID рекламного акаунта Meta (для автообліку витрат, лише читання)<input id="ag-acc" inputmode="numeric" value="${esc(f.metaAcc)}" placeholder="цифри з Ads Manager" style="width:230px"></label>
+   <label class="f" style="margin:0">Дата старту календарів<input id="ag-launch" type="date" value="${esc(f.launch)}"></label>
+   <button class="btn ghost" id="ag-save" type="button">Зберегти</button>
+   <button class="btn" id="ag-run" type="button">Запустити агента зараз</button>${f.metaAcc ? '<button class="btn ghost" id="ag-sync" type="button">Синхронізувати витрати Meta</button>' : ''}</div>
+  ${r ? `<div style="border-top:1px solid var(--line);padding-top:12px;display:grid;gap:12px">
+   <div><div class="muted" style="font-size:12px">Звіт за ${esc(r.day)} · ${r.mode === 'claude' ? 'Claude' : 'правила'}${r.note ? ' · ' + esc(r.note) : ''}</div><div style="font-size:16px;line-height:1.45;margin-top:4px">${esc(r.headline)}</div></div>
+   ${k ? `<div class="row" style="flex-wrap:wrap;gap:8px">${chip('Оплат за 7 дн.', k.paid7)}${chip('Оформлень', k.started7)}${chip('Виручка', (k.revenueUah7 || 0).toLocaleString('uk-UA') + ' ₴')}${chip('Витрати', '$' + k.spendUsd7)}${chip('CPA', k.cpaUsd7 != null ? '$' + k.cpaUsd7 : '—')}${chip('ROAS', k.roas7 != null ? k.roas7 + '×' : '—')}${m && m.targetCpaUsd ? chip('Межа CPA', '$' + m.targetCpaUsd) : ''}${dl != null ? chip(dl >= 0 ? 'До старту' : 'Після старту', Math.abs(dl) + ' дн.') : ''}${r.snapshot.recovery && r.snapshot.recovery.sent ? chip('Повернено оплат', r.snapshot.recovery.recovered + ' із ' + r.snapshot.recovery.sent) : ''}</div>` : ''}
+   ${r.applied && r.applied.length ? `<div class="muted">Агент уже зробив: ${r.applied.map(esc).join('; ')}</div>` : ''}
+   <div><b style="font-size:14px">Що зробити</b><div style="display:grid;gap:8px;margin-top:6px">${r.actions.map(a => `<div style="border:1px solid var(--line);border-radius:12px;padding:10px 12px;${a.status !== 'new' ? 'opacity:.55' : ''}"><div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap"><span class="muted" style="font-size:11px;text-transform:uppercase;letter-spacing:.08em">${esc(AG_TYPE[a.type] || a.type)}</span><b style="flex:1;min-width:200px">${esc(a.title)}</b>${a.status === 'done' ? '<span style="color:#27ae60">✅ виконано</span>' : a.status === 'dismissed' ? '<span class="muted">відхилено</span>' : `${a.auto ? `<button class="btn sm agact" data-id="${esc(a.id)}" data-op="apply" type="button">Застосувати</button>` : a.info ? '' : `<button class="btn ghost sm agact" data-id="${esc(a.id)}" data-op="done" type="button">Виконано</button>`}<button class="btn ghost sm agact" data-id="${esc(a.id)}" data-op="dismiss" type="button">Відхилити</button>`}</div><div class="muted" style="margin-top:4px">${esc(a.why)}${a.note ? ' · ' + esc(a.note) : ''}</div></div>`).join('') || '<div class="muted">Порад немає</div>'}</div></div>
+   ${r.ideas && r.ideas.length ? `<div><b style="font-size:14px">Ідеї для контенту (нові формати)</b><div style="display:grid;gap:8px;margin-top:6px">${r.ideas.map((i, n) => `<div style="border:1px solid var(--line);border-radius:12px;padding:10px 12px"><div class="muted" style="font-size:11px;text-transform:uppercase;letter-spacing:.08em">${esc(i.format)}</div><b>${esc(i.hook)}</b><div class="muted" style="margin-top:4px;white-space:pre-wrap">${esc(i.caption_ua)}\n${esc(i.caption_en)}</div><button class="btn ghost sm agcopy" data-n="${n}" type="button" style="margin-top:6px">Скопіювати підпис</button></div>`).join('')}</div></div>` : ''}
+   ${r.experiment ? `<div style="border:1px dashed var(--line2);border-radius:12px;padding:10px 12px"><b>Експеримент: ${esc(r.experiment.title)}</b><div class="muted" style="margin-top:4px">Гіпотеза: ${esc(r.experiment.hypothesis)}<br>Як перевірити: ${esc(r.experiment.how)}</div></div>` : ''}
+   ${d.history && d.history.length ? `<details><summary class="muted" style="cursor:pointer">Попередні звіти (${d.history.length})</summary><div class="muted">${d.history.map(h => `${esc(h.day)} · ${esc(h.headline)}`).join('<br>')}</div></details>` : ''}</div>` : '<div class="muted">Звітів ще немає. Натисніть «Запустити агента зараз», і за кілька секунд з\'являться перші поради.</div>'}`;
+  const post = async (path, body, ok) => { try { const x = await api('POST', '/api/admin/agent/' + path, body); if (ok) toast(typeof ok === 'function' ? ok(x) : ok); return x; } catch (e) { toast(errText(e)); return null; } };
+  const flagsBody = () => ({ daily: $('#ag-daily').checked, email: $('#ag-email').checked, autoq: $('#ag-autoq').checked, recovery: $('#ag-rec').checked });
+  ['ag-daily', 'ag-email', 'ag-autoq', 'ag-rec'].forEach(id => $('#' + id).onchange = async () => { const x = await post('settings', flagsBody(), 'Збережено'); if (x) d.flags = x.flags; });
+  $('#ag-save').onclick = async () => { const x = await post('settings', { ...flagsBody(), metaAcc: $('#ag-acc').value, launch: $('#ag-launch').value }, 'Збережено'); if (x) renderAgent(null); };
+  $('#ag-run').onclick = async () => { const b = $('#ag-run'); b.disabled = true; b.textContent = 'Аналізую…'; const x = await post('run', {}, 'Звіт готовий'); if (x) renderAgent(x); else renderAgent(null); };
+  if ($('#ag-sync')) $('#ag-sync').onclick = async () => { const b = $('#ag-sync'); b.disabled = true; const x = await post('sync', {}, x2 => x2.skipped ? 'Нічого синхронізувати' : `Синхронізовано кампаній: ${x2.campaigns}`); renderAds && renderAds(30); b.disabled = false; };
+  host.querySelectorAll('.agact').forEach(b => b.onclick = async () => { const x = await post('action', { at: r.at, id: b.dataset.id, op: b.dataset.op }, y => y.message || 'Готово'); if (x) { d.last = x.last; renderAgent(d); if (b.dataset.op === 'apply') { try { renderIgPlan(await api('GET', '/api/admin/instagram/publish'), await api('GET', '/api/admin/instagram')); } catch {} } } });
+  host.querySelectorAll('.agcopy').forEach(b => b.onclick = async () => { const i = r.ideas[+b.dataset.n]; try { await navigator.clipboard.writeText(i.caption_ua + '\n\n' + i.caption_en); toast('Скопійовано'); } catch { toast('Не вдалося скопіювати'); } });
+}
+
 /* ---------- Соцмережі й реклама: Instagram, Facebook, публікації; сюди ж додаватимемо рекламу ---------- */
 async function social() {
   const ig = await api('GET', '/api/admin/instagram').catch(() => ({ connected: false })), pb = await api('GET', '/api/admin/instagram/publish').catch(() => null);
   $('#main').innerHTML = `<div class="top"><div><h2>Маркетинг</h2><h1>Соцмережі й реклама</h1></div></div>
+  <div class="card sec" id="agentcard" style="max-width:1000px"><h2>Агент росту</h2><div class="muted">Завантаження…</div></div>
   <div class="card sec" style="max-width:620px;margin-top:14px"><h2>Підключення: Instagram і Facebook</h2>
     ${ig.lastError ? `<div class="muted" style="color:#eb5757">Остання помилка Instagram (${esc(fdate(ig.lastError.at))}): ${esc(ig.lastError.error)}</div>` : ''}
     <div class="muted">${ig.connected ? `Підключено${ig.username ? ': <b>@' + esc(ig.username) + '</b>' : ''}${ig.viaSecret ? ' (через секрет середовища)' : ''}. ${ig.neverExpires ? 'Токен системного користувача: без терміну дії.' : ig.daysLeft != null ? `Токен діє ще ${ig.daysLeft} дн. і продовжується автоматично раз на тиждень.` : ''} Останні пости показуються на головній.` : 'Не підключено: на головній показується лише іконка й посилання на @reeadvent. Щоб показувати стрічку постів, додайте токен: або токен системного користувача (разом із числовим ID акаунта Instagram), або токен Instagram Login (ID не потрібен).'}</div>
@@ -408,7 +447,7 @@ async function social() {
     <div class="row"><button class="btn" id="igs" type="button">Підключити</button>${ig.connected ? '<button class="btn ghost" id="igtest" type="button">Перевірити зараз</button>' : ''}${ig.connected && !ig.viaSecret ? '<button class="btn ghost" id="igd" type="button">Відключити</button>' : ''}</div></div>
   <div class="card sec" id="igplan" style="max-width:1000px;margin-top:14px"></div>
   <div class="card sec" id="adscard" style="max-width:1000px;margin-top:14px"><h2>Реклама</h2><div class="muted">Завантаження…</div></div>`;
-  renderAds(30);
+  renderAds(30); renderAgent(null);
   $('#igse').onclick = async () => { try { const x = await api('POST', '/api/admin/instagram/embeds', { text: $('#ige').value }); toast(x.embeds ? `Збережено постів: ${x.embeds}` : 'Збережено: список порожній'); social(); } catch (e) { toast(errText(e)); } };
   renderIgPlan(pb, ig);
   $('#fbs').onclick = async () => { try { const x = await api('POST', '/api/admin/instagram/fbpage', { id: $('#fbid').value.trim() }); toast(x.fbPage ? 'Сторінку Facebook підключено: ' + x.fbPage.name : 'Facebook відключено'); social(); } catch (e) { toast(errText(e)); } };
