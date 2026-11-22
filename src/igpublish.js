@@ -13,7 +13,9 @@ export async function loadManifest(fetchImpl = fetch, site = SITE) {
   if (!r.ok) throw new Error('manifest ' + r.status);
   return await r.json();
 }
-export async function pubState(env) { const s = parse(await getSetting(env, 'ig_pub')) || {}; return { done: s.done || {}, err: s.err || null, auto: (await getSetting(env, 'ig_auto')) === '1' }; }
+export async function pubState(env) { const s = parse(await getSetting(env, 'ig_pub')) || {}; return { done: s.done || {}, fb: s.fb || {}, err: s.err || null, auto: (await getSetting(env, 'ig_auto')) === '1' }; }
+export const getFbPage = async env => parse(await getSetting(env, 'fb_page')) || null;   // { id, name }
+export const FB_LINE = 'https://reeadvent.fun';
 export const setAuto = (env, on) => setSetting(env, 'ig_auto', on ? '1' : '0');
 const emptyPlan = () => ({ order: [], posts: {} });
 export async function getPlan(env) { const p = parse(await getSetting(env, 'ig_plan')) || {}; return { order: Array.isArray(p.order) ? p.order : [], posts: p.posts && typeof p.posts === 'object' ? p.posts : {} }; }
@@ -21,14 +23,18 @@ const savePlan = (env, plan) => setSetting(env, 'ig_plan', JSON.stringify(plan))
 /** Маніфест + правки адміна: порядок, свій підпис, запланований час. */
 export function effective(man, plan) {
   const byId = Object.fromEntries(man.map(p => [p.id, p])), ids = [...plan.order.filter(i => byId[i]), ...man.map(p => p.id).filter(i => !plan.order.includes(i))];
-  return ids.map(id => { const p = byId[id], o = plan.posts[id] || {}; return { ...p, defaultCaption: p.caption, caption: typeof o.caption === 'string' ? o.caption : p.caption, at: Number.isFinite(o.at) ? o.at : null }; });
+  return ids.map(id => { const p = byId[id], o = plan.posts[id] || {}; return { ...p, defaultCaption: p.caption, caption: typeof o.caption === 'string' ? o.caption : p.caption, at: Number.isFinite(o.at) ? o.at : null, ig: o.ig !== false, fb: o.fb !== false }; });
 }
 export const MAX_CAPTION = 2200;
+/** Усі ввімкнені майданчики поста вже опубліковано? Facebook враховується лише якщо підключено сторінку. */
+export const isComplete = (st, p, hasFb) => { const needIg = p.ig !== false && !st.done[p.id], needFb = hasFb && p.fb !== false && !st.fb[p.id]; return !needIg && !needFb && (p.ig !== false || (hasFb && p.fb !== false)) ; };
 /** Зберігає правки одного поста: caption (рядок або null = стандартний), at (мс або null). Опубліковані пости не змінюються. */
-export async function editPost(env, id, { caption, at } = {}, man) {
+export async function editPost(env, id, { caption, at, ig, fb } = {}, man) {
   const st = await pubState(env); if (!man.find(p => p.id === id)) return { ok: false, error: 'Немає такого поста' };
-  if (st.done[id]) return { ok: false, error: 'Пост уже опубліковано, його не можна змінити' };
+  const fbp = await getFbPage(env), cur = effective(man, await getPlan(env)).find(p => p.id === id);
+  if (isComplete(st, cur, !!fbp)) return { ok: false, error: 'Пост уже опубліковано, його не можна змінити' };
   const plan = await getPlan(env), o = plan.posts[id] = plan.posts[id] || {};
+  if (typeof ig === 'boolean') o.ig = ig; if (typeof fb === 'boolean') o.fb = fb;
   if (caption !== undefined) { if (caption === null) delete o.caption; else { caption = String(caption).replace(/\r/g, '').trim(); if (!caption || caption.length > MAX_CAPTION) return { ok: false, error: 'Підпис: від 1 до 2200 символів' }; if ((caption.match(/#[^\s#]+/g) || []).length > 30) return { ok: false, error: 'Не більше 30 хештегів' }; o.caption = caption; } }
   if (at !== undefined) { if (at === null) delete o.at; else { at = Number(at); if (!Number.isFinite(at) || at < Date.now() - 864e5 || at > Date.now() + 400 * 864e5) return { ok: false, error: 'Некоректна дата' }; o.at = Math.round(at / 6e4) * 6e4; } }
   await savePlan(env, plan); return { ok: true };
@@ -41,11 +47,11 @@ export async function setOrder(env, order, man) {
 export async function spread(env, startMs, everyDays, man) {
   startMs = Number(startMs); everyDays = Math.max(1, Math.min(14, Math.round(Number(everyDays) || 1)));
   if (!Number.isFinite(startMs) || startMs < Date.now() - 36e5) return { ok: false, error: 'Оберіть початок у майбутньому' };
-  const st = await pubState(env), plan = await getPlan(env); let k = 0;
-  for (const p of effective(man, plan)) if (!st.done[p.id]) { (plan.posts[p.id] = plan.posts[p.id] || {}).at = Math.round((startMs + k * everyDays * DAY) / 6e4) * 6e4; k++; }
+  const st = await pubState(env), plan = await getPlan(env), hasFb = !!(await getFbPage(env)); let k = 0;
+  for (const p of effective(man, plan)) if (!isComplete(st, p, hasFb)) { (plan.posts[p.id] = plan.posts[p.id] || {}).at = Math.round((startMs + k * everyDays * DAY) / 6e4) * 6e4; k++; }
   await savePlan(env, plan); return { ok: true, n: k };
 }
-const saveState = (env, st) => setSetting(env, 'ig_pub', JSON.stringify({ done: st.done, err: st.err }));
+const saveState = (env, st) => setSetting(env, 'ig_pub', JSON.stringify({ done: st.done, fb: st.fb, err: st.err }));
 
 async function call(fetchImpl, method, url, params) {
   const body = new URLSearchParams(params);
@@ -84,26 +90,54 @@ export async function publishPost(env, post, { fetchImpl = fetch, site = SITE, d
   return { media_id: pub.id, link };
 }
 
-/** Публікує наступний пост за чергою (або конкретний id). Результат: { ok, id } або { ok: false, error } */
+/** Публікація на сторінку Facebook (токен системного користувача → токен сторінки). Повертає { id, link }. */
+export async function publishFb(env, post, { fetchImpl = fetch, site = SITE } = {}) {
+  const token = await getToken(env); if (!token) throw new Error('Токен не додано');
+  const page = await getFbPage(env); if (!page) throw new Error('Не задано сторінку Facebook');
+  let pt = token; try { const j = await call(fetchImpl, 'GET', `${FB}/${page.id}`, { fields: 'access_token', access_token: token }); if (j.access_token) pt = j.access_token; } catch {}
+  const url = f => `${site}/social/${f}`, text = String(post.caption || '').replace('Посилання в шапці профілю · Link in bio', FB_LINE);
+  let j;
+  if (post.type === 'IMAGE') j = await call(fetchImpl, 'POST', `${FB}/${page.id}/photos`, { url: url(post.files[0]), caption: text, access_token: pt });
+  else if (post.type === 'REELS') j = await call(fetchImpl, 'POST', `${FB}/${page.id}/videos`, { file_url: url(post.files[0]), description: text, access_token: pt });
+  else {
+    const ids = []; for (const f of post.files) ids.push((await call(fetchImpl, 'POST', `${FB}/${page.id}/photos`, { url: url(f), published: 'false', access_token: pt })).id);
+    j = await call(fetchImpl, 'POST', `${FB}/${page.id}/feed`, { message: text, access_token: pt, ...Object.fromEntries(ids.map((id, i) => [`attached_media[${i}]`, JSON.stringify({ media_fbid: id })])) });
+  }
+  const id = j.post_id || j.id; if (!id) throw new Error('Facebook не повернув ID публікації');
+  return { id, link: `https://www.facebook.com/${id}` };
+}
+
+/** Публікує наступний пост за чергою (або конкретний id) на всі ввімкнені майданчики, що ще не отримали його. */
 export async function publishNext(env, { only = null, fetchImpl = fetch, site = SITE, now = Date.now(), delay = 3000 } = {}) {
   const st = await pubState(env); let man;
   try { man = await loadManifest(fetchImpl, site); } catch (e) { return { ok: false, error: 'Не вдалося прочитати список постів: ' + e.message }; }
-  const eff = effective(man, await getPlan(env)), post = only ? eff.find(p => p.id === only) : eff.find(p => !st.done[p.id]);
+  const fbp = await getFbPage(env), hasFb = !!fbp, eff = effective(man, await getPlan(env)), post = only ? eff.find(p => p.id === only) : eff.find(p => !isComplete(st, p, hasFb));
   if (!post) return { ok: false, error: only ? 'Немає такого поста' : 'Усі пости вже опубліковано' };
-  if (st.done[post.id]) return { ok: false, error: 'Цей пост уже опубліковано' };
-  try { const r = await publishPost(env, post, { fetchImpl, site, delay }); st.done[post.id] = { at: now, ...r }; st.err = null; await saveState(env, st); await setSetting(env, 'ig_cache', ''); return { ok: true, id: post.id, link: r.link }; }
-  catch (e) { st.err = { at: now, id: post.id, error: String(e.message || e).slice(0, 240) }; await saveState(env, st); return { ok: false, error: st.err.error }; }
+  if (isComplete(st, post, hasFb)) return { ok: false, error: 'Цей пост уже опубліковано' };
+  const errors = [], link = {};
+  if (post.ig !== false && !st.done[post.id]) { try { const r = await publishPost(env, post, { fetchImpl, site, delay }); st.done[post.id] = { at: now, ...r }; link.ig = r.link; await saveState(env, st); await setSetting(env, 'ig_cache', ''); } catch (e) { errors.push('Instagram: ' + String(e.message || e).slice(0, 200)); } }
+  if (hasFb && post.fb !== false && !st.fb[post.id]) { try { const r = await publishFb(env, post, { fetchImpl, site }); st.fb[post.id] = { at: now, ...r }; link.fb = r.link; await saveState(env, st); } catch (e) { errors.push('Facebook: ' + String(e.message || e).slice(0, 200)); } }
+  st.err = errors.length ? { at: now, id: post.id, error: errors.join(' · ').slice(0, 400) } : null; await saveState(env, st);
+  return errors.length ? { ok: false, id: post.id, error: st.err.error } : { ok: true, id: post.id, link: link.ig || link.fb };
 }
 /** Автопублікація за розкладом: якщо ввімкнена, публікуємо найраніший пост, час якого настав (раз на запуск). Після помилки пауза 6 год. */
 export async function runAutoPublish(env, { now = Date.now(), ...rest } = {}) {
   const st = await pubState(env); if (!st.auto) return { skipped: 'off' };
   if (st.err && st.err.at && now - st.err.at < 6 * 36e5) return { skipped: 'error_cooldown' };
   let man; try { man = await loadManifest(rest.fetchImpl || fetch, rest.site || SITE); } catch { return { skipped: 'manifest' }; }
-  const due = effective(man, await getPlan(env)).filter(p => !st.done[p.id] && p.at && p.at <= now).sort((a, b) => a.at - b.at)[0];
+  const hasFb = !!(await getFbPage(env)), due = effective(man, await getPlan(env)).filter(p => !isComplete(st, p, hasFb) && p.at && p.at <= now).sort((a, b) => a.at - b.at)[0];
   if (!due) return { skipped: 'none_due' };
   return publishNext(env, { now, only: due.id, ...rest });
 }
 export async function publishStatus(env, fetchImpl = fetch, site = SITE) {
-  const st = await pubState(env); let man = []; try { man = await loadManifest(fetchImpl, site); } catch {}
-  return { auto: st.auto, err: st.err, now: Date.now(), posts: effective(man, await getPlan(env)).map(p => ({ id: p.id, type: p.type, files: p.files, cover: p.cover || null, caption: p.caption, defaultCaption: p.defaultCaption, edited: p.caption !== p.defaultCaption, at: p.at, done: st.done[p.id] || null })) };
+  const st = await pubState(env), fbp = await getFbPage(env); let man = []; try { man = await loadManifest(fetchImpl, site); } catch {}
+  return { auto: st.auto, err: st.err, now: Date.now(), fbPage: fbp, posts: effective(man, await getPlan(env)).map(p => ({ id: p.id, type: p.type, files: p.files, cover: p.cover || null, caption: p.caption, defaultCaption: p.defaultCaption, edited: p.caption !== p.defaultCaption, at: p.at, ig: p.ig, fb: p.fb, done: st.done[p.id] || null, fbDone: st.fb[p.id] || null, complete: isComplete(st, p, !!fbp) })) };
+}
+/** Зберігає сторінку Facebook: перевіряє токеном, що вона доступна, і запам'ятовує назву. */
+export async function saveFbPage(env, id, { fetchImpl = fetch } = {}) {
+  id = String(id || '').trim(); if (!id) { await setSetting(env, 'fb_page', ''); return { ok: true, page: null }; }
+  if (!/^\d{5,25}$/.test(id)) return { ok: false, error: 'ID сторінки: лише цифри' };
+  const token = await getToken(env); if (!token) return { ok: false, error: 'Спершу підключіть токен' };
+  try { const j = await call(fetchImpl, 'GET', `${FB}/${id}`, { fields: 'name', access_token: token }); if (!j.name) return { ok: false, error: 'Сторінку не знайдено' }; await setSetting(env, 'fb_page', JSON.stringify({ id, name: j.name })); return { ok: true, page: { id, name: j.name } }; }
+  catch (e) { return { ok: false, error: 'Facebook не пустив до сторінки: ' + String(e.message).slice(0, 160) }; }
 }
