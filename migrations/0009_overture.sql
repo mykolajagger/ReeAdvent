@@ -1,0 +1,3 @@
+ALTER TABLE venues ADD COLUMN ov_conf REAL;
+ALTER TABLE venues ADD COLUMN ov_state TEXT;
+ALTER TABLE venue_cities ADD COLUMN ov_at INTEGER;

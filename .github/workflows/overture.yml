@@ -1,0 +1,36 @@
+name: Збагачення бази закладів даними Overture Maps
+
+# Рівень достовірності (популярність/актуальність), статус «закрито» і нові заклади з відкритих даних Overture Maps.
+# Секрети: CLOUDFLARE_API_TOKEN (D1 → Edit), CLOUDFLARE_ACCOUNT_ID. Спершу застосуйте міграцію docs/d1-console-0009.sql.
+on:
+  schedule:
+    - cron: '37 2 * * 1'      # щопонеділка
+  workflow_dispatch:
+
+concurrency:
+  group: venues-overture
+  cancel-in-progress: false
+
+jobs:
+  enrich:
+    runs-on: ubuntu-latest
+    timeout-minutes: 350
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: pip install duckdb
+      - name: Збагатити базу закладів
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          D1_DATABASE_ID: 8dd4d746-1746-4168-b724-1643f99925e6
+          BUDGET_MIN: '300'
+          WORK_DIR: ${{ runner.temp }}/ov
+        run: |
+          mkdir -p "$WORK_DIR"
+          node tools/overture-enrich.mjs

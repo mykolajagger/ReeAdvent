@@ -175,7 +175,7 @@ export async function resolveCoords(env, c, fetchImpl = fetch) {
 export async function storeCityVenues(env, c, rows, note = null, now = Date.now()) {
   const st = rows.map(v => env.DB.prepare('INSERT INTO venues (city_id, osm, cat, name, address, lat, lon, prior, hours, edited, seen_at) VALUES (?,?,?,?,?,?,?,?,?,?,?) ON CONFLICT(city_id, osm, cat) DO UPDATE SET name = excluded.name, address = excluded.address, lat = excluded.lat, lon = excluded.lon, prior = excluded.prior, hours = excluded.hours, edited = excluded.edited, seen_at = excluded.seen_at').bind(c.id, v.osm, v.cat, v.name, v.address, v.lat, v.lon, v.prior, v.hours, v.edited ?? null, now));
   for (let i = 0; i < st.length; i += 100) await env.DB.batch(st.slice(i, i + 100));
-  if (rows.length) await env.DB.prepare('DELETE FROM venues WHERE city_id = ? AND seen_at < ? AND r_cnt = 0').bind(c.id, now).run(); // зниклі з OSM без оцінок прибираємо
+  if (rows.length) await env.DB.prepare('DELETE FROM venues WHERE city_id = ? AND seen_at < ? AND r_cnt = 0 AND osm NOT LIKE \'ov:%\'').bind(c.id, now).run(); // зниклі з OSM без оцінок прибираємо (заклади з Overture не чіпаємо)
   await env.DB.prepare("UPDATE venue_cities SET status = 'ready', venues_count = ?, fetched_at = ?, attempts = 0, error = ? WHERE id = ?").bind(rows.length, now, note, c.id).run();
 }
 
@@ -279,6 +279,8 @@ async function cityId(env, country, name) {
   return c ? { id: c.id, status: c.status, n: c.n, lat: c.lat, lon: c.lon } : null;
 }
 
+/** Поправка за даними Overture Maps: підтверджений і достовірний заклад піднімається, заклад OSM без пари в добре покритому місті (можливо, закритий) опускається. */
+export const ovAdj = v => v.ov_state === 'match' || v.ov_state === 'ov' ? 0.3 + (Number(v.ov_conf) || 0.5) : v.ov_state === 'miss' ? -0.7 : 0;
 /** Посилання на пошук у Google Maps, прив'язаний до координат закладу (інакше Google підставляє однойменні заклади з інших місць). */
 export const mapUrl = (v, city) => v.lat != null && v.lon != null
   ? `https://www.google.com/maps/search/${encodeURIComponent((v.name + ' ' + (v.address || '')).trim())}/@${Number(v.lat).toFixed(6)},${Number(v.lon).toFixed(6)},18z`
@@ -287,10 +289,12 @@ export const mapUrl = (v, city) => v.lat != null && v.lon != null
 /** До 3 закладів категорії: найкращі за (оцінки користувачів + повнота даних OSM), з варіативністю за учасником/днем. Порожньо, якщо база міста ще не готова. */
 export async function venuePicks(env, { country, city, cat, seedKey, lang = 'uk' }) {
   const c = await cityId(env, country, city); if (!c || !cat || (c.status !== 'ready' && !(c.n > 0))) return [];
-  const { results } = await env.DB.prepare('SELECT id, name, address, prior, r_sum, r_cnt, lat, lon, hours FROM venues WHERE city_id = ? AND cat = ? AND hidden = 0 AND closed_reports < 2').bind(c.id, cat).all();
+  const { results } = await env.DB.prepare('SELECT id, name, address, prior, r_sum, r_cnt, lat, lon, hours, ov_conf, ov_state FROM venues WHERE city_id = ? AND cat = ? AND hidden = 0 AND closed_reports < 2 AND (ov_state IS NULL OR ov_state != \'closed\')').bind(c.id, cat).all();
   const ok = results.filter(v => !(v.r_cnt >= 5 && v.r_sum / v.r_cnt < 3));
-  ok.sort((a, b) => (bayes(b) + b.prior * 0.35) - (bayes(a) + a.prior * 0.35));
-  const top = ok.slice(0, 12).map(v => ({ v, k: hash(seedKey + ':' + v.id) })).sort((a, b) => a.k - b.k).slice(0, 3).map(x => x.v);
+  const score = v => bayes(v) + v.prior * 0.35 + ovAdj(v);
+  const solid = ok.filter(v => v.ov_state !== 'miss'), pool = solid.length >= 3 ? solid : ok;   // «немає в Overture» відсікаємо, якщо є хоча б 3 підтверджені
+  pool.sort((a, b) => score(b) - score(a));
+  const top = pool.slice(0, 12).map(v => ({ v, k: hash(seedKey + ':' + v.id) })).sort((a, b) => a.k - b.k).slice(0, 3).map(x => x.v);
   return top.sort((a, b) => bayes(b) - bayes(a)).map(v => ({ id: v.id, name: v.name, address: v.address || '', km: c.lat != null && v.lat != null ? Math.round(dist(v.lat, v.lon, c.lat, c.lon) * 10) / 10 : null, hours: formatHours(v.hours, lang), rating: v.r_cnt >= 3 ? Math.round(v.r_sum / v.r_cnt * 10) / 10 : null, count: v.r_cnt,
     url: mapUrl(v, city), source: 'osm' }));
 }
@@ -321,7 +325,7 @@ export async function catalogCities(env, cc) {
 export async function catalogCity(env, id) {
   const city = await env.DB.prepare("SELECT id, country, name, status, venues_count, fetched_at, error, lat, lon, alias_of FROM venue_cities WHERE id = ?").bind(id).first(); if (!city) return null;
   const target = city.alias_of ? await env.DB.prepare('SELECT id, name FROM venue_cities WHERE id = ?').bind(city.alias_of).first() : null;
-  const { results } = await env.DB.prepare('SELECT id, cat, name, address, prior, r_sum, r_cnt, hours, lat, lon, hidden, closed_reports, edited FROM venues WHERE city_id = ? ORDER BY cat, prior DESC LIMIT 2500').bind(target ? target.id : city.id).all();
+  const { results } = await env.DB.prepare('SELECT id, cat, name, address, prior, r_sum, r_cnt, hours, lat, lon, hidden, closed_reports, edited, ov_conf, ov_state FROM venues WHERE city_id = ? ORDER BY cat, prior DESC LIMIT 2500').bind(target ? target.id : city.id).all();
   return { city, alias: target, venues: results };
 }
 
