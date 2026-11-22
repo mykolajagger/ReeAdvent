@@ -23,13 +23,15 @@ let calls = 0, ok = true; const calledUrls = [];
 const fakeFetch = async url => { calls++; calledUrls.push(String(url));
   if (String(url).includes('/me/media')) return ok ? new Response(JSON.stringify(media)) : new Response('err', { status: 500 });
   if (String(url).includes('refresh_access_token')) return ok ? new Response(JSON.stringify({ access_token: 'N'.repeat(40), expires_in: 5184000 })) : new Response('{}', { status: 400 });
+  if (String(url).includes('graph.facebook.com') && String(url).includes('?fields=username')) return String(url).includes('GOODTOKEN') && String(url).includes('/17841400000000000?') ? new Response(JSON.stringify({ username: 'reeadvent', id: '17841400000000000' })) : new Response('{"error":{}}', { status: 400 });
+  if (String(url).includes('graph.facebook.com') && String(url).includes('/media?')) return new Response(JSON.stringify(media));
   if (String(url).includes('/me?fields=username')) return String(url).includes('GOODTOKEN') ? new Response(JSON.stringify({ username: 'reeadvent', id: '1' })) : new Response('{"error":{}}', { status: 400 });
   throw new Error('unexpected ' + url); };
 
 // без токена порожньо, мережу не чіпаємо
 assert.deepEqual(await instagramFeed(env, { fetchImpl: fakeFetch }), []); assert.equal(calls, 0); assert.equal((await igStatus(env)).connected, false);
 // токен: коротка/зайва/відхилена
-for (const bad of ['', 'short', 'a'.repeat(700), 'has space ' + 'a'.repeat(40)]) assert.equal((await saveToken(env, bad, { fetchImpl: fakeFetch })).error, 'bad_token', bad.slice(0, 10));
+for (const bad of ['', 'short', 'a'.repeat(900), 'has space ' + 'a'.repeat(40)]) assert.equal((await saveToken(env, bad, { fetchImpl: fakeFetch })).error, 'bad_token', bad.slice(0, 10));
 assert.equal((await saveToken(env, 'WRONG' + 'x'.repeat(40), { fetchImpl: fakeFetch })).error, 'token_rejected'); assert.equal(await getToken(env), null);
 const T0 = Date.now(), GOOD = 'GOODTOKEN' + 'g'.repeat(40);
 assert.deepEqual(await saveToken(env, GOOD, { fetchImpl: fakeFetch, now: T0 }), { ok: true, username: 'reeadvent' });
@@ -48,6 +50,14 @@ ok = false; assert.equal((await refreshToken(env, { fetchImpl: fakeFetch, now: T
 await disconnect(env); assert.equal(await getToken(env), null); assert.equal((await igStatus(env)).connected, false);
 const env2 = { ...env, INSTAGRAM_TOKEN: 'S'.repeat(40) }; assert.equal((await igStatus(env2)).viaSecret, true);
 
+// токен системного користувача (Unified login): graph.facebook.com + ID акаунта, без терміну дії і без продовження
+assert.equal((await saveToken(env, GOOD, { igId: 'abc', fetchImpl: fakeFetch })).error, 'bad_id');
+assert.equal((await saveToken(env, GOOD, { igId: '99999999', fetchImpl: fakeFetch })).error, 'token_rejected', 'невірний ID');
+assert.deepEqual(await saveToken(env, GOOD, { igId: '17841400000000000', fetchImpl: fakeFetch, now: T0 }), { ok: true, username: 'reeadvent' });
+st = await igStatus(env, T0 + 400 * 864e5); assert.deepEqual([st.connected, st.neverExpires, st.daysLeft], [true, true, null]);
+ok = true; calls = 0; calledUrls.length = 0; const fbPosts = await instagramFeed(env, { fetchImpl: fakeFetch, now: T0 + 5 }); assert.equal(fbPosts.length, 6); assert(calledUrls.some(u => u.startsWith('https://graph.facebook.com/v23.0/17841400000000000/media?')), calledUrls.join(' '));
+assert.equal((await refreshToken(env, { fetchImpl: fakeFetch, now: T0 + 90 * 864e5 })).refreshed, false, 'токен без терміну дії не продовжується');
+await disconnect(env);
 // публічний API й захист адмінки
 const pub = await handle(new Request('http://x/api/instagram'), env); const pj = await pub.json();
 assert.equal(pub.status, 200); assert.deepEqual([pj.ok, pj.handle, pj.posts], [true, 'reeadvent', []]); assert.match(pub.headers.get('cache-control'), /max-age=600/);
