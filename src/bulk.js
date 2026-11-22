@@ -93,7 +93,10 @@ export async function queueCities(env, cc, now = Date.now()) {
 }
 
 /** Варіанти адреси файлу: з каталогу (europe/ukraine/ukraine-latest…) і «пласка» (europe/ukraine-latest…). Geofabrik інколи віддає лише одну з них. */
+export const GF_BASES = ['https://download.geofabrik.de/', 'https://ftp5.gwdg.de/pub/misc/openstreetmap/download.geofabrik.de/'];   // головний сервер і дзеркало GWDG
 export function urlVariants(url) {
-  const m = String(url).match(/^(.*)\/([^/]+)\/\2-latest\.osm\.pbf$/);
-  return m ? [url, `${m[1]}/${m[2]}-latest.osm.pbf`] : [url];
+  const m = String(url).match(/^(.*)\/([^/]+)\/\2-latest\.osm\.pbf$/), forms = m ? [url, `${m[1]}/${m[2]}-latest.osm.pbf`] : [url];
+  const out = [...forms];
+  for (const f of forms) if (f.startsWith(GF_BASES[0])) out.push(GF_BASES[1] + f.slice(GF_BASES[0].length));          // те саме на дзеркалі
+  return out;
 }

@@ -6,7 +6,7 @@ import fs from 'node:fs'; import path from 'node:path'; import os from 'node:os'
 import { spawnSync } from 'node:child_process';
 import { makeRestDb } from './d1-rest.mjs';
 import { pickVenues, storeCityVenues, resolveCoords } from '../src/venues.js';
-import { osmiumExpressions, findPbf, describeIndex, urlVariants, parseFeature, CityIndex, queueCountries, queueCities } from '../src/bulk.js';
+import { osmiumExpressions, findPbf, describeIndex, urlVariants, GF_BASES, parseFeature, CityIndex, queueCountries, queueCities } from '../src/bulk.js';
 
 const { CLOUDFLARE_API_TOKEN: token, CLOUDFLARE_ACCOUNT_ID: accountId, D1_DATABASE_ID: databaseId } = process.env;
 if (!token || !accountId || !databaseId) { console.error('Потрібні CLOUDFLARE_API_TOKEN, CLOUDFLARE_ACCOUNT_ID, D1_DATABASE_ID'); process.exit(1); }
@@ -15,7 +15,7 @@ const BUDGET = (Number(process.env.BUDGET_MIN) || 300) * 60e3, MAX_GB = Number(p
 const WORK = process.env.WORK_DIR || fs.mkdtempSync(path.join(os.tmpdir(), 'bulk-'));
 const log = (...a) => console.log(new Date().toISOString().slice(11, 19), ...a);
 const sleep = ms => new Promise(r => setTimeout(r, ms));
-const DAY = 864e5;
+const DAY = 864e5, MAX_DL_GB = Number(process.env.MAX_DOWNLOAD_GB) || 12; let downloaded = 0;   // за один запуск скачуємо не більше MAX_DOWNLOAD_GB, щоб не перевантажувати Geofabrik
 
 // ---------- налаштування: країни, що тимчасово пропускаємо (помилка, завеликий файл) ----------
 async function getSkip() { const r = await env.DB.prepare("SELECT value FROM settings WHERE key = 'bulk_skip2'").first(); try { return r ? JSON.parse(r.value) : {}; } catch { return {}; } }
@@ -31,7 +31,14 @@ async function fetchRetry(url, opts = {}, tries = 5) {
   }
   throw last;
 }
-let _idx = null; const getIndex = async () => _idx || (_idx = await (await fetchRetry('https://download.geofabrik.de/index-v1-nogeom.json')).json());
+const UA = 'ReeAdvent-bulk/1.0 (+https://reeadvent.fun; support@reeadvent.fun)';
+class Unavailable extends Error {}
+let _idx = null;
+async function getIndex() {
+  if (_idx) return _idx;
+  for (const base of GF_BASES) { try { return (_idx = await (await fetchRetry(base + 'index-v1-nogeom.json', { headers: { 'User-Agent': UA } }, 2)).json()); } catch (e) { log('каталог недоступний:', base, e.message.slice(0, 80)); } }
+  throw new Unavailable('Geofabrik і дзеркало недоступні (можливе тимчасове блокування за навантаження)');
+}
 async function unskipCountry(cc) { const s = await getSkip(); if (!s[cc]) return; delete s[cc]; await env.DB.prepare("INSERT INTO settings (key, value, updated_at) VALUES ('bulk_skip2', ?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value, updated_at = excluded.updated_at").bind(JSON.stringify(s), Date.now()).run(); }
 async function pickCountry(done) {
   const skip = await getSkip();
@@ -63,7 +70,7 @@ async function processCountry(cc) {
   const pbf = findPbf(idx, cc, cname);
   if (!pbf) { log('УВАГА: у каталозі Geofabrik немає країни', cc, cname, '|', describeIndex(idx)); await skipCountry(cc, 'немає вигрузки Geofabrik', 1); return; }
   let url = null, gb = 0, herr;
-  for (const u of urlVariants(pbf.url)) { try { const head = await fetchRetry(u, { method: 'HEAD' }, 3); url = u; gb = Number(head.headers.get('content-length') || 0) / 1e9; break; } catch (e) { herr = e; log('адреса не відповідає:', u); } }
+  for (const u of urlVariants(pbf.url)) { try { const head = await fetchRetry(u, { method: 'HEAD', headers: { 'User-Agent': UA } }, 2); url = u; gb = Number(head.headers.get('content-length') || 0) / 1e9; break; } catch (e) { herr = e; log('адреса не відповідає:', u); } }
   if (!url) throw herr || new Error('вигрузка недоступна');
   pbf.url = url;
   log(`вигрузка ${pbf.id}: ${gb.toFixed(2)} ГБ`, pbf.shared ? '(спільна для кількох країн)' : '');
@@ -71,7 +78,8 @@ async function processCountry(cc) {
 
   const f = n => path.join(WORK, `${cc}-${n}`), inPbf = f('in.osm.pbf'), outPbf = f('f.osm.pbf'), seq = f('out.geojsonseq');
   try {
-    run('curl', ['-L', '--fail', '--retry', '5', '--retry-delay', '20', '--retry-all-errors', '--connect-timeout', '60', '-sS', '-o', inPbf, pbf.url]);
+    run('curl', ['-L', '--fail', '--retry', '4', '--retry-delay', '20', '--retry-all-errors', '--connect-timeout', '60', '-A', UA, '-sS', '-o', inPbf, pbf.url]);
+    downloaded += gb;
     log(`завантажено ${fileGB(inPbf).toFixed(2)} ГБ за ${Math.round((Date.now() - t1) / 1000)} с`);
     run('osmium', ['tags-filter', inPbf, ...osmiumExpressions(), '-o', outPbf, '--overwrite']); fs.rmSync(inPbf);
     run('osmium', ['export', outPbf, '-f', 'geojsonseq', '--add-unique-id=type_id', '-o', seq, '--overwrite']); fs.rmSync(outPbf);
@@ -99,11 +107,12 @@ async function processCountry(cc) {
 const forced = process.argv.slice(2).map(s => s.toUpperCase()).filter(s => /^[A-Z]{2}$/.test(s)), done = new Set();
 async function save(v) { await env.DB.prepare("INSERT INTO settings (key, value, updated_at) VALUES ('venues_last', ?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value, updated_at = excluded.updated_at").bind(JSON.stringify(v).slice(0, 900), Date.now()).run().catch(() => {}); }
 while (Date.now() - T0 < BUDGET) {
+  if (downloaded >= MAX_DL_GB) { log(`ліміт завантажень за запуск (${MAX_DL_GB} ГБ) вичерпано, решту доробить наступний запуск`); break; }
   const cc = forced.length ? forced.shift() : (process.argv.length > 2 ? null : await pickCountry(done));
   if (!cc) { log('черга порожня'); break; }
   done.add(cc);
   if (done.size > 1) await sleep(20000);   // пауза між країнами: Geofabrik обмежує частоту завантажень
   try { await processCountry(cc); await unskipCountry(cc); await save({ at: Date.now(), out: { bulk: cc, status: 'done' } }); }
-  catch (e) { log('ПОМИЛКА', cc, String(e && e.stack || e).slice(0, 500)); await skipCountry(cc, String(e && e.message || e).slice(0, 120), 0.25); await save({ at: Date.now(), error: `bulk ${cc}: ${String(e && e.message || e).slice(0, 200)}` }); }
+  catch (e) { if (e instanceof Unavailable) { log('ЗУПИНКА:', e.message); await save({ at: Date.now(), error: e.message }); break; } log('ПОМИЛКА', cc, String(e && e.stack || e).slice(0, 500)); await skipCountry(cc, String(e && e.message || e).slice(0, 120), 0.25); await save({ at: Date.now(), error: `bulk ${cc}: ${String(e && e.message || e).slice(0, 200)}` }); }
 }
 log('завершено');
