@@ -281,13 +281,15 @@ async function inbox() {
 /* ---------- Налаштування (відсотки для дашборда) ---------- */
 
 /* ---------- Instagram: редактор публікацій (перегляд, підпис, розклад, порядок) ---------- */
-let igSel = null, igSlide = 0;
+let igSel = null, igSlide = 0, igTab = 'post';
 const igMedia = f => '/social/' + encodeURIComponent(f);
 const dtLocal = t => t ? new Date(t - new Date(t).getTimezoneOffset() * 6e4).toISOString().slice(0, 16) : '';
-const igTitle = p => String(p.caption || '').split('\n')[0].slice(0, 48);
-const igKind = p => p.type === 'REELS' ? 'Reel' : p.type === 'CAROUSEL' ? 'Карусель · ' + p.files.length : 'Фото';
+const igTitle = p => p.title || String(p.caption || '').split('\n')[0].slice(0, 48);
+const igKind = p => p.type === 'REELS' ? 'Reel' : p.type === 'CAROUSEL' ? 'Карусель · ' + p.files.length : p.type === 'STORY' ? 'Сторіс · фото' : p.type === 'STORY_VIDEO' ? 'Сторіс · відео' : 'Фото';
+const isVid = p => p.type === 'REELS' || p.type === 'STORY_VIDEO';
 const igCaptionHtml = c => String(c).split(/(#[^\s#]+)/).map(t => t.length > 1 && t[0] === '#' ? `<span style="color:#7aa7ff">${esc(t)}</span>` : esc(t)).join('').replace(/\n/g, '<br>');
 function igMediaHtml(p) {
+  if (p.format === 'story') return `<div style="position:relative;background:#000;width:100%;aspect-ratio:9/16;max-height:500px;margin:0 auto">${p.type === 'STORY_VIDEO' ? `<video src="${igMedia(p.files[0])}" poster="${p.cover ? igMedia(p.cover) : ''}" controls playsinline preload="metadata" style="width:100%;height:100%;object-fit:contain;display:block"></video>` : `<img src="${igMedia(p.files[0])}" alt="" style="width:100%;height:100%;object-fit:contain;display:block">`}<div style="position:absolute;left:10px;right:10px;top:8px;height:3px;border-radius:2px;background:#ffffff55;pointer-events:none"><i style="display:block;width:35%;height:100%;background:#fff;border-radius:2px"></i></div></div>`;
   if (p.type === 'REELS') return `<video src="${igMedia(p.files[0])}" poster="${p.cover ? igMedia(p.cover) : ''}" controls playsinline preload="metadata" style="width:100%;display:block;background:#000;aspect-ratio:9/16;max-height:420px;object-fit:contain"></video>`;
   const n = p.files.length, i = Math.min(igSlide, n - 1);
   return `<div style="position:relative;background:#000"><img src="${igMedia(p.files[i])}" alt="" style="width:100%;display:block;aspect-ratio:4/5;object-fit:cover">${n > 1 ? `<button type="button" class="btn sm" id="igprev" style="position:absolute;left:6px;top:45%">‹</button><button type="button" class="btn sm" id="ignext" style="position:absolute;right:6px;top:45%">›</button><div style="position:absolute;right:8px;top:8px;background:#000a;color:#fff;border-radius:10px;padding:2px 8px;font-size:12px">${i + 1}/${n}</div><div style="text-align:center;position:absolute;left:0;right:0;bottom:6px;color:#fff;font-size:18px;letter-spacing:3px">${p.files.map((_, k) => k === i ? '●' : '○').join('')}</div>` : ''}</div>`;
@@ -295,51 +297,57 @@ function igMediaHtml(p) {
 function renderIgPlan(pb, ig) {
   const host = $('#igplan'); if (!host) return;
   if (!pb || !pb.posts || !pb.posts.length) { host.innerHTML = '<h2>Публікації Instagram</h2><div class="muted">Список постів поки недоступний (файл /social/posts.json). Спробуйте оновити сторінку після розгортання сайту.</div>'; return; }
-  if (!pb.posts.find(p => p.id === igSel)) { igSel = (pb.posts.find(p => !p.done) || pb.posts[0]).id; igSlide = 0; }
-  const P = pb.posts, p = P.find(x => x.id === igSel), now = Date.now();
+  const P = pb.posts, now = Date.now(), V = P.filter(x => (x.format || 'post') === igTab), nPost = P.filter(x => (x.format || 'post') === 'post').length, nStory = P.length - nPost;
+  if (!V.length) igTab = 'post';
+  const list = P.filter(x => (x.format || 'post') === igTab);
+  if (!list.find(x => x.id === igSel)) { igSel = (list.find(x => !x.complete) || list[0]).id; igSlide = 0; }
+  const p = list.find(x => x.id === igSel), story = p.format === 'story';
   const hasFb = !!pb.fbPage, plat = (on, d, name) => on ? (d ? `<span style="color:#27ae60" title="${esc(fdate(d.at))}">${name} ✅</span>` : `<span class="muted">${name} ⏳</span>`) : `<span class="muted" style="text-decoration:line-through">${name}</span>`;
   const status = x => `${plat(x.ig, x.done, 'IG')}${hasFb ? ' ' + plat(x.fb, x.fbDone, 'FB') : ''} · ${x.complete ? '<span style="color:#27ae60">готово</span>' : x.at ? `<span style="color:${x.at < now ? '#eb5757' : '#2f80ed'}">🕒 ${esc(fdate(x.at))}</span>` : '<span class="muted">без дати</span>'}`;
+  const tabBtn = (k, label, n) => `<button type="button" class="btn ${igTab === k ? '' : 'ghost'} sm igtab" data-t="${k}">${label} (${n})</button>`;
   host.innerHTML = `<h2>Публікації Instagram і Facebook</h2>
-  <div class="muted">Перегляньте пост, відредагуйте підпис і призначте дату й час (ваш місцевий час). З увімкненою автопублікацією пост виходить сам у призначений час (перевірка щогодини).</div>
+  <div class="muted">Перегляньте публікацію, відредагуйте підпис і призначте дату й час (ваш місцевий час). З увімкненою автопублікацією вона виходить сама у призначений час (перевірка щогодини).</div>
+  <div class="row" style="gap:8px">${tabBtn('post', 'Пости й Reels', nPost)}${nStory ? tabBtn('story', 'Сторіс', nStory) : ''}</div>
   <div style="display:flex;gap:18px;flex-wrap:wrap;align-items:flex-start">
-   <div style="flex:1 1 300px;min-width:260px;display:grid;gap:8px" id="iglist">${P.map((x, i) => `<div class="card" data-id="${esc(x.id)}" style="padding:8px;display:flex;gap:10px;align-items:center;cursor:pointer;${x.id === igSel ? 'border-color:var(--accent);box-shadow:0 0 0 1px var(--accent)' : ''}">
-      <img src="${igMedia(x.type === 'REELS' ? x.cover : x.files[0])}" alt="" style="width:48px;height:60px;object-fit:cover;border-radius:6px;flex:none">
+   <div style="flex:1 1 300px;min-width:260px;display:grid;gap:8px" id="iglist">${list.map((x, i) => `<div class="card" data-id="${esc(x.id)}" style="padding:8px;display:flex;gap:10px;align-items:center;cursor:pointer;${x.id === igSel ? 'border-color:var(--accent);box-shadow:0 0 0 1px var(--accent)' : ''}">
+      <img src="${igMedia(isVid(x) ? x.cover : x.files[0])}" alt="" style="width:${x.format === 'story' ? 36 : 48}px;height:60px;object-fit:cover;border-radius:6px;flex:none">
       <div style="flex:1;min-width:0"><div style="font-weight:600;font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${i + 1}. ${esc(igTitle(x))}</div><div class="muted" style="font-size:12px">${igKind(x)}${x.edited ? ' · змінено' : ''} · ${status(x)}</div></div>
-      ${x.complete ? '' : `<div style="display:grid;gap:2px"><button type="button" class="btn ghost sm igup" data-i="${i}" ${i === 0 ? 'disabled' : ''}>↑</button><button type="button" class="btn ghost sm igdn" data-i="${i}" ${i === P.length - 1 ? 'disabled' : ''}>↓</button></div>`}</div>`).join('')}
-    <div class="card" style="padding:10px;display:grid;gap:8px"><b style="font-size:13px">Розставити по днях</b>
-     <div class="row" style="flex-wrap:wrap;gap:8px"><label class="f" style="margin:0">Перший пост<input type="datetime-local" id="igsp0"></label><label class="f" style="margin:0">Кожні, днів<input type="number" id="igspn" min="1" max="14" value="1" style="width:80px"></label></div>
+      ${x.complete ? '' : `<div style="display:grid;gap:2px"><button type="button" class="btn ghost sm igup" data-i="${i}" ${i === 0 ? 'disabled' : ''}>↑</button><button type="button" class="btn ghost sm igdn" data-i="${i}" ${i === list.length - 1 ? 'disabled' : ''}>↓</button></div>`}</div>`).join('')}
+    <div class="card" style="padding:10px;display:grid;gap:8px"><b style="font-size:13px">Розставити за розкладом${story ? ' (сторіс)' : ''}</b>
+     <div class="row" style="flex-wrap:wrap;gap:8px"><label class="f" style="margin:0">Перша публікація<input type="datetime-local" id="igsp0"></label><label class="f" style="margin:0">Інтервал<select id="igspn">${[[0.25, 'кожні 6 годин'], [0.5, 'кожні 12 годин'], [1, 'щодня'], [2, 'через день'], [3, 'кожні 3 дні'], [7, 'раз на тиждень']].map(([v, t]) => `<option value="${v}" ${v === 1 ? 'selected' : ''}>${t}</option>`).join('')}</select></label></div>
      <button type="button" class="btn ghost sm" id="igspread">Призначити час усім неопублікованим за порядком</button></div>
     <label class="muted" style="display:flex;gap:6px;align-items:center"><input type="checkbox" id="igauto" ${pb.auto ? 'checked' : ''}> Автопублікація за розкладом ${ig && ig.connected ? '' : '(спершу підключіть Instagram)'}</label>
     ${pb.err ? `<div class="muted" style="color:#eb5757">Остання помилка (${esc(fdate(pb.err.at))}, ${esc(pb.err.id)}): ${esc(pb.err.error)}</div>` : ''}
    </div>
    <div style="flex:1 1 330px;min-width:280px;display:grid;gap:10px">
-    <div class="card" style="padding:0;overflow:hidden;max-width:380px;background:#0e0f14;color:#f3efe6">
-     <div style="display:flex;gap:8px;align-items:center;padding:10px 12px"><div style="width:30px;height:30px;border-radius:50%;background:linear-gradient(135deg,#d6b46a,#8a6a2a)"></div><b style="font-size:13px">reeadvent</b><span style="margin-left:auto;opacity:.6">···</span></div>
+    <div class="card" style="padding:0;overflow:hidden;max-width:${story ? 260 : 380}px;background:#0e0f14;color:#f3efe6">
+     <div style="display:flex;gap:8px;align-items:center;padding:10px 12px"><div style="width:30px;height:30px;border-radius:50%;background:linear-gradient(135deg,#d6b46a,#8a6a2a)"></div><b style="font-size:13px">reeadvent</b><span style="margin-left:auto;opacity:.6">${story ? '24 год' : '···'}</span></div>
      ${igMediaHtml(p)}
-     <div style="padding:10px 12px;font-size:13px;line-height:1.45;max-height:230px;overflow:auto"><b>reeadvent</b> <span id="igprevcap">${igCaptionHtml(p.caption)}</span></div></div>
-    <label class="f">Підпис (${p.complete ? 'опубліковано, лише перегляд' : 'можна редагувати'}${hasFb ? '; у Facebook рядок «Посилання в шапці профілю» замінюється на reeadvent.fun' : ''})<textarea id="igcap" rows="9" ${p.complete ? 'disabled' : ''}>${esc(p.caption)}</textarea></label>
-    <div class="muted" id="igcnt"></div>
-    ${p.complete ? `<div class="muted">Опубліковано${p.done ? ` в Instagram ${esc(fdate(p.done.at))}${p.done.link ? ` · <a href="${esc(p.done.link)}" target="_blank" rel="noopener">відкрити</a>` : ''}` : ''}${p.fbDone ? ` · у Facebook ${esc(fdate(p.fbDone.at))} · <a href="${esc(p.fbDone.link)}" target="_blank" rel="noopener">відкрити</a>` : ''}</div>` : `
+     ${story ? '' : `<div style="padding:10px 12px;font-size:13px;line-height:1.45;max-height:230px;overflow:auto"><b>reeadvent</b> <span id="igprevcap">${igCaptionHtml(p.caption)}</span></div>`}</div>
+    ${story ? `<div class="muted">Сторіс не має підпису: текст уже на картинці. Вона живе 24 години. Посилання, опитування й інші стікери API не підтримує: додайте їх вручну в застосунку Instagram, якщо потрібно.</div>` : `<label class="f">Підпис (${p.complete ? 'опубліковано, лише перегляд' : 'можна редагувати'}${hasFb ? '; у Facebook рядок «Посилання в шапці профілю» замінюється на reeadvent.fun' : ''})<textarea id="igcap" rows="9" ${p.complete ? 'disabled' : ''}>${esc(p.caption)}</textarea></label>
+    <div class="muted" id="igcnt"></div>`}
+    ${p.complete ? `<div class="muted">Опубліковано${p.done ? ` в Instagram ${esc(fdate(p.done.at))}${p.done.link ? ` · <a href="${esc(p.done.link)}" target="_blank" rel="noopener">відкрити</a>` : ''}` : ''}${p.fbDone ? ` · у Facebook ${esc(fdate(p.fbDone.at))}${p.fbDone.link ? ` · <a href="${esc(p.fbDone.link)}" target="_blank" rel="noopener">відкрити</a>` : ''}` : ''}</div>` : `
     <div class="row" style="gap:16px"><span class="muted">Куди публікувати:</span><label class="muted" style="display:flex;gap:6px;align-items:center"><input type="checkbox" id="igt-ig" ${p.ig ? 'checked' : ''} ${p.done ? 'disabled' : ''}> Instagram${p.done ? ' ✅' : ''}</label>${hasFb ? `<label class="muted" style="display:flex;gap:6px;align-items:center"><input type="checkbox" id="igt-fb" ${p.fb ? 'checked' : ''} ${p.fbDone ? 'disabled' : ''}> Facebook${p.fbDone ? ' ✅' : ''}</label>` : ''}</div>
     <label class="f">Дата й час публікації<input type="datetime-local" id="igat" value="${dtLocal(p.at)}"></label>
-    <div class="row" style="flex-wrap:wrap;gap:8px"><button class="btn" id="igsave" type="button">Зберегти</button><button class="btn ghost" id="igreset" type="button" ${p.edited ? '' : 'disabled'}>Стандартний підпис</button><button class="btn ghost" id="igclear" type="button" ${p.at ? '' : 'disabled'}>Зняти дату</button><button class="btn ghost" id="igpub" type="button" ${ig && ig.connected ? '' : 'disabled'}>Опублікувати зараз</button></div>
-    <div class="muted">Reel обробляється до 3 хвилин, під час публікації не закривайте сторінку.</div>`}
+    <div class="row" style="flex-wrap:wrap;gap:8px"><button class="btn" id="igsave" type="button">Зберегти</button>${story ? '' : `<button class="btn ghost" id="igreset" type="button" ${p.edited ? '' : 'disabled'}>Стандартний підпис</button>`}<button class="btn ghost" id="igclear" type="button" ${p.at ? '' : 'disabled'}>Зняти дату</button><button class="btn ghost" id="igpub" type="button" ${ig && ig.connected ? '' : 'disabled'}>Опублікувати зараз</button></div>
+    <div class="muted">${isVid(p) ? 'Відео обробляється до 3 хвилин, під час публікації не закривайте сторінку.' : 'Публікація займає до хвилини.'}</div>`}
    </div></div>`;
   const apply = x => { Object.assign(pb, x); renderIgPlan(pb, ig); };
   const post = async (path, body, okMsg) => { try { const x = await api('POST', '/api/admin/instagram/' + path, body); if (x.ok === false) { toast(x.error || 'Не вийшло'); return null; } if (okMsg) toast(okMsg); apply(x); return x; } catch (e) { toast(errText(e)); return null; } };
-  const count = () => { const c = $('#igcap').value, tags = (c.match(/#[^\s#]+/g) || []).length; $('#igcnt').innerHTML = `${c.length}/2200 символів · ${tags}/30 хештегів` + (c.length > 2200 || tags > 30 ? ' <b style="color:#eb5757">перевищено</b>' : ''); $('#igprevcap').innerHTML = igCaptionHtml(c); };
-  count(); $('#igcap').oninput = count;
+  if (!story) { const count = () => { const c = $('#igcap').value, tags = (c.match(/#[^\s#]+/g) || []).length; $('#igcnt').innerHTML = `${c.length}/2200 символів · ${tags}/30 хештегів` + (c.length > 2200 || tags > 30 ? ' <b style="color:#eb5757">перевищено</b>' : ''); $('#igprevcap').innerHTML = igCaptionHtml(c); }; count(); $('#igcap').oninput = count; }
+  host.querySelectorAll('.igtab').forEach(b => b.onclick = () => { igTab = b.dataset.t; igSel = null; igSlide = 0; renderIgPlan(pb, ig); });
   host.querySelectorAll('#iglist [data-id]').forEach(el => el.onclick = e => { if (e.target.closest('button')) return; igSel = el.dataset.id; igSlide = 0; renderIgPlan(pb, ig); });
-  const move = (i, d) => { const ids = P.map(x => x.id); [ids[i], ids[i + d]] = [ids[i + d], ids[i]]; post('plan', { order: ids }); };
+  const move = (i, d) => { const ids = list.map(x => x.id); [ids[i], ids[i + d]] = [ids[i + d], ids[i]]; let k = 0; post('plan', { order: P.map(x => (x.format || 'post') === igTab ? ids[k++] : x.id) }); };
   host.querySelectorAll('.igup').forEach(b => b.onclick = () => move(+b.dataset.i, -1)); host.querySelectorAll('.igdn').forEach(b => b.onclick = () => move(+b.dataset.i, 1));
   if ($('#igprev')) { $('#igprev').onclick = () => { igSlide = (igSlide + p.files.length - 1) % p.files.length; renderIgPlan(pb, ig); }; $('#ignext').onclick = () => { igSlide = (igSlide + 1) % p.files.length; renderIgPlan(pb, ig); }; }
   const at = () => { const v = $('#igat').value; return v ? new Date(v).getTime() : null; };
   const tg = () => ({ ig: $('#igt-ig').checked, ...($('#igt-fb') ? { fb: $('#igt-fb').checked } : {}) });
-  if ($('#igsave')) $('#igsave').onclick = () => post('plan', { id: p.id, caption: $('#igcap').value, at: at(), ...tg() }, 'Збережено');
+  const cap = () => story ? {} : { caption: $('#igcap').value };
+  if ($('#igsave')) $('#igsave').onclick = () => post('plan', { id: p.id, ...cap(), at: at(), ...tg() }, 'Збережено');
   if ($('#igreset')) $('#igreset').onclick = () => { if (confirm('Повернути стандартний підпис?')) post('plan', { id: p.id, caption: null }, 'Підпис скинуто'); };
   if ($('#igclear')) $('#igclear').onclick = () => post('plan', { id: p.id, at: null }, 'Дату знято');
-  if ($('#igpub')) $('#igpub').onclick = async () => { if (!confirm('Опублікувати цей пост в Instagram зараз?')) return; const b = $('#igpub'); b.disabled = true; b.textContent = 'Публікуємо… (до 3 хв)'; try { const s0 = await api('POST', '/api/admin/instagram/plan', { id: p.id, caption: $('#igcap').value, ...tg() }); Object.assign(pb, s0); const x = await api('POST', '/api/admin/instagram/publish', { id: p.id }); toast(x.ok ? 'Опубліковано ✅' : 'Не вийшло: ' + x.error); Object.assign(pb, x); } catch (e) { toast(errText(e)); } renderIgPlan(pb, ig); };
-  $('#igspread').onclick = () => { const v = $('#igsp0').value; if (!v) return toast('Оберіть дату й час першого поста'); post('plan', { spread: true, start: new Date(v).getTime(), everyDays: +$('#igspn').value || 1 }, 'Час призначено'); };
+  if ($('#igpub')) $('#igpub').onclick = async () => { if (!confirm(story ? 'Опублікувати цю сторіс зараз?' : 'Опублікувати цей пост зараз?')) return; const b = $('#igpub'); b.disabled = true; b.textContent = isVid(p) ? 'Публікуємо… (до 3 хв)' : 'Публікуємо…'; try { const s0 = await api('POST', '/api/admin/instagram/plan', { id: p.id, ...cap(), ...tg() }); Object.assign(pb, s0); const x = await api('POST', '/api/admin/instagram/publish', { id: p.id }); toast(x.ok ? 'Опубліковано ✅' : 'Не вийшло: ' + x.error); Object.assign(pb, x); } catch (e) { toast(errText(e)); } renderIgPlan(pb, ig); };
+  $('#igspread').onclick = () => { const v = $('#igsp0').value; if (!v) return toast('Оберіть дату й час першої публікації'); post('plan', { spread: true, format: igTab, start: new Date(v).getTime(), everyDays: +$('#igspn').value || 1 }, 'Час призначено'); };
   $('#igauto').onchange = async () => { try { const x = await api('POST', '/api/admin/instagram/auto', { on: $('#igauto').checked }); Object.assign(pb, x); toast($('#igauto').checked ? 'Автопублікацію ввімкнено' : 'Автопублікацію вимкнено'); } catch (e) { toast(errText(e)); } };
 }
 /* ---------- Реклама: ID трекінгу, UTM-посилання, витрати, результати за джерелами ---------- */

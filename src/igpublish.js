@@ -1,4 +1,5 @@
-// Публікація в Instagram через Content Publishing API: готові пости лежать на сайті (/social/posts.json), публікуємо по одному за чергою.
+// Публікація в Instagram і на сторінку Facebook: готові пости й сторіс лежать на сайті (/social/posts.json), публікуємо за розкладом або вручну.
+// Типи: IMAGE, CAROUSEL, REELS (пости) і STORY, STORY_VIDEO (сторіс: без підпису, текст уже на картинці).
 // Стан у settings: ig_pub = { done: { id: { at, media_id, link } }, err }, ig_auto = '1' (автопублікація раз на добу після 18:00 за Києвом).
 import { getToken } from './instagram.js';
 export const SITE = 'https://reeadvent.fun';
@@ -17,13 +18,13 @@ export async function pubState(env) { const s = parse(await getSetting(env, 'ig_
 export const getFbPage = async env => parse(await getSetting(env, 'fb_page')) || null;   // { id, name }
 export const FB_LINE = 'https://reeadvent.fun';
 export const setAuto = (env, on) => setSetting(env, 'ig_auto', on ? '1' : '0');
-const emptyPlan = () => ({ order: [], posts: {} });
+export const isStory = p => !!p && (p.type === 'STORY' || p.type === 'STORY_VIDEO');
 export async function getPlan(env) { const p = parse(await getSetting(env, 'ig_plan')) || {}; return { order: Array.isArray(p.order) ? p.order : [], posts: p.posts && typeof p.posts === 'object' ? p.posts : {} }; }
 const savePlan = (env, plan) => setSetting(env, 'ig_plan', JSON.stringify(plan));
 /** Маніфест + правки адміна: порядок, свій підпис, запланований час. */
 export function effective(man, plan) {
   const byId = Object.fromEntries(man.map(p => [p.id, p])), ids = [...plan.order.filter(i => byId[i]), ...man.map(p => p.id).filter(i => !plan.order.includes(i))];
-  return ids.map(id => { const p = byId[id], o = plan.posts[id] || {}; return { ...p, defaultCaption: p.caption, caption: typeof o.caption === 'string' ? o.caption : p.caption, at: Number.isFinite(o.at) ? o.at : null, ig: o.ig !== false, fb: o.fb !== false }; });
+  return ids.map(id => { const p = byId[id], o = plan.posts[id] || {}; return { ...p, format: isStory(p) ? 'story' : 'post', defaultCaption: p.caption || '', caption: isStory(p) ? '' : typeof o.caption === 'string' ? o.caption : p.caption, at: Number.isFinite(o.at) ? o.at : null, ig: o.ig !== false, fb: o.fb !== false }; });
 }
 export const MAX_CAPTION = 2200;
 /** Усі ввімкнені майданчики поста вже опубліковано? Facebook враховується лише якщо підключено сторінку. */
@@ -35,7 +36,7 @@ export async function editPost(env, id, { caption, at, ig, fb } = {}, man) {
   if (isComplete(st, cur, !!fbp)) return { ok: false, error: 'Пост уже опубліковано, його не можна змінити' };
   const plan = await getPlan(env), o = plan.posts[id] = plan.posts[id] || {};
   if (typeof ig === 'boolean') o.ig = ig; if (typeof fb === 'boolean') o.fb = fb;
-  if (caption !== undefined) { if (caption === null) delete o.caption; else { caption = String(caption).replace(/\r/g, '').trim(); if (!caption || caption.length > MAX_CAPTION) return { ok: false, error: 'Підпис: від 1 до 2200 символів' }; if ((caption.match(/#[^\s#]+/g) || []).length > 30) return { ok: false, error: 'Не більше 30 хештегів' }; o.caption = caption; } }
+  if (caption !== undefined && !isStory(cur)) { if (caption === null) delete o.caption; else { caption = String(caption).replace(/\r/g, '').trim(); if (!caption || caption.length > MAX_CAPTION) return { ok: false, error: 'Підпис: від 1 до 2200 символів' }; if ((caption.match(/#[^\s#]+/g) || []).length > 30) return { ok: false, error: 'Не більше 30 хештегів' }; o.caption = caption; } }
   if (at !== undefined) { if (at === null) delete o.at; else { at = Number(at); if (!Number.isFinite(at) || at < Date.now() - 864e5 || at > Date.now() + 400 * 864e5) return { ok: false, error: 'Некоректна дата' }; o.at = Math.round(at / 6e4) * 6e4; } }
   await savePlan(env, plan); return { ok: true };
 }
@@ -44,11 +45,11 @@ export async function setOrder(env, order, man) {
   const plan = await getPlan(env); plan.order = order; await savePlan(env, plan); return { ok: true };
 }
 /** Розставляє незаплановані й заплановані неопубліковані пости по одному на кожні N днів від заданого часу, у поточному порядку. */
-export async function spread(env, startMs, everyDays, man) {
-  startMs = Number(startMs); everyDays = Math.max(1, Math.min(14, Math.round(Number(everyDays) || 1)));
+export async function spread(env, startMs, everyDays, man, format = null) {
+  startMs = Number(startMs); everyDays = Math.max(1 / 24, Math.min(14, Number(everyDays) || 1));   // крок у днях, може бути дробовим (0,25 = кожні 6 год)
   if (!Number.isFinite(startMs) || startMs < Date.now() - 36e5) return { ok: false, error: 'Оберіть початок у майбутньому' };
   const st = await pubState(env), plan = await getPlan(env), hasFb = !!(await getFbPage(env)); let k = 0;
-  for (const p of effective(man, plan)) if (!isComplete(st, p, hasFb)) { (plan.posts[p.id] = plan.posts[p.id] || {}).at = Math.round((startMs + k * everyDays * DAY) / 6e4) * 6e4; k++; }
+  for (const p of effective(man, plan)) if (!isComplete(st, p, hasFb) && (!format || p.format === format)) { (plan.posts[p.id] = plan.posts[p.id] || {}).at = Math.round((startMs + k * everyDays * DAY) / 6e4) * 6e4; k++; }
   await savePlan(env, plan); return { ok: true, n: k };
 }
 const saveState = (env, st) => setSetting(env, 'ig_pub', JSON.stringify({ done: st.done, fb: st.fb, err: st.err }));
@@ -78,13 +79,15 @@ export async function publishPost(env, post, { fetchImpl = fetch, site = SITE, d
   let creation;
   if (post.type === 'IMAGE') creation = (await call(fetchImpl, 'POST', `${base}/${id}/media`, { image_url: url(post.files[0]), caption: post.caption, access_token: token })).id;
   else if (post.type === 'REELS') creation = (await call(fetchImpl, 'POST', `${base}/${id}/media`, { media_type: 'REELS', video_url: url(post.files[0]), caption: post.caption, share_to_feed: 'true', ...(post.cover ? { cover_url: url(post.cover) } : {}), access_token: token })).id;
+  else if (post.type === 'STORY') creation = (await call(fetchImpl, 'POST', `${base}/${id}/media`, { media_type: 'STORIES', image_url: url(post.files[0]), access_token: token })).id;
+  else if (post.type === 'STORY_VIDEO') creation = (await call(fetchImpl, 'POST', `${base}/${id}/media`, { media_type: 'STORIES', video_url: url(post.files[0]), access_token: token })).id;
   else if (post.type === 'CAROUSEL') {
     const kids = []; for (const f of post.files) kids.push((await call(fetchImpl, 'POST', `${base}/${id}/media`, { image_url: url(f), is_carousel_item: 'true', access_token: token })).id);
     for (const k of kids) await waitReady(fetchImpl, base, k, token, { tries: 20, delay });
     creation = (await call(fetchImpl, 'POST', `${base}/${id}/media`, { media_type: 'CAROUSEL', children: kids.join(','), caption: post.caption, access_token: token })).id;
   } else throw new Error('Невідомий тип поста');
   if (!creation) throw new Error('Instagram не повернув ID контейнера');
-  await waitReady(fetchImpl, base, creation, token, { tries: post.type === 'REELS' ? 60 : 20, ...opts });
+  await waitReady(fetchImpl, base, creation, token, { tries: post.type === 'REELS' || post.type === 'STORY_VIDEO' ? 60 : 20, ...opts });
   const pub = await call(fetchImpl, 'POST', `${base}/${id}/media_publish`, { creation_id: creation, access_token: token });
   let link = ''; try { link = (await call(fetchImpl, 'GET', `${base}/${pub.id}`, { fields: 'permalink', access_token: token })).permalink || ''; } catch {}
   return { media_id: pub.id, link };
@@ -96,15 +99,24 @@ export async function publishFb(env, post, { fetchImpl = fetch, site = SITE } = 
   const page = await getFbPage(env); if (!page) throw new Error('Не задано сторінку Facebook');
   let pt = token; try { const j = await call(fetchImpl, 'GET', `${FB}/${page.id}`, { fields: 'access_token', access_token: token }); if (j.access_token) pt = j.access_token; } catch {}
   const url = f => `${site}/social/${f}`, text = String(post.caption || '').replace('Посилання в шапці профілю · Link in bio', FB_LINE);
-  let j;
-  if (post.type === 'IMAGE') j = await call(fetchImpl, 'POST', `${FB}/${page.id}/photos`, { url: url(post.files[0]), caption: text, access_token: pt });
+  let j, noLink = false;
+  if (post.type === 'STORY') {   // фото-сторіс: спершу неопубліковане фото, потім сторіс із нього
+    const ph = await call(fetchImpl, 'POST', `${FB}/${page.id}/photos`, { url: url(post.files[0]), published: 'false', access_token: pt });
+    j = await call(fetchImpl, 'POST', `${FB}/${page.id}/photo_stories`, { photo_id: ph.id, access_token: pt }); noLink = true;
+  } else if (post.type === 'STORY_VIDEO') {   // відео-сторіс у три кроки: старт → завантаження за посиланням на файл → завершення
+    const st = await call(fetchImpl, 'POST', `${FB}/${page.id}/video_stories`, { upload_phase: 'start', access_token: pt });
+    if (!st.video_id || !st.upload_url) throw new Error('Facebook не відкрив завантаження відео-сторіс');
+    const up = await fetchImpl(st.upload_url, { method: 'POST', headers: { Authorization: 'OAuth ' + pt, file_url: url(post.files[0]) }, signal: AbortSignal.timeout(60000) });
+    const uj = await up.json().catch(() => ({})); if (!up.ok || uj.success === false) throw new Error(String((uj.debug_info && uj.debug_info.message) || uj.message || 'завантаження відео-сторіс: HTTP ' + up.status).slice(0, 200));
+    j = await call(fetchImpl, 'POST', `${FB}/${page.id}/video_stories`, { upload_phase: 'finish', video_id: st.video_id, access_token: pt }); j.id = j.id || st.video_id; noLink = true;
+  } else if (post.type === 'IMAGE') j = await call(fetchImpl, 'POST', `${FB}/${page.id}/photos`, { url: url(post.files[0]), caption: text, access_token: pt });
   else if (post.type === 'REELS') j = await call(fetchImpl, 'POST', `${FB}/${page.id}/videos`, { file_url: url(post.files[0]), description: text, access_token: pt });
   else {
     const ids = []; for (const f of post.files) ids.push((await call(fetchImpl, 'POST', `${FB}/${page.id}/photos`, { url: url(f), published: 'false', access_token: pt })).id);
     j = await call(fetchImpl, 'POST', `${FB}/${page.id}/feed`, { message: text, access_token: pt, ...Object.fromEntries(ids.map((id, i) => [`attached_media[${i}]`, JSON.stringify({ media_fbid: id })])) });
   }
   const id = j.post_id || j.id; if (!id) throw new Error('Facebook не повернув ID публікації');
-  return { id, link: `https://www.facebook.com/${id}` };
+  return { id, link: noLink ? '' : `https://www.facebook.com/${id}` };
 }
 
 /** Публікує наступний пост за чергою (або конкретний id) на всі ввімкнені майданчики, що ще не отримали його. */
@@ -131,7 +143,7 @@ export async function runAutoPublish(env, { now = Date.now(), ...rest } = {}) {
 }
 export async function publishStatus(env, fetchImpl = fetch, site = SITE) {
   const st = await pubState(env), fbp = await getFbPage(env); let man = []; try { man = await loadManifest(fetchImpl, site); } catch {}
-  return { auto: st.auto, err: st.err, now: Date.now(), fbPage: fbp, posts: effective(man, await getPlan(env)).map(p => ({ id: p.id, type: p.type, files: p.files, cover: p.cover || null, caption: p.caption, defaultCaption: p.defaultCaption, edited: p.caption !== p.defaultCaption, at: p.at, ig: p.ig, fb: p.fb, done: st.done[p.id] || null, fbDone: st.fb[p.id] || null, complete: isComplete(st, p, !!fbp) })) };
+  return { auto: st.auto, err: st.err, now: Date.now(), fbPage: fbp, posts: effective(man, await getPlan(env)).map(p => ({ id: p.id, type: p.type, format: p.format, title: p.title || null, files: p.files, cover: p.cover || null, caption: p.caption, defaultCaption: p.defaultCaption, edited: p.caption !== p.defaultCaption, at: p.at, ig: p.ig, fb: p.fb, done: st.done[p.id] || null, fbDone: st.fb[p.id] || null, complete: isComplete(st, p, !!fbp) })) };
 }
 /** Зберігає сторінку Facebook: перевіряє токеном, що вона доступна, і запам'ятовує назву. */
 export async function saveFbPage(env, id, { fetchImpl = fetch } = {}) {

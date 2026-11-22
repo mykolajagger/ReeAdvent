@@ -172,3 +172,190 @@ Save this post so you do not lose it, and send it to the person you want to ask.
 **Хештеги:** #вечірдлядвох #романтика #адвент #reeadvent #datenight
 
 **Alt-текст:** Чотири мультфільмові сцени пари: вечеря зі свічками, ковзанка, диван із вином, ялинка й подарунки.
+
+
+---
+
+# Серія «Вечори вдвох» (нові публікації, Reels і сторіс)
+
+Нові візуали зроблено зі сцен пари: ялинка, вечеря, подушковий бій, книга під пледом, зоряна ніч. Файли в `out/` (скрипт `build2.mjs`), для автопублікації їх готує `prep-social.py`. Усюди: Він і Вона, для неї, для нього.
+
+**Рекомендований ритм до 1 грудня:** один пост на день (чергуйте фото, каруселі й Reels), 1–2 сторіс щодня; сторіс з опитуванням чи питанням краще ввечері. Увімкніть автопублікацію й натисніть «Розставити за розкладом» у розділі «Соцмережі й реклама».
+
+## 8. Карусель «Одне вікно: чотири сюрпризи» (`08-window-four-1…6.png`)
+
+**Підпис (UA):**
+Що ховається за одним вікном? ✦
+1) Питання дня: одне на двох, щоб заговорити про важливе.
+2) Подарунок: ідея за вашим бюджетом і смаками, ще й підказка, де купити.
+3) Пригода: місце чи затія у вашому місті.
+4) Спільна активність: від вечері вдвох до гри вдома.
+Для неї. Для нього. Для вас двох.
+Старт 1 грудня.
+Посилання в шапці профілю.
+
+**Caption (EN):**
+What hides behind one window? ✦
+1) A question of the day for both of you.
+2) A gift idea matched to your budget and tastes, plus where to buy it.
+3) An adventure: a place or plan in your city.
+4) A shared activity, from dinner for two to a game at home.
+For her. For him. For both of you.
+Starts December 1.
+Link in bio.
+
+**Хештеги:** #адвенткалендар #длядвох #романтика #ідеїдляпар #побачення #reeadvent #adventcalendar #couplegoals
+
+**Alt-текст:** Слайд 1: пара прикрашає ялинку. Слайд 2: пара читає книгу під пледом біля каміна. Слайд 3: пара з гірляндою біля ялинки. Слайд 4: пара дивиться на зорі. Слайд 5: пара готує вечерю. Слайд 6: подушковий бій і слова «Для неї. Для нього. Для вас двох».
+
+---
+
+## 9. Карусель «5 зимових вечорів удвох» (`09-evenings-five-1…7.png`)
+
+**Підпис (UA):**
+5 зимових вечорів удвох ✦ Збережіть, щоб не загубити.
+1) Прикрасьте ялинку разом
+2) Приготуйте вечерю вдвох
+3) Влаштуйте подушковий бій
+4) Почитайте під пледом
+5) Подивіться на зорі
+Який вечір ваш? Напишіть цифру в коментарях. У ReeAdvent схожі ідеї відкриваються щодня, 24 дні.
+Посилання в шапці профілю.
+
+**Caption (EN):**
+5 winter evenings for two ✦ Save it for later.
+1) Decorate the tree together
+2) Cook dinner for two
+3) Have a pillow fight
+4) Read under a blanket
+5) Watch the stars
+Which evening is yours? Comment the number. In ReeAdvent ideas like these open every day, for 24 days.
+Link in bio.
+
+**Хештеги:** #зимовийвечір #ідеїдляпар #романтика #вечірвдвох #reeadvent #winterdate #datenightideas #cozyvibes
+
+**Alt-текст:** Обкладинка: пара під зоряним небом і п'ять круглих мініатюр вечорів. Слайди 2–6: по одному вечору з короткою порадою. Слайд 7: пара з книгою й заклик «Схожі ідеї щодня, 24 дні».
+
+---
+
+## 10. Опитування «Який вечір ваш?» (`10-poll-evening.png`)
+
+**Підпис (UA):**
+Який вечір ваш? ✦
+1 ялинка, 2 вечеря, 3 подушки, 4 книга, 5 зорі.
+Напишіть цифру в коментарях і розкажіть, чому саме цей. Для неї. Для нього.
+Посилання в шапці профілю.
+
+**Caption (EN):**
+Which evening is yours? ✦
+1 tree, 2 dinner, 3 pillows, 4 book, 5 stars.
+Comment the number and tell us why. For her. For him.
+Link in bio.
+
+**Хештеги:** #якийвечір #ідеїдляпар #романтика #вечірвдвох #reeadvent #datenight #couplequestions
+
+**Alt-текст:** П'ять мультяшних вечорів пари з номерами від 1 до 5: ялинка, вечеря, подушковий бій, книга під пледом, зоряне небо.
+
+---
+
+## 11. «Вечеря вдвох — теж подарунок» (`11-dinner-for-two.png`)
+
+**Підпис (UA):**
+Вечеря вдвох — теж подарунок ✦
+Не потрібен ресторан: простий рецепт, свічка й ви обоє на кухні. У ReeAdvent у вікні може чекати така спільна активність. Для неї. Для нього.
+Посилання в шапці профілю.
+
+**Caption (EN):**
+Dinner for two is a gift too ✦
+You do not need a restaurant: a simple recipe, a candle and the two of you in the kitchen. A shared activity like this can be waiting in a ReeAdvent window. For her. For him.
+Link in bio.
+
+**Хештеги:** #вечеряудвох #готуєморазом #романтика #reeadvent #cookingtogether #datenightathome
+
+**Alt-текст:** Він і Вона готують пасту на кухні, на столі свічка, базилік і помідори, за вікном падає сніг.
+
+---
+
+## 12. «Дозвольте собі побешкетувати» (`12-play.png`)
+
+**Підпис (UA):**
+Дозвольте собі побешкетувати ✦
+Десять хвилин подушкового бою здатні перевернути весь вечір. Гра, сміх і м'які завдання в ReeAdvent завжди за взаємною згодою. Переможець обирає десерт.
+Посилання в шапці профілю.
+
+**Caption (EN):**
+Let yourselves be playful ✦
+Ten minutes of a pillow fight can turn a whole evening around. Play, laughter and soft challenges in ReeAdvent are always by mutual consent. The winner picks dessert.
+Link in bio.
+
+**Хештеги:** #гра #сміх #романтика #reeadvent #pillowfight #playfulcouples
+
+**Alt-текст:** Він і Вона б'ються подушками на ліжку, довкола летить пір'я, на тумбочці свічки, за вікном сніг.
+
+---
+
+## 13. «Зоряна ніч» (`13-starry-night.png`)
+
+**Підпис (UA):**
+Зоряна ніч ✦
+Плед, термос і ясне небо. Інколи найкраща пригода — просто лягти поруч і дивитися вгору. Яке ваше улюблене сузір'я? Розкажіть у коментарях.
+Посилання в шапці профілю.
+
+**Caption (EN):**
+A night under the stars ✦
+A blanket, a flask and a clear sky. Sometimes the best adventure is simply lying side by side and looking up. Which constellation is yours? Tell us below.
+Link in bio.
+
+**Хештеги:** #зорянаніч #пригода #романтика #reeadvent #stargazing #cozynight
+
+**Alt-текст:** Він і Вона під одним пледом дивляться на зоряне небо, поруч телескоп і ліхтар, у небі падає зірка.
+
+---
+
+## 14. Reel «5 вечорів для двох» (`reel-5-evenings.mp4`, 18 с, з музикою)
+
+**Підпис (UA):**
+5 вечорів для двох за 18 секунд ✦
+Ялинка, вечеря, подушковий бій, книга чи зорі: з якого почнете? Збережіть, щоб не загубити.
+Посилання в шапці профілю.
+
+**Caption (EN):**
+5 evenings for two in 18 seconds ✦
+Tree, dinner, pillow fight, a book or the stars: which one first? Save it for later.
+Link in bio.
+
+**Хештеги:** #reels #ідеїдляпар #романтика #длядвох #reeadvent #datenightideas #coupleideas
+
+**Обкладинка:** `reel-5-evenings-cover.jpg`.
+
+---
+
+## 15. Reel «Один день у ReeAdvent» (`reel-one-day.mp4`, 21 с, з музикою)
+
+**Підпис (UA):**
+Один день у ReeAdvent ✦
+Вікно відкривається вранці, а далі день складається сам: питання дня зранку, подарунок удень, спільна активність увечері, пригода для двох уночі. А ще трохи гри. Так 24 дні поспіль, старт 1 грудня.
+Посилання в шапці профілю.
+
+**Caption (EN):**
+One day in ReeAdvent ✦
+The window opens in the morning and the day builds around it: the question of the day in the morning, a gift in the afternoon, a shared activity in the evening, an adventure for two at night. And a little play. 24 days in a row, starting December 1.
+Link in bio.
+
+**Хештеги:** #reels #адвенткалендар #длядвох #романтика #reeadvent #adventcalendar #couplegoals
+
+**Обкладинка:** `reel-one-day-cover.jpg`.
+
+---
+
+# Сторіс (формат 1080×1920, `story-*.png` і `story-video.mp4`)
+
+У сторіс підпису немає: текст уже на картинці. API Instagram і Facebook не вміє додавати стікери, тому інтерактив додається лише вручну в застосунку:
+- `story-1-start.png` «Старт 1 грудня»: додайте стікер «Зворотний відлік» до 1 грудня.
+- `story-2-choose.png` «Що обираєте на вечір?» (A: ялинка, B: вечеря): додайте стікер «Опитування» A / B.
+- `story-3-question.png` «Питання дня»: додайте стікер «Запитання».
+- `story-4-stars.png` «Зоряна ніч» і `story-5-play.png` «10 хвилин сміху»: настрій дня, без стікерів.
+- `story-6-order.png` «Замовити»: додайте стікер-посилання на `https://reeadvent.fun`.
+- `story-video.mp4` (10 с, з музикою): швидка добірка вечорів, завершується «Старт 1 грудня».
+
+Сторіс живе 24 години. Якщо публікувати з адмінки автоматично, стікерів не буде: краще для сторіс 2, 3 і 6 публікувати вручну, а решту (1, 4, 5 і відео) з адмінки.

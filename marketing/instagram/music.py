@@ -1,6 +1,6 @@
-# Власна коротка музична тема для Reel (синтез, без сторонніх прав): ніжна музична скринька + м'які акорди, ~21 с. Використання: python3 music.py out.wav 21
+# Власна коротка музична тема для Reel (синтез, без сторонніх прав): ніжна музична скринька + м'які акорди, ~21 с. Використання: python3 music.py out.wav 21 [a|b]  (a: спокійна C–Am–F–G; b: світліша G–D–Em–C, трохи швидша, із простою мелодією)
 import sys, numpy as np, wave
-dur = float(sys.argv[2]) if len(sys.argv) > 2 else 21; sr = 44100; n = int(dur * sr); t = np.arange(n) / sr
+dur = float(sys.argv[2]) if len(sys.argv) > 2 else 21; theme = sys.argv[3] if len(sys.argv) > 3 else 'a'; sr = 44100; n = int(dur * sr); t = np.arange(n) / sr
 mix = np.zeros(n)
 def note(f, start, length, amp, kind='bell'):
     i0 = int(start * sr); m = min(int(length * sr), n - i0)
@@ -10,15 +10,18 @@ def note(f, start, length, amp, kind='bell'):
     else: w = np.sin(2*np.pi*f*tt) + .4*np.sin(2*np.pi*2*f*tt) + .2*np.sin(2*np.pi*f*1.003*tt); env = np.minimum(1, tt/1.2)*np.minimum(1, (length - tt)/1.5).clip(0, 1)
     mix[i0:i0+m] += amp * w * env
 fr = lambda midi: 440 * 2 ** ((midi - 69) / 12)
-bar = 60 / 76 * 4   # 76 BPM, такт 4 долі
-chords = [(48, [60, 64, 67]), (45, [57, 60, 64]), (41, [57, 60, 65]), (43, [59, 62, 67])]   # C Am F G
+bar = 60 / (92 if theme == 'b' else 76) * 4   # такт 4 долі: 76 BPM (a) або 92 BPM (b)
+chords = [(43, [55, 59, 62]), (50, [57, 62, 66]), (40, [55, 59, 64]), (48, [55, 60, 64])] if theme == 'b' else [(48, [60, 64, 67]), (45, [57, 60, 64]), (41, [57, 60, 65]), (43, [59, 62, 67])]   # b: G D Em C; a: C Am F G
 for b in range(int(dur / bar) + 1):
     root, ch = chords[b % 4]; st = b * bar
     note(fr(root - 12), st, bar + .8, .16, 'pad')
     for c in ch: note(fr(c - 12), st, bar + .8, .07, 'pad')
-    arp = [ch[0], ch[1], ch[2], ch[1] + 12, ch[2], ch[1], ch[0] + 12, ch[2]]
+    arp = [ch[0], ch[2], ch[1] + 12, ch[2], ch[0] + 12, ch[2], ch[1] + 12, ch[2]] if theme == 'b' else [ch[0], ch[1], ch[2], ch[1] + 12, ch[2], ch[1], ch[0] + 12, ch[2]]
     for k, m in enumerate(arp): note(fr(m + 12), st + k * bar / 8, 1.6, .11)
     if b % 2 == 1: note(fr(ch[2] + 24), st + bar * .5, 2.2, .07)
+    if theme == 'b':   # проста мелодія пентатоніки G на сильні долі
+        mel = [[79, 83, 81, 79], [78, 81, 85, 81], [76, 79, 83, 79], [79, 84, 83, 79]][b % 4]
+        for k, m in enumerate(mel): note(fr(m), st + k * bar / 4 + (bar / 8 if k % 2 else 0), 1.4, .085)
 mix /= max(1e-9, np.abs(mix).max()); mix *= .8
 mix *= np.minimum(1, t / 1.2) * np.minimum(1, (dur - t) / 2.5).clip(0, 1)
 d = int(.28 * sr); echo = mix.copy(); echo[d:] += .3 * mix[:-d]; mix = echo / np.abs(echo).max() * .8

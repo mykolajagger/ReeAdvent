@@ -80,9 +80,9 @@ export async function purgeOld(env) {
 export async function runDaily(env) {
   const fx = await refreshFx(env); // курси валют оновлюються раз на добу
   try { await refreshInstagramToken(env); } catch (e) { console.error('instagram refresh', e); }
-  try { await runAutoPublish(env); } catch (e) { console.error('instagram publish', e); }
   const reminders = await runReminders(env);
   let purge = null;
   if (nowOf(env).getUTCHours() === 1) purge = await purgeOld(env);
-  return { reminders, purge, fx };
+  let publish = null; try { publish = await runAutoPublish(env); } catch (e) { console.error('autopublish', e); }   // після нагадувань: публікація Reel може тривати кілька хвилин
+  return { reminders, purge, fx, publish: publish && (publish.skipped || (publish.ok ? 'ok:' + publish.id : 'err')) };
 }
