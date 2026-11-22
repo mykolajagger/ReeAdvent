@@ -51,7 +51,7 @@ export async function igTest(env, { fetchImpl = fetch, now = Date.now() } = {}) 
 
 /** Перевіряє токен (запит профілю) і зберігає його; повертає { ok, username } або { ok: false, error }. */
 export async function saveToken(env, token, { igId = '', fetchImpl = fetch, now = Date.now() } = {}) {
-  token = String(token || '').trim(); igId = String(igId || '').trim();
+  token = String(token || '').trim() || (await getSetting(env, 'ig_token')) || ''; igId = String(igId || '').trim();   // порожній токен = лишити поточний (можна змінити лише ID)
   if (token.length < 30 || token.length > 800 || /\s/.test(token)) return { ok: false, error: 'bad_token' };
   if (igId && !/^\d{5,25}$/.test(igId)) return { ok: false, error: 'bad_id' };
   try {
@@ -70,7 +70,7 @@ export async function disconnect(env) { for (const k of ['ig_token', 'ig_meta', 
 
 export async function igStatus(env, now = Date.now()) {
   const meta = parse(await getSetting(env, 'ig_meta')), token = await getToken(env), embeds = await getEmbeds(env), lastError = parse(await getSetting(env, 'ig_err'));
-  return { lastError, embeds: embeds.length, embedsText: embedsText(embeds), connected: !!token, viaSecret: !(await getSetting(env, 'ig_token')) && !!env.INSTAGRAM_TOKEN, username: meta ? meta.username : null, expiresAt: meta ? meta.expires_at : null, neverExpires: !!(meta && meta.never), daysLeft: meta && meta.expires_at ? Math.max(0, Math.floor((meta.expires_at - now) / DAY)) : null };
+  return { igId: (await getSetting(env, 'ig_id')) || '', lastError, embeds: embeds.length, embedsText: embedsText(embeds), connected: !!token, viaSecret: !(await getSetting(env, 'ig_token')) && !!env.INSTAGRAM_TOKEN, username: meta ? meta.username : null, expiresAt: meta ? meta.expires_at : null, neverExpires: !!(meta && meta.never), daysLeft: meta && meta.expires_at ? Math.max(0, Math.floor((meta.expires_at - now) / DAY)) : null };
 }
 
 /** Раз на 7 днів продовжує довгоживучий токен (діє 60 днів). Викликається щогодини з cron, але працює лише коли настав час. */
