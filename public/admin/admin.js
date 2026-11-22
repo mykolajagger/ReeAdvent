@@ -80,7 +80,7 @@ async function catalogCityView(main, cc, id) {
 }
 
 /* ---------- Каркас ---------- */
-const NAV = [['dashboard', 'Дашборд'], ['orders', 'Замовлення'], ['customers', 'Клієнти'], ['promos', 'Промокоди'], ['inbox', 'Підтримка'], ['catalog', 'Каталог закладів'], ['settings', 'Налаштування'], ['audit', 'Журнал дій']];
+const NAV = [['dashboard', 'Дашборд'], ['orders', 'Замовлення'], ['customers', 'Клієнти'], ['promos', 'Промокоди'], ['social', 'Соцмережі й реклама'], ['inbox', 'Підтримка'], ['catalog', 'Каталог закладів'], ['settings', 'Налаштування'], ['audit', 'Журнал дій']];
 async function shell() {
   root.innerHTML = `<div class="shell"><aside class="side"><div class="logo"><img class="logo-img" src="/assets/logo.png" alt="ReeAdvent" width="120" height="44"></div>
     <nav class="nav">${NAV.map(([k, t]) => `<a data-v="${k}" class="${view === k ? 'on' : ''}" href="#/${k}">${t}${k === 'inbox' ? '<span class="badge" id="ib" hidden></span>' : ''}</a>`).join('')}</nav>
@@ -91,7 +91,7 @@ async function route() {
   if (!me) return;
   view = (location.hash.match(/^#\/(\w+)/) || [])[1] || 'dashboard'; if (!NAV.some(n => n[0] === view)) view = 'dashboard';
   await shell();
-  const views = { dashboard, orders, customers, promos, inbox, catalog, settings, audit };
+  const views = { dashboard, orders, customers, promos, social, inbox, catalog, settings, audit };
   try { await views[view](); } catch (e) { if (e.code !== 'admin_auth') $('#main').innerHTML = `<div class="empty">Помилка: ${esc(errText(e))}</div>`; }
   refreshBadge();
 }
@@ -342,17 +342,11 @@ function renderIgPlan(pb, ig) {
   $('#igspread').onclick = () => { const v = $('#igsp0').value; if (!v) return toast('Оберіть дату й час першого поста'); post('plan', { spread: true, start: new Date(v).getTime(), everyDays: +$('#igspn').value || 1 }, 'Час призначено'); };
   $('#igauto').onchange = async () => { try { const x = await api('POST', '/api/admin/instagram/auto', { on: $('#igauto').checked }); Object.assign(pb, x); toast($('#igauto').checked ? 'Автопублікацію ввімкнено' : 'Автопублікацію вимкнено'); } catch (e) { toast(errText(e)); } };
 }
-async function settings() {
-  const r = await api('GET', '/api/admin/settings'), v = r.settings, ig = await api('GET', '/api/admin/instagram').catch(() => ({ connected: false })), pb = await api('GET', '/api/admin/instagram/publish').catch(() => null);
-  $('#main').innerHTML = `<div class="top"><div><h2>Фінанси</h2><h1>Налаштування</h1></div></div>
-  <div class="card sec" style="max-width:620px"><h2>Ціна календаря</h2>
-    <label class="f">Ціна для клієнтів, грн<input id="s0" type="number" step="0.01" min="1" max="100000" value="${v.price_uah}" required></label>
-    <div class="muted">Діє одразу на сайті й для нових замовлень. Уже створені замовлення, які ще не оплачено, лишаються за ціною на момент оформлення. Промокоди рахуються від цієї ціни.</div>
-    <label class="f">Курс для показу ціни іноземним клієнтам, грн за 1 USD<input id="s00" type="number" step="0.01" min="1" max="1000" value="${v.usd_rate}" required></label>
-    <div class="muted">Лише для орієнтовного показу «≈ $N» в англомовній версії й для перерахунку бюджету подарунка. Списання завжди у гривнях; конвертує банк клієнта.</div>
-    <div class="muted" id="fxinfo">${r.fx ? `Автокурси оновлено ${dt(r.fx.updated)}: 1 USD ≈ ${r.fx.usd} ₴, 1 EUR ≈ ${r.fx.eur} ₴ (${r.fx.count} валют${r.fx.mono != null ? `, з них ${r.fx.mono} від Monobank` : ''}). Оновлюються щодня самі: пріоритет у курсів Monobank, решта з ExchangeRate-API.` : 'Автокурси ще не завантажено (оновляться за добу після запуску крону). До того для інших валют показується долар за курсом вище.'} Дані: <a href="https://www.exchangerate-api.com" target="_blank" rel="noopener">ExchangeRate-API</a>.</div>
-    <div class="row"><button class="btn" id="sp">Зберегти</button><button class="btn ghost" id="fxr" type="button">Оновити курси зараз</button></div></div>
-  <div class="card sec" style="max-width:620px;margin-top:14px"><h2>Instagram</h2>
+/* ---------- Соцмережі й реклама: Instagram, Facebook, публікації; сюди ж додаватимемо рекламу ---------- */
+async function social() {
+  const ig = await api('GET', '/api/admin/instagram').catch(() => ({ connected: false })), pb = await api('GET', '/api/admin/instagram/publish').catch(() => null);
+  $('#main').innerHTML = `<div class="top"><div><h2>Маркетинг</h2><h1>Соцмережі й реклама</h1></div></div>
+  <div class="card sec" style="max-width:620px;margin-top:14px"><h2>Підключення: Instagram і Facebook</h2>
     ${ig.lastError ? `<div class="muted" style="color:#eb5757">Остання помилка Instagram (${esc(fdate(ig.lastError.at))}): ${esc(ig.lastError.error)}</div>` : ''}
     <div class="muted">${ig.connected ? `Підключено${ig.username ? ': <b>@' + esc(ig.username) + '</b>' : ''}${ig.viaSecret ? ' (через секрет середовища)' : ''}. ${ig.neverExpires ? 'Токен системного користувача: без терміну дії.' : ig.daysLeft != null ? `Токен діє ще ${ig.daysLeft} дн. і продовжується автоматично раз на тиждень.` : ''} Останні пости показуються на головній.` : 'Не підключено: на головній показується лише іконка й посилання на @reeadvent. Щоб показувати стрічку постів, додайте токен: або токен системного користувача (разом із числовим ID акаунта Instagram), або токен Instagram Login (ID не потрібен).'}</div>
     <label class="f">Токен доступу Instagram<input id="igt" type="password" autocomplete="off" placeholder="Вставте токен і натисніть «Підключити»"></label>
@@ -363,6 +357,25 @@ async function settings() {
     <div class="row"><button class="btn ghost" id="fbs" type="button">Зберегти сторінку Facebook</button><span class="muted">${pb && pb.fbPage ? 'Підключено: <b>' + esc(pb.fbPage.name) + '</b>' : 'Не підключено. Залиште поле порожнім і збережіть, щоб відключити.'}</span></div>
     <div class="row"><button class="btn" id="igs" type="button">Підключити</button>${ig.connected ? '<button class="btn ghost" id="igtest" type="button">Перевірити зараз</button>' : ''}${ig.connected && !ig.viaSecret ? '<button class="btn ghost" id="igd" type="button">Відключити</button>' : ''}</div></div>
   <div class="card sec" id="igplan" style="max-width:1000px;margin-top:14px"></div>
+  <div class="card sec" style="max-width:620px;margin-top:14px"><h2>Реклама</h2><div class="muted">Тут з'являться дані по рекламі: бюджети, кампанії, результати та посилання з мітками UTM.</div></div>`;
+  $('#igse').onclick = async () => { try { const x = await api('POST', '/api/admin/instagram/embeds', { text: $('#ige').value }); toast(x.embeds ? `Збережено постів: ${x.embeds}` : 'Збережено: список порожній'); social(); } catch (e) { toast(errText(e)); } };
+  renderIgPlan(pb, ig);
+  $('#fbs').onclick = async () => { try { const x = await api('POST', '/api/admin/instagram/fbpage', { id: $('#fbid').value.trim() }); toast(x.fbPage ? 'Сторінку Facebook підключено: ' + x.fbPage.name : 'Facebook відключено'); social(); } catch (e) { toast(errText(e)); } };
+  if ($('#igtest')) $('#igtest').onclick = async () => { const b = $('#igtest'); b.disabled = true; try { const x = await api('POST', '/api/admin/instagram/test', {}); toast(x.ok ? (x.count ? `Instagram віддав постів: ${x.count}. Вони з'являться на головній` : `Підключення працює, але Instagram повернув 0 публікацій (${x.raw || 0} у відповіді). Перевірте, чи є в акаунті пости й чи має токен доступ до медіа`) : 'Помилка: ' + x.error); social(); } catch (e) { toast(errText(e)); b.disabled = false; } };
+  $('#igs').onclick = async () => { const t = $('#igt').value.trim(); if (!t && !ig.connected) return toast('Вставте токен'); try { const x = await api('POST', '/api/admin/instagram/token', { token: t, igId: $('#igid').value.trim() }); toast('Підключено: @' + x.username); social(); } catch (e) { toast(e.code === 'token_rejected' ? 'Instagram не прийняв токен' : e.code === 'bad_token' ? 'Токен має неправильний вигляд' : errText(e)); } };
+  if ($('#igd')) $('#igd').onclick = async () => { if (!confirm('Відключити Instagram? Стрічку з головної буде прибрано.')) return; try { await api('POST', '/api/admin/instagram/disconnect', {}); toast('Відключено'); social(); } catch (e) { toast(errText(e)); } };
+}
+
+async function settings() {
+  const r = await api('GET', '/api/admin/settings'), v = r.settings;
+  $('#main').innerHTML = `<div class="top"><div><h2>Фінанси</h2><h1>Налаштування</h1></div></div>
+  <div class="card sec" style="max-width:620px"><h2>Ціна календаря</h2>
+    <label class="f">Ціна для клієнтів, грн<input id="s0" type="number" step="0.01" min="1" max="100000" value="${v.price_uah}" required></label>
+    <div class="muted">Діє одразу на сайті й для нових замовлень. Уже створені замовлення, які ще не оплачено, лишаються за ціною на момент оформлення. Промокоди рахуються від цієї ціни.</div>
+    <label class="f">Курс для показу ціни іноземним клієнтам, грн за 1 USD<input id="s00" type="number" step="0.01" min="1" max="1000" value="${v.usd_rate}" required></label>
+    <div class="muted">Лише для орієнтовного показу «≈ $N» в англомовній версії й для перерахунку бюджету подарунка. Списання завжди у гривнях; конвертує банк клієнта.</div>
+    <div class="muted" id="fxinfo">${r.fx ? `Автокурси оновлено ${dt(r.fx.updated)}: 1 USD ≈ ${r.fx.usd} ₴, 1 EUR ≈ ${r.fx.eur} ₴ (${r.fx.count} валют${r.fx.mono != null ? `, з них ${r.fx.mono} від Monobank` : ''}). Оновлюються щодня самі: пріоритет у курсів Monobank, решта з ExchangeRate-API.` : 'Автокурси ще не завантажено (оновляться за добу після запуску крону). До того для інших валют показується долар за курсом вище.'} Дані: <a href="https://www.exchangerate-api.com" target="_blank" rel="noopener">ExchangeRate-API</a>.</div>
+    <div class="row"><button class="btn" id="sp">Зберегти</button><button class="btn ghost" id="fxr" type="button">Оновити курси зараз</button></div></div>
   <div class="card sec" style="max-width:620px;margin-top:14px"><h2>База закладів (OpenStreetMap)</h2>
     <div class="muted">Безкоштовна власна база: ${r.venues.withData} із ${r.venues.cities} міст мають заклади (оновлені за новими правилами: ${r.venues.ready}), у черзі ${r.venues.pending}, в обробці ${r.venues.working}, з помилкою ${r.venues.failed}. Закладів: <b>${r.venues.venues}</b>, оцінок користувачів: <b>${r.venues.ratings}</b>. Нові міста наповнюються за 20–40 хв, оновлення щотижня вночі. Дані © OpenStreetMap contributors.</div>
     <div class="muted" style="margin-top:8px;font-size:13px">${r.venues.paused ? '<b>⏸ Наповнення призупинено.</b> ' : ''}Останній запуск наповнення: ${r.venues.last ? `<b>${new Date(r.venues.last.at).toLocaleString('uk-UA')}</b> — ${r.venues.last.error ? 'помилка: ' + esc(r.venues.last.error) : esc(JSON.stringify(r.venues.last.out))}` : 'ще не було (запуск за розкладом Worker не відбувся)'}</div>
@@ -389,12 +402,6 @@ async function settings() {
   document.querySelectorAll('.vr').forEach(b => b.onclick = async () => { try { await api('POST', '/api/admin/venues/retry', { id: b.dataset.id }); toast('Місто повернуто в чергу'); settings(); } catch (e) { toast(errText(e)); } });
   if ($('#vra')) $('#vra').onclick = async () => { try { const x = await api('POST', '/api/admin/venues/retry', {}); toast('Повернуто в чергу: ' + x.n); settings(); } catch (e) { toast(errText(e)); } };
   $('#va').onclick = async () => { try { await api('POST', '/api/admin/venues/add', { country: $('#vc').value, name: $('#vn').value }); toast('Додано в чергу'); settings(); } catch (e) { toast(errText(e)); } };
-  $('#igse').onclick = async () => { try { const x = await api('POST', '/api/admin/instagram/embeds', { text: $('#ige').value }); toast(x.embeds ? `Збережено постів: ${x.embeds}` : 'Збережено: список порожній'); settings(); } catch (e) { toast(errText(e)); } };
-  renderIgPlan(pb, ig);
-  $('#fbs').onclick = async () => { try { const x = await api('POST', '/api/admin/instagram/fbpage', { id: $('#fbid').value.trim() }); toast(x.fbPage ? 'Сторінку Facebook підключено: ' + x.fbPage.name : 'Facebook відключено'); settings(); } catch (e) { toast(errText(e)); } };
-  if ($('#igtest')) $('#igtest').onclick = async () => { const b = $('#igtest'); b.disabled = true; try { const x = await api('POST', '/api/admin/instagram/test', {}); toast(x.ok ? (x.count ? `Instagram віддав постів: ${x.count}. Вони з'являться на головній` : `Підключення працює, але Instagram повернув 0 публікацій (${x.raw || 0} у відповіді). Перевірте, чи є в акаунті пости й чи має токен доступ до медіа`) : 'Помилка: ' + x.error); settings(); } catch (e) { toast(errText(e)); b.disabled = false; } };
-  $('#igs').onclick = async () => { const t = $('#igt').value.trim(); if (!t && !ig.connected) return toast('Вставте токен'); try { const x = await api('POST', '/api/admin/instagram/token', { token: t, igId: $('#igid').value.trim() }); toast('Підключено: @' + x.username); settings(); } catch (e) { toast(e.code === 'token_rejected' ? 'Instagram не прийняв токен' : e.code === 'bad_token' ? 'Токен має неправильний вигляд' : errText(e)); } };
-  if ($('#igd')) $('#igd').onclick = async () => { if (!confirm('Відключити Instagram? Стрічку з головної буде прибрано.')) return; try { await api('POST', '/api/admin/instagram/disconnect', {}); toast('Відключено'); settings(); } catch (e) { toast(errText(e)); } };
   $('#vp').onclick = async () => { try { await api('POST', '/api/admin/venues/pause', { paused: !($('#vp').textContent.startsWith('Продовжити')) }); toast('Збережено'); settings(); } catch (e) { toast(errText(e)); } };
   $('#vt').onclick = async () => { const b = $('#vt'); b.disabled = true; b.textContent = 'Перевіряємо (до 40 с)…'; try { const x = await api('POST', '/api/admin/venues/test', {}); const f = o => o.error ? 'помилка: ' + o.error + ' (' + o.ms + ' мс)' : `HTTP ${o.status}, ${o.ms} мс, ${o.bytes} Б, об’єктів: ${o.n ?? '—'}${o.note ? ', ' + o.note : ''}`; let box = $('#vtres'); if (!box) { box = document.createElement('pre'); box.id = 'vtres'; box.className = 'muted'; box.style.cssText = 'white-space:pre-wrap;overflow-wrap:anywhere;font-size:12px;margin:8px 0 0'; $('#vt').closest('.row').after(box); } box.textContent = x.probe.map(p => `${p.mirror}\n  статус сервера: ${f(p.status)}\n  малий запит: ${f(p.small)}\n  справжній (група 1): ${f(p.group1)}`).join('\n\n'); } catch (e) { toast(errText(e)); } b.disabled = false; b.textContent = 'Перевірити Overpass'; };
   $('#fxr').onclick = async () => { $('#fxr').disabled = true; try { const x = await api('POST', '/api/admin/fx/refresh', {}); toast('Курси оновлено: ' + x.count + ' валют'); settings(); } catch (e) { toast(errText(e)); $('#fxr').disabled = false; } };
