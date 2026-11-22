@@ -18,19 +18,35 @@ export function mapPosts(data) {
     .filter(p => p.img && /^https:\/\//.test(p.img) && /^https:\/\/www\.instagram\.com\//.test(p.link || '')).slice(0, 6);
 }
 
-/** Стрічка з кешем на годину; при помилці віддаємо старий кеш, а без нього порожній список. */
-export async function instagramFeed(env, { fetchImpl = fetch, now = Date.now() } = {}) {
-  const cache = parse(await getSetting(env, 'ig_cache'));
-  if (cache && now - cache.at < HOUR) return cache.posts;
-  const token = await getToken(env); if (!token) return [];
+/** Один запит до Instagram: { ok, posts } або { ok: false, status, error } (текст помилки від Meta). */
+async function fetchPosts(env, fetchImpl) {
+  const token = await getToken(env); if (!token) return { ok: false, error: 'Токен не додано' };
   const fbId = (await getSetting(env, 'ig_mode')) === 'fb' ? await getSetting(env, 'ig_id') : null;
   try {
     const r = await fetchImpl(`${fbId ? `${FB}/${fbId}` : `${GRAPH}/me`}/media?fields=id,caption,media_type,media_url,thumbnail_url,permalink,timestamp&limit=12&access_token=${encodeURIComponent(token)}`, { signal: AbortSignal.timeout(8000) });
-    if (!r.ok) throw new Error('ig ' + r.status);
-    const posts = mapPosts(await r.json());
-    await setSetting(env, 'ig_cache', JSON.stringify({ at: now, posts }));
-    return posts;
-  } catch { return cache ? cache.posts : []; }
+    const j = await r.json().catch(() => ({}));
+    if (!r.ok) return { ok: false, status: r.status, error: String((j.error && (j.error.message || j.error.type)) || 'HTTP ' + r.status).slice(0, 220) };
+    return { ok: true, posts: mapPosts(j), raw: Array.isArray(j.data) ? j.data.length : 0 };
+  } catch (e) { return { ok: false, error: 'Instagram недоступний: ' + String(e && e.message || e).slice(0, 80) }; }
+}
+
+/** Стрічка з кешем на годину; при помилці віддаємо старий кеш (або порожній список) і запам'ятовуємо причину для адмінки. */
+export async function instagramFeed(env, { fetchImpl = fetch, now = Date.now() } = {}) {
+  const cache = parse(await getSetting(env, 'ig_cache'));
+  if (cache && now - cache.at < HOUR) return cache.posts;
+  if (!(await getToken(env))) return [];
+  const r = await fetchPosts(env, fetchImpl);
+  if (!r.ok) { await setSetting(env, 'ig_err', JSON.stringify({ at: now, status: r.status || null, error: r.error })); return cache ? cache.posts : []; }
+  await setSetting(env, 'ig_err', ''); await setSetting(env, 'ig_cache', JSON.stringify({ at: now, posts: r.posts }));
+  return r.posts;
+}
+
+/** Ручна перевірка з адмінки: запит без кешу, повертає кількість постів або причину помилки. */
+export async function igTest(env, { fetchImpl = fetch, now = Date.now() } = {}) {
+  const r = await fetchPosts(env, fetchImpl);
+  if (!r.ok) { await setSetting(env, 'ig_err', JSON.stringify({ at: now, status: r.status || null, error: r.error })); return { ok: false, status: r.status || null, error: r.error }; }
+  await setSetting(env, 'ig_err', ''); await setSetting(env, 'ig_cache', JSON.stringify({ at: now, posts: r.posts }));
+  return { ok: true, count: r.posts.length, raw: r.raw };
 }
 
 /** Перевіряє токен (запит профілю) і зберігає його; повертає { ok, username } або { ok: false, error }. */
@@ -53,8 +69,8 @@ export async function saveToken(env, token, { igId = '', fetchImpl = fetch, now 
 export async function disconnect(env) { for (const k of ['ig_token', 'ig_meta', 'ig_cache', 'ig_mode', 'ig_id']) await setSetting(env, k, ''); }
 
 export async function igStatus(env, now = Date.now()) {
-  const meta = parse(await getSetting(env, 'ig_meta')), token = await getToken(env), embeds = await getEmbeds(env);
-  return { embeds: embeds.length, embedsText: embedsText(embeds), connected: !!token, viaSecret: !(await getSetting(env, 'ig_token')) && !!env.INSTAGRAM_TOKEN, username: meta ? meta.username : null, expiresAt: meta ? meta.expires_at : null, neverExpires: !!(meta && meta.never), daysLeft: meta && meta.expires_at ? Math.max(0, Math.floor((meta.expires_at - now) / DAY)) : null };
+  const meta = parse(await getSetting(env, 'ig_meta')), token = await getToken(env), embeds = await getEmbeds(env), lastError = parse(await getSetting(env, 'ig_err'));
+  return { lastError, embeds: embeds.length, embedsText: embedsText(embeds), connected: !!token, viaSecret: !(await getSetting(env, 'ig_token')) && !!env.INSTAGRAM_TOKEN, username: meta ? meta.username : null, expiresAt: meta ? meta.expires_at : null, neverExpires: !!(meta && meta.never), daysLeft: meta && meta.expires_at ? Math.max(0, Math.floor((meta.expires_at - now) / DAY)) : null };
 }
 
 /** Раз на 7 днів продовжує довгоживучий токен (діє 60 днів). Викликається щогодини з cron, але працює лише коли настав час. */

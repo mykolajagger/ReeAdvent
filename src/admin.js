@@ -8,7 +8,7 @@ import { issueLoginLink, issueLoginCode, WELCOME_TTL_MS } from './api.js';
 import { getSettings, saveSettings, getPriceUah } from './settings.js';
 import { getFx, refreshFx } from './currency.js';
 import { placesUsage } from './places.js';
-import { saveToken as igSaveToken, disconnect as igDisconnect, igStatus, saveEmbeds as igSaveEmbeds } from './instagram.js';
+import { saveToken as igSaveToken, disconnect as igDisconnect, igStatus, saveEmbeds as igSaveEmbeds, igTest } from './instagram.js';
 import { venueStats, venueProblems, retryCities, queueCity, overpassProbe, setVenuesPaused, catalogCountries, catalogCities, catalogCity, setVenueHidden, mapUrl } from './venues.js';
 import { cancelInvoice } from './payments.js';
 
@@ -78,6 +78,7 @@ export async function handleAdmin(request, env, path, m) {
   if (m === 'GET' && path === '/api/admin/instagram') return json({ ok: true, ...(await igStatus(env)) });
   if (m === 'POST' && path === '/api/admin/instagram/token') { const b = await readJson(request); const out = await igSaveToken(env, b.token, { igId: b.igId }); if (!out.ok) throw new HttpError(400, out.error); await audit(env, admin, 'instagram_connect', null, { username: out.username }); return json({ ok: true, ...(await igStatus(env)) }); }
   if (m === 'POST' && path === '/api/admin/instagram/embeds') { const b = await readJson(request); const list = await igSaveEmbeds(env, b.text); await audit(env, admin, 'instagram_embeds', null, { n: list.length }); return json({ ok: true, ...(await igStatus(env)) }); }
+  if (m === 'POST' && path === '/api/admin/instagram/test') return json({ ok: true, ...(await igTest(env)), status2: await igStatus(env) });
   if (m === 'POST' && path === '/api/admin/instagram/disconnect') { await igDisconnect(env); await audit(env, admin, 'instagram_disconnect', null, {}); return json({ ok: true, ...(await igStatus(env)) }); }
   if (m === 'POST' && path === '/api/admin/venues/test') return json({ ok: true, probe: await overpassProbe() });
   if (m === 'POST' && path === '/api/admin/venues/add') { const b = await readJson(request); if (!(await queueCity(env, b.country, b.name))) throw new HttpError(400, 'bad_city'); await audit(env, admin, 'venues_add', null, { country: b.country, name: b.name }); return json({ ok: true }); }

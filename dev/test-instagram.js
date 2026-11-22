@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import path from 'node:path'; import { fileURLToPath } from 'node:url';
 import { makeDb } from './d1.js';
 import { handle } from '../src/api.js';
-import { mapPosts, parseEmbeds, saveEmbeds, getEmbeds, embedsText, instagramFeed, saveToken, refreshToken, igStatus, disconnect, getToken, IG_URL, IG_HANDLE } from '../src/instagram.js';
+import { igTest, mapPosts, parseEmbeds, saveEmbeds, getEmbeds, embedsText, instagramFeed, saveToken, refreshToken, igStatus, disconnect, getToken, IG_URL, IG_HANDLE } from '../src/instagram.js';
 const root = path.join(path.dirname(fileURLToPath(import.meta.url)), '..'), db = makeDb(root), env = { DB: db, DEV: '1', CRON_SECRET: 'c'.repeat(24), BASE_URL: 'http://x', PAYMENT_MODE: 'stub', EMAIL_MODE: 'stub', PRICE_UAH: '400' };
 assert.equal(IG_HANDLE, 'reeadvent'); assert.equal(IG_URL, 'https://www.instagram.com/reeadvent/');
 
@@ -64,8 +64,17 @@ assert.deepEqual(em, [{ t: 'p', c: 'ABCDEFG12345' }, { t: 'reel', c: 'Zz-_9yyyyy
 assert.equal(parseEmbeds(Array.from({ length: 9 }, (_, i) => `https://www.instagram.com/p/CODE${i}abcde/`).join('\n')).length, 6, 'не більше 6');
 assert.deepEqual(await getEmbeds(env), []); await saveEmbeds(env, 'https://www.instagram.com/p/ABCDEFG12345/'); assert.equal(embedsText(await getEmbeds(env)), 'https://www.instagram.com/p/ABCDEFG12345/'); assert.equal((await igStatus(env)).embeds, 1);
 const pubE = await (await handle(new Request('http://x/api/instagram'), env)).json(); assert.deepEqual(pubE.embeds, [{ t: 'p', c: 'ABCDEFG12345' }]);
+// діагностика: помилка Meta, нуль публікацій, успіх
+const metaErr = async () => new Response(JSON.stringify({ error: { message: 'Invalid OAuth access token.', type: 'OAuthException', code: 190 } }), { status: 400 });
+await saveToken(env, GOOD, { fetchImpl: fakeFetch, now: T0 });
+let tr = await igTest(env, { fetchImpl: metaErr }); assert.deepEqual([tr.ok, tr.status, tr.error], [false, 400, 'Invalid OAuth access token.']);
+let stt = await igStatus(env); assert.equal(stt.lastError.error, 'Invalid OAuth access token.');
+tr = await igTest(env, { fetchImpl: async () => new Response(JSON.stringify({ data: [] })) }); assert.deepEqual([tr.ok, tr.count, tr.raw], [true, 0, 0]); assert.equal((await igStatus(env)).lastError, null, 'успіх прибирає помилку');
+ok = true; tr = await igTest(env, { fetchImpl: fakeFetch }); assert.deepEqual([tr.ok, tr.count], [true, 6]);
+tr = await igTest(env, { fetchImpl: async () => { throw new Error('boom'); } }); assert.equal(tr.ok, false); assert.match(tr.error, /недоступний/);
+await disconnect(env); assert.equal((await igTest(env, { fetchImpl: fakeFetch })).error, 'Токен не додано');
 // публічний API й захист адмінки
 const pub = await handle(new Request('http://x/api/instagram'), env); const pj = await pub.json();
 assert.equal(pub.status, 200); assert.deepEqual([pj.ok, pj.handle, pj.posts], [true, 'reeadvent', []]); assert.match(pub.headers.get('cache-control'), /max-age=600/);
-for (const [m, p, b] of [['GET', '/api/admin/instagram'], ['POST', '/api/admin/instagram/token', { token: GOOD }], ['POST', '/api/admin/instagram/disconnect', {}], ['POST', '/api/admin/instagram/embeds', { text: 'x' }]]) assert([401, 403].includes((await handle(new Request('http://x' + p, { method: m, headers: { 'x-admin': '1', 'content-type': 'application/json' }, body: b ? JSON.stringify(b) : undefined }), env)).status), p);
+for (const [m, p, b] of [['GET', '/api/admin/instagram'], ['POST', '/api/admin/instagram/token', { token: GOOD }], ['POST', '/api/admin/instagram/disconnect', {}], ['POST', '/api/admin/instagram/embeds', { text: 'x' }], ['POST', '/api/admin/instagram/test', {}]]) assert([401, 403].includes((await handle(new Request('http://x' + p, { method: m, headers: { 'x-admin': '1', 'content-type': 'application/json' }, body: b ? JSON.stringify(b) : undefined }), env)).status), p);
 console.log('INSTAGRAM OK');
