@@ -3,7 +3,7 @@
 (() => {
   const ls = { get: k => { try { return localStorage.getItem(k); } catch { return null; } }, set: (k, v) => { try { localStorage.setItem(k, v); } catch {} } };
   const ss = { get: k => { try { return sessionStorage.getItem(k); } catch { return null; } }, set: (k, v) => { try { sessionStorage.setItem(k, v); } catch {} } };
-  const lang = () => { const s = ls.get('lang'); return s === 'en' || s === 'uk' ? s : (/^uk/i.test(navigator.language || '') ? 'uk' : 'en'); };
+  const lang = () => { if (window.LANG && window.LANG.get) { const g = window.LANG.get(); if (g === 'en' || g === 'uk') return g; } const s = ls.get('lang'); return s === 'en' || s === 'uk' ? s : (/^uk/i.test(navigator.language || '') ? 'uk' : 'en'); };
   // --- UTM: з адреси (або за fbclid/gclid), остання мітка перемагає; у замовлення йде window.raUtm()
   const q = new URLSearchParams(location.search), u = {};
   for (const k of ['source', 'medium', 'campaign', 'content', 'term']) { const v = q.get('utm_' + k); if (v) u[k] = v.slice(0, 80); }
@@ -46,5 +46,7 @@
     const c = ls.get('ra_consent'); if (c === 'all') { load(); if (/^\/(index\.html)?$/.test(location.pathname)) window.raTrack('view'); } else if (!c) banner();
     const open = document.getElementById('ck-open'); if (open) { open.hidden = false; open.textContent = T[lang()].open; open.onclick = e => { e.preventDefault(); banner(); }; }
   }
+  // мова сайту перемкнулась: банер і посилання «Налаштування cookies» оновлюють текст
+  window.addEventListener('langchange', () => { if (document.getElementById('ra-ck')) banner(); const o = document.getElementById('ck-open'); if (o && !o.hidden) o.textContent = T[lang()].open; });
   fetch('/api/track-config').then(r => r.json()).then(j => { if (j && j.ok) { cfg = j; init(); } }).catch(() => {});
 })();
