@@ -5,18 +5,20 @@
   "title": "Знайомство з брендом",
   "caption": "Знайомтеся: Він і Вона. Вони відкривають свій адвент-календар для двох.\n\n24 дні. Щодня нове вікно: питання одне одному, подарунок, пригода й спільна активність у вашому місті. Підбираємо за вашими смаками, а те, що всередині, лишається сюрпризом.\n\nUnwrap Love. Every Day. ✦\n\nMeet Him and Her. They are opening their advent calendar for two.\n\n24 days. A new window every day: a question for each other, a gift idea, an adventure and a shared activity in your city. Matched to your tastes, but what is inside stays a surprise.\n\nПосилання в шапці профілю · Link in bio\n\n#адвент #адвенткалендар #романтика #длядвох #подарунокнаНовийрік #побачення #reeadvent #adventcalendar #couplegoals #datenight",
   "cover": null,
+  "scene": "art",
   "files": [
    "01-brand-post.jpg"
   ]
  },
  {
-  "id": "reel",
+  "id": "reel4",
   "type": "REELS",
-  "title": "Reel «Одне вікно»",
-  "caption": "Ось як відкривається одне вікно ✦\nПитання дня. Подарунок. Пригода для двох. Спільна активність.\nУсе це щодня, 24 дні. Вікно №7 для неї вже відкрите, а ваше чекає.\n\nThis is what one window looks like ✦\nA question of the day. A gift. An adventure for two. A shared activity.\nEvery day for 24 days.\n\nПосилання в шапці профілю · Link in bio\n\n#адвент #адвенткалендар #reels #романтика #длядвох #reeadvent #adventcalendar #coupleideas",
-  "cover": "02-reel-cover.jpg",
+  "title": "Reel «A чи B?»",
+  "caption": "Швидка гра: A чи B? ✦\nЯрмарок чи спа. Кіно чи настільна гра. Подарунки чи вечеря. Зорі чи книга. Пишіть у коментарях свої відповіді: порівняємо, кого більше.\n\nQuick game: A or B? ✦\nMarket or spa. Movie or board game. Gifts or dinner. Stars or a book. Drop your answers below and we will see who wins.\n\nСтарт 1 грудня: посилання в шапці профілю · Starts December 1: link in bio\n\n#reels #обирай #ідеїдляпар #романтика #reeadvent #thisorthat #datenight",
+  "cover": "reel-ab-cover.jpg",
+  "scene": null,
   "files": [
-   "02-reel.mp4"
+   "reel-ab.mp4"
   ]
  },
  {
@@ -25,6 +27,7 @@
   "title": "Карусель «Як це працює»",
   "caption": "Три кроки до 24 днів сюрпризів ✦\n1) Він замовляє (а ви): імена, пошти, місто, дата старту.\n2) Він і Вона заповнюють анкету окремо (як і ви). Навіть партнер не бачить ваших відповідей.\n3) Щоранку відкривається нове вікно: питання, подарунок, пригода й активність.\n\nДля пар від 18 років. Частина змісту м'яко романтична й завжди за взаємною згодою.\n\nThree steps to 24 days of surprises ✦\n1) He orders (and so do you): names, emails, city and start date.\n2) He and She fill in a questionnaire separately, and so do you. Not even your partner sees your answers.\n3) A new window opens every morning.\n\nFor couples aged 18+. Some of the content is softly romantic and always by mutual consent.\n\nПосилання в шапці профілю · Link in bio\n\n#якцепрацює #адвенткалендар #романтика #ідеїдляпар #reeadvent #adventcalendar #relationshipgoals",
   "cover": null,
+  "scene": "art",
   "files": [
    "03-carousel-how-1.jpg",
    "03-carousel-how-2.jpg",
@@ -34,13 +37,91 @@
   ]
  },
  {
+  "id": "poll",
+  "type": "IMAGE",
+  "title": "Опитування «Який вечір ваш?»",
+  "caption": "Який вечір ваш? ✦\n1 ялинка, 2 вечеря, 3 подушки, 4 книга, 5 зорі.\nНапишіть цифру в коментарях і розкажіть, чому саме цей. Для неї. Для нього.\n\nWhich evening is yours? ✦\n1 tree, 2 dinner, 3 pillows, 4 book, 5 stars.\nComment the number and tell us why. For her. For him.\n\nПосилання в шапці профілю · Link in bio\n\n#якийвечір #ідеїдляпар #романтика #вечірвдвох #reeadvent #datenight #couplequestions",
+  "cover": null,
+  "scene": null,
+  "files": [
+   "10-poll-evening.jpg"
+  ]
+ },
+ {
+  "id": "reel",
+  "type": "REELS",
+  "title": "Reel «Одне вікно»",
+  "caption": "Ось як відкривається одне вікно ✦\nПитання дня. Подарунок. Пригода для двох. Спільна активність.\nУсе це щодня, 24 дні. Вікно №7 для неї вже відкрите, а ваше чекає.\n\nThis is what one window looks like ✦\nA question of the day. A gift. An adventure for two. A shared activity.\nEvery day for 24 days.\n\nПосилання в шапці профілю · Link in bio\n\n#адвент #адвенткалендар #reels #романтика #длядвох #reeadvent #adventcalendar #coupleideas",
+  "cover": "02-reel-cover.jpg",
+  "scene": "art",
+  "files": [
+   "02-reel.mp4"
+  ]
+ },
+ {
+  "id": "window4",
+  "type": "CAROUSEL",
+  "title": "Карусель «Одне вікно: чотири сюрпризи»",
+  "caption": "Що ховається за одним вікном? ✦\n1) Питання дня: одне на двох, щоб заговорити про важливе.\n2) Подарунок: ідея за вашим бюджетом і смаками, ще й підказка, де купити.\n3) Пригода: місце чи затія у вашому місті.\n4) Спільна активність: від вечері вдвох до гри вдома.\nДля неї. Для нього. Для вас двох.\nСтарт 1 грудня.\n\nWhat hides behind one window? ✦\n1) A question of the day for both of you.\n2) A gift idea matched to your budget and tastes, plus where to buy it.\n3) An adventure: a place or plan in your city.\n4) A shared activity, from dinner for two to a game at home.\nFor her. For him. For both of you.\nStarts December 1.\n\nПосилання в шапці профілю · Link in bio\n\n#адвенткалендар #длядвох #романтика #ідеїдляпар #побачення #reeadvent #adventcalendar #couplegoals",
+  "cover": null,
+  "scene": null,
+  "files": [
+   "08-window-four-1.jpg",
+   "08-window-four-2.jpg",
+   "08-window-four-3.jpg",
+   "08-window-four-4.jpg",
+   "08-window-four-5.jpg",
+   "08-window-four-6.jpg"
+  ]
+ },
+ {
+  "id": "dinner",
+  "type": "IMAGE",
+  "title": "Вечеря вдвох — теж подарунок",
+  "caption": "Вечеря вдвох — теж подарунок ✦\nНе потрібен ресторан: простий рецепт, свічка й ви обоє на кухні. У ReeAdvent у вікні може чекати така спільна активність. Для неї. Для нього.\n\nDinner for two is a gift too ✦\nYou do not need a restaurant: a simple recipe, a candle and the two of you in the kitchen. A shared activity like this can be waiting in a ReeAdvent window. For her. For him.\n\nПосилання в шапці профілю · Link in bio\n\n#вечеряудвох #готуєморазом #романтика #reeadvent #cookingtogether #datenightathome",
+  "cover": null,
+  "scene": "pasta",
+  "files": [
+   "11-dinner-for-two.jpg"
+  ]
+ },
+ {
+  "id": "reel5",
+  "type": "REELS",
+  "title": "Reel «Вікно за вікном»",
+  "caption": "Вікно за вікном ✦\n12 ідей вечорів, і це лише початок: у ReeAdvent 24 вікна, а в кожному питання, подарунок, пригода й активність. Яке відкриєте першим?\n\nWindow by window ✦\n12 evening ideas, and that is only the beginning: ReeAdvent has 24 windows, each with a question, a gift, an adventure and an activity. Which one would you open first?\n\nЗамовити: посилання в шапці профілю · Order: link in bio\n\n#адвенткалендар #24вікна #reels #романтика #reeadvent #adventcalendar #couplegoals",
+  "cover": "reel-windows-cover.jpg",
+  "scene": null,
+  "files": [
+   "reel-windows.mp4"
+  ]
+ },
+ {
   "id": "couple",
   "type": "IMAGE",
   "title": "Ваша історія. Ваш адвент",
   "caption": "Ваша історія. Ваш адвент ✦\nВечір, гірлянда, тепло поруч, і одне вікно на день, яке ви відкриваєте разом.\n\nРозкажіть у коментарях, яким був ваш найтепліший зимовий вечір?\n\nYour story. Your advent ✦\nAn evening, string lights, someone warm beside you, and one window a day that you open together.\n\nTell us in the comments: what was your warmest winter evening?\n\nПосилання в шапці профілю · Link in bio\n\n#ваша_історія #зимовийвечір #романтика #адвент #reeadvent #cozyvibes #winterevening",
   "cover": null,
+  "scene": "art",
   "files": [
    "04-couple-illustration.jpg"
+  ]
+ },
+ {
+  "id": "game5",
+  "type": "CAROUSEL",
+  "title": "Карусель «5 правил настільного вечора»",
+  "caption": "Настільна гра для двох: 5 правил вечора ✦\n1) Оберіть гру, де цікаво вигравати обом.\n2) Домовтесь про приз: десерт, масаж плечей чи вибір фільму.\n3) Какао й імбирне печиво обов'язкові.\n4) Телефони в іншу кімнату.\n5) Після гри одне питання: «Який момент вечора тобі сподобався найбільше?»\nЯкий приз у вашого переможця? Напишіть у коментарях.\n\nBoard-game night for two: 5 rules ✦\n1) Pick a game you both enjoy winning.\n2) Agree on a prize: dessert, a shoulder rub or choosing the movie.\n3) Cocoa and gingerbread are a must.\n4) Phones go to another room.\n5) After the game, one question: “Which moment of the evening did you like most?”\nWhat is your winner's prize? Tell us below.\n\nТакі вечори чекають у вікнах: посилання в шапці профілю · Evenings like this wait in the windows: link in bio\n\n#настільніігри #вечірвдвох #ідеїдляпар #побаченнявдома #reeadvent #boardgamenight #datenightathome #couplegames",
+  "cover": null,
+  "scene": "game",
+  "files": [
+   "16-game-rules-1.jpg",
+   "16-game-rules-2.jpg",
+   "16-game-rules-3.jpg",
+   "16-game-rules-4.jpg",
+   "16-game-rules-5.jpg",
+   "16-game-rules-6.jpg",
+   "16-game-rules-7.jpg"
   ]
  },
  {
@@ -49,8 +130,31 @@
   "title": "24 вікна: який відкриєте першим",
   "caption": "24 вікна. 24 дні. Який день відкриєте першим? ✦\nВін обрав №7. А Вона? Напишіть цифру в коментарях, а ми розповімо, що за вікном приготуємо для вас (без спойлерів!).\n\n24 windows. 24 days. Which one would you open first? ✦\nTell us the number below, and we will give you a hint of what lives behind it (no spoilers!).\n\nПосилання в шапці профілю · Link in bio\n\n#24вікна #адвент #адвенткалендар #reeadvent #adventcalendar",
   "cover": null,
+  "scene": null,
   "files": [
    "05-calendar-24.jpg"
+  ]
+ },
+ {
+  "id": "reel3",
+  "type": "REELS",
+  "title": "Reel «Один день у ReeAdvent»",
+  "caption": "Один день у ReeAdvent ✦\nВікно відкривається вранці, а далі день складається сам: питання дня зранку, подарунок удень, спільна активність увечері, пригода для двох уночі. А ще трохи гри. Так 24 дні поспіль, старт 1 грудня.\n\nOne day in ReeAdvent ✦\nThe window opens in the morning and the day builds around it: the question of the day in the morning, a gift in the afternoon, a shared activity in the evening, an adventure for two at night. And a little play. 24 days in a row, starting December 1.\n\nПосилання в шапці профілю · Link in bio\n\n#reels #адвенткалендар #длядвох #романтика #reeadvent #adventcalendar #couplegoals",
+  "cover": "reel-one-day-cover.jpg",
+  "scene": null,
+  "files": [
+   "reel-one-day.mp4"
+  ]
+ },
+ {
+  "id": "spa",
+  "type": "IMAGE",
+  "title": "Чекліст «Спа-вечір вдома»",
+  "caption": "Спа-вечір вдома: що потрібно ✦\nЧекліст для двох: 1) халати й теплий плед, 2) огірки й маски для обличчя, 3) мед і морська сіль, 4) трав'яний чай на двох, 5) свічки й тиша. Збережіть, щоб не загубити. Хто з вас першим засне під маскою?\n\nA spa night at home: what you need ✦\nA checklist for two: 1) robes and a warm blanket, 2) cucumbers and face masks, 3) honey and sea salt, 4) herbal tea for two, 5) candles and silence. Save it for later. Who will fall asleep under the mask first?\n\nБільше ідей на кожен вечір: посилання в шапці профілю · More ideas for every evening: link in bio\n\n#спавечір #вечірвдвох #відпочинокудвох #романтика #reeadvent #spanight #selfcarecouples #cozyathome",
+  "cover": null,
+  "scene": "spa",
+  "files": [
+   "19-spa-checklist.jpg"
   ]
  },
  {
@@ -59,6 +163,7 @@
   "title": "Карусель «5 питань»",
   "caption": "5 питань, від яких вечеря стане теплішою ✦\nВін і Вона задають їх одне одному (відповіді на слайдах: приклади). Задайте їх одне одному сьогодні. А в ReeAdvent таке питання відкривається щодня.\n\nЗбережіть допис, щоб не загубити, і поділіться з тим, кому хочеться їх поставити.\n\n5 questions for a warmer evening ✦\nAsk each other tonight. In ReeAdvent, a question like this opens every day.\n\nSave this post so you do not lose it, and send it to the person you want to ask.\n\nПосилання в шапці профілю · Link in bio\n\n#питаннядляпар #романтика #вечеря #стосунки #reeadvent #questionsforcouples #relationshipquestions",
   "cover": null,
+  "scene": "art",
   "files": [
    "06-carousel-questions-1.jpg",
    "06-carousel-questions-2.jpg",
@@ -70,28 +175,36 @@
   ]
  },
  {
-  "id": "evenings",
+  "id": "duel",
   "type": "IMAGE",
-  "title": "Вечори, які хочеться повторити",
-  "caption": "Вечеря при свічках, ковзанка, плед і вино, сюрприз під ялинкою. Який вечір ваш? ✦\n\nCandlelit dinner, ice rink, a blanket and wine, a surprise under the tree. Which evening is yours? ✦\n\nПосилання в шапці профілю · Link in bio\n\n#вечірдлядвох #романтика #адвент #reeadvent #datenight",
+  "title": "Дуель «Гра чи кіно?»",
+  "caption": "Гра чи кіно? ✦\nA: настільна гра з какао й печивом. B: кіновечір під пледом із попкорном. Для неї. Для нього. Пишіть у коментарях A або B, а ще чому. Посперечайтеся по-доброму.\n\nGame or movie? ✦\nA: a board game with cocoa and gingerbread. B: a movie night under a blanket with popcorn. For her. For him. Comment A or B, and tell us why. Argue nicely.\n\nЗамовити календар: посилання в шапці профілю · Order the calendar: link in bio\n\n#гра_чи_кіно #обирай #ідеїдляпар #романтика #reeadvent #thisorthat #datenight",
   "cover": null,
+  "scene": "game",
   "files": [
-   "07-bonus-evenings.jpg"
+   "17-duel-game-or-movie.jpg"
   ]
  },
  {
-  "id": "window4",
-  "type": "CAROUSEL",
-  "title": "Карусель «Одне вікно: чотири сюрпризи»",
-  "caption": "Що ховається за одним вікном? ✦\n1) Питання дня: одне на двох, щоб заговорити про важливе.\n2) Подарунок: ідея за вашим бюджетом і смаками, ще й підказка, де купити.\n3) Пригода: місце чи затія у вашому місті.\n4) Спільна активність: від вечері вдвох до гри вдома.\nДля неї. Для нього. Для вас двох.\nСтарт 1 грудня.\n\nWhat hides behind one window? ✦\n1) A question of the day for both of you.\n2) A gift idea matched to your budget and tastes, plus where to buy it.\n3) An adventure: a place or plan in your city.\n4) A shared activity, from dinner for two to a game at home.\nFor her. For him. For both of you.\nStarts December 1.\n\nПосилання в шапці профілю · Link in bio\n\n#адвенткалендар #длядвох #романтика #ідеїдляпар #побачення #reeadvent #adventcalendar #couplegoals",
-  "cover": null,
+  "id": "reel2",
+  "type": "REELS",
+  "title": "Reel «5 вечорів для двох»",
+  "caption": "5 вечорів для двох за 18 секунд ✦\nЯлинка, вечеря, подушковий бій, книга чи зорі: з якого почнете? Збережіть, щоб не загубити.\n\n5 evenings for two in 18 seconds ✦\nTree, dinner, pillow fight, a book or the stars: which one first? Save it for later.\n\nПосилання в шапці профілю · Link in bio\n\n#reels #ідеїдляпар #романтика #длядвох #reeadvent #datenightideas #coupleideas",
+  "cover": "reel-5-evenings-cover.jpg",
+  "scene": null,
   "files": [
-   "08-window-four-1.jpg",
-   "08-window-four-2.jpg",
-   "08-window-four-3.jpg",
-   "08-window-four-4.jpg",
-   "08-window-four-5.jpg",
-   "08-window-four-6.jpg"
+   "reel-5-evenings.mp4"
+  ]
+ },
+ {
+  "id": "wrap",
+  "type": "IMAGE",
+  "title": "Дві коробки, один секрет",
+  "caption": "Дві коробки, один секрет ✦\nВін пакує подарунок для неї, вона для нього. Таємниця триває до ранку. У ReeAdvent у вікні чекає ідея подарунка за вашим бюджетом і смаками, ще й підказка, де її купити.\n\nTwo boxes, one secret ✦\nHe wraps a gift for her, she wraps one for him. The secret lasts until morning. In ReeAdvent a window holds a gift idea matched to your budget and tastes, plus a hint on where to buy it.\n\nІдеї подарунків: посилання в шапці профілю · Gift ideas: link in bio\n\n#подарунок #сюрприз #подарункинаНовийрік #reeadvent #giftideas #wrappinggifts #christmasgifts",
+  "cover": null,
+  "scene": "wrap",
+  "files": [
+   "18-two-boxes.jpg"
   ]
  },
  {
@@ -100,6 +213,7 @@
   "title": "Карусель «5 зимових вечорів удвох»",
   "caption": "5 зимових вечорів удвох ✦ Збережіть, щоб не загубити.\n1) Прикрасьте ялинку разом\n2) Приготуйте вечерю вдвох\n3) Влаштуйте подушковий бій\n4) Почитайте під пледом\n5) Подивіться на зорі\nЯкий вечір ваш? Напишіть цифру в коментарях. У ReeAdvent схожі ідеї відкриваються щодня, 24 дні.\n\n5 winter evenings for two ✦ Save it for later.\n1) Decorate the tree together\n2) Cook dinner for two\n3) Have a pillow fight\n4) Read under a blanket\n5) Watch the stars\nWhich evening is yours? Comment the number. In ReeAdvent ideas like these open every day, for 24 days.\n\nПосилання в шапці профілю · Link in bio\n\n#зимовийвечір #ідеїдляпар #романтика #вечірвдвох #reeadvent #winterdate #datenightideas #cozyvibes",
   "cover": null,
+  "scene": null,
   "files": [
    "09-evenings-five-1.jpg",
    "09-evenings-five-2.jpg",
@@ -111,23 +225,14 @@
   ]
  },
  {
-  "id": "poll",
+  "id": "market",
   "type": "IMAGE",
-  "title": "Опитування «Який вечір ваш?»",
-  "caption": "Який вечір ваш? ✦\n1 ялинка, 2 вечеря, 3 подушки, 4 книга, 5 зорі.\nНапишіть цифру в коментарях і розкажіть, чому саме цей. Для неї. Для нього.\n\nWhich evening is yours? ✦\n1 tree, 2 dinner, 3 pillows, 4 book, 5 stars.\nComment the number and tell us why. For her. For him.\n\nПосилання в шапці профілю · Link in bio\n\n#якийвечір #ідеїдляпар #романтика #вечірвдвох #reeadvent #datenight #couplequestions",
+  "title": "Ідея: глінтвейн на ярмарку",
+  "caption": "Глінтвейн на ярмарку ✦\nІдея для пригоди на вихідні: обійти всі будки, обрати спільне печиво й загадати бажання біля ялинки. Теплий шарф обов'язковий. Безалкогольна версія (виноградний сік зі спеціями) теж смачна. А в якому місті найкращий ярмарок? Підкажіть у коментарях.\n\nMulled wine at the Christmas market ✦\nAn adventure idea for the weekend: visit every stall, pick a cookie to share and make a wish by the tree. A warm scarf is a must. A non-alcoholic version (grape juice with spices) is just as good. Which city has the best market? Tell us below.\n\nПригоди для вашого міста: посилання в шапці профілю · Adventures for your city: link in bio\n\n#різдвяний_ярмарок #глінтвейн #пригода #романтика #reeadvent #christmasmarket #winterdate #mulledwine",
   "cover": null,
+  "scene": "market",
   "files": [
-   "10-poll-evening.jpg"
-  ]
- },
- {
-  "id": "dinner",
-  "type": "IMAGE",
-  "title": "Вечеря вдвох — теж подарунок",
-  "caption": "Вечеря вдвох — теж подарунок ✦\nНе потрібен ресторан: простий рецепт, свічка й ви обоє на кухні. У ReeAdvent у вікні може чекати така спільна активність. Для неї. Для нього.\n\nDinner for two is a gift too ✦\nYou do not need a restaurant: a simple recipe, a candle and the two of you in the kitchen. A shared activity like this can be waiting in a ReeAdvent window. For her. For him.\n\nПосилання в шапці профілю · Link in bio\n\n#вечеряудвох #готуєморазом #романтика #reeadvent #cookingtogether #datenightathome",
-  "cover": null,
-  "files": [
-   "11-dinner-for-two.jpg"
+   "20-market-idea.jpg"
   ]
  },
  {
@@ -136,8 +241,31 @@
   "title": "Дозвольте собі побешкетувати",
   "caption": "Дозвольте собі побешкетувати ✦\nДесять хвилин подушкового бою здатні перевернути весь вечір. Гра, сміх і м'які завдання в ReeAdvent завжди за взаємною згодою. Переможець обирає десерт.\n\nLet yourselves be playful ✦\nTen minutes of a pillow fight can turn a whole evening around. Play, laughter and soft challenges in ReeAdvent are always by mutual consent. The winner picks dessert.\n\nПосилання в шапці профілю · Link in bio\n\n#гра #сміх #романтика #reeadvent #pillowfight #playfulcouples",
   "cover": null,
+  "scene": "pillow",
   "files": [
    "12-play.jpg"
+  ]
+ },
+ {
+  "id": "week",
+  "type": "IMAGE",
+  "title": "Планер «Тиждень вечорів удвох»",
+  "caption": "Тиждень вечорів удвох ✦\nЗбережіть і заберіть у планер: Пн кіновечір, Вт настільна гра, Ср спа-вечір, Чт вечеря вдвох, Пт ярмарок і глінтвейн, Сб зоряна ніч, Нд книга під пледом. Який день тижня найкращий для вас двох?\n\nA week of evenings for two ✦\nSave it and drop it into your planner: Mon movie night, Tue board game, Wed spa night, Thu dinner for two, Fri market and mulled wine, Sat stargazing, Sun a book under a blanket. Which day of the week is best for the two of you?\n\nВікно щодня: посилання в шапці профілю · A window every day: link in bio\n\n#планер #тижденьвдвох #ідеїдляпар #романтика #reeadvent #weeklyplan #datenightideas",
+  "cover": null,
+  "scene": null,
+  "files": [
+   "21-week-planner.jpg"
+  ]
+ },
+ {
+  "id": "evenings",
+  "type": "IMAGE",
+  "title": "Вечори, які хочеться повторити",
+  "caption": "Вечеря при свічках, ковзанка, плед і вино, сюрприз під ялинкою. Який вечір ваш? ✦\n\nCandlelit dinner, ice rink, a blanket and wine, a surprise under the tree. Which evening is yours? ✦\n\nПосилання в шапці профілю · Link in bio\n\n#вечірдлядвох #романтика #адвент #reeadvent #datenight",
+  "cover": null,
+  "scene": null,
+  "files": [
+   "07-bonus-evenings.jpg"
   ]
  },
  {
@@ -146,28 +274,9 @@
   "title": "Зоряна ніч",
   "caption": "Зоряна ніч ✦\nПлед, термос і ясне небо. Інколи найкраща пригода — просто лягти поруч і дивитися вгору. Яке ваше улюблене сузір'я? Розкажіть у коментарях.\n\nA night under the stars ✦\nA blanket, a flask and a clear sky. Sometimes the best adventure is simply lying side by side and looking up. Which constellation is yours? Tell us below.\n\nПосилання в шапці профілю · Link in bio\n\n#зорянаніч #пригода #романтика #reeadvent #stargazing #cozynight",
   "cover": null,
+  "scene": "stars",
   "files": [
    "13-starry-night.jpg"
-  ]
- },
- {
-  "id": "reel2",
-  "type": "REELS",
-  "title": "Reel «5 вечорів для двох»",
-  "caption": "5 вечорів для двох за 18 секунд ✦\nЯлинка, вечеря, подушковий бій, книга чи зорі: з якого почнете? Збережіть, щоб не загубити.\n\n5 evenings for two in 18 seconds ✦\nTree, dinner, pillow fight, a book or the stars: which one first? Save it for later.\n\nПосилання в шапці профілю · Link in bio\n\n#reels #ідеїдляпар #романтика #длядвох #reeadvent #datenightideas #coupleideas",
-  "cover": "reel-5-evenings-cover.jpg",
-  "files": [
-   "reel-5-evenings.mp4"
-  ]
- },
- {
-  "id": "reel3",
-  "type": "REELS",
-  "title": "Reel «Один день у ReeAdvent»",
-  "caption": "Один день у ReeAdvent ✦\nВікно відкривається вранці, а далі день складається сам: питання дня зранку, подарунок удень, спільна активність увечері, пригода для двох уночі. А ще трохи гри. Так 24 дні поспіль, старт 1 грудня.\n\nOne day in ReeAdvent ✦\nThe window opens in the morning and the day builds around it: the question of the day in the morning, a gift in the afternoon, a shared activity in the evening, an adventure for two at night. And a little play. 24 days in a row, starting December 1.\n\nПосилання в шапці профілю · Link in bio\n\n#reels #адвенткалендар #длядвох #романтика #reeadvent #adventcalendar #couplegoals",
-  "cover": "reel-one-day-cover.jpg",
-  "files": [
-   "reel-one-day.mp4"
   ]
  },
  {
@@ -176,18 +285,9 @@
   "title": "Сторіс: старт 1 грудня",
   "caption": "",
   "cover": null,
+  "scene": "tree",
   "files": [
    "story-1-start.jpg"
-  ]
- },
- {
-  "id": "story2",
-  "type": "STORY",
-  "title": "Сторіс: що обираєте на вечір?",
-  "caption": "",
-  "cover": null,
-  "files": [
-   "story-2-choose.jpg"
   ]
  },
  {
@@ -196,8 +296,53 @@
   "title": "Сторіс: питання дня",
   "caption": "",
   "cover": null,
+  "scene": "book",
   "files": [
    "story-3-question.jpg"
+  ]
+ },
+ {
+  "id": "story8",
+  "type": "STORY",
+  "title": "Сторіс: киньте кубик",
+  "caption": "",
+  "cover": null,
+  "scene": null,
+  "files": [
+   "story-8-dice.jpg"
+  ]
+ },
+ {
+  "id": "story7",
+  "type": "STORY",
+  "title": "Сторіс: квиток на кіновечір",
+  "caption": "",
+  "cover": null,
+  "scene": "movie",
+  "files": [
+   "story-7-ticket.jpg"
+  ]
+ },
+ {
+  "id": "story2",
+  "type": "STORY",
+  "title": "Сторіс: що обираєте на вечір?",
+  "caption": "",
+  "cover": null,
+  "scene": "tree",
+  "files": [
+   "story-2-choose.jpg"
+  ]
+ },
+ {
+  "id": "story9",
+  "type": "STORY",
+  "title": "Сторіс: рецепт глінтвейну",
+  "caption": "",
+  "cover": null,
+  "scene": "market",
+  "files": [
+   "story-9-recipe.jpg"
   ]
  },
  {
@@ -206,8 +351,31 @@
   "title": "Сторіс: зоряна ніч",
   "caption": "",
   "cover": null,
+  "scene": "stars",
   "files": [
    "story-4-stars.jpg"
+  ]
+ },
+ {
+  "id": "story10",
+  "type": "STORY",
+  "title": "Сторіс: закінчіть речення",
+  "caption": "",
+  "cover": null,
+  "scene": "game",
+  "files": [
+   "story-10-prompt.jpg"
+  ]
+ },
+ {
+  "id": "story11",
+  "type": "STORY",
+  "title": "Сторіс: прогноз на вечір",
+  "caption": "",
+  "cover": null,
+  "scene": "spa",
+  "files": [
+   "story-11-forecast.jpg"
   ]
  },
  {
@@ -216,18 +384,9 @@
   "title": "Сторіс: гра на вечір",
   "caption": "",
   "cover": null,
+  "scene": "pillow",
   "files": [
    "story-5-play.jpg"
-  ]
- },
- {
-  "id": "story6",
-  "type": "STORY",
-  "title": "Сторіс: замовити",
-  "caption": "",
-  "cover": null,
-  "files": [
-   "story-6-order.jpg"
   ]
  },
  {
@@ -236,8 +395,20 @@
   "title": "Сторіс-відео: 24 вікна для двох",
   "caption": "",
   "cover": "story-video-cover.jpg",
+  "scene": null,
   "files": [
    "story-video.mp4"
+  ]
+ },
+ {
+  "id": "story6",
+  "type": "STORY",
+  "title": "Сторіс: замовити",
+  "caption": "",
+  "cover": null,
+  "scene": "tree",
+  "files": [
+   "story-6-order.jpg"
   ]
  }
 ]

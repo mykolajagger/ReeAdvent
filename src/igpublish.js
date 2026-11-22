@@ -98,7 +98,7 @@ export async function publishFb(env, post, { fetchImpl = fetch, site = SITE } = 
   const token = await getToken(env); if (!token) throw new Error('Токен не додано');
   const page = await getFbPage(env); if (!page) throw new Error('Не задано сторінку Facebook');
   let pt = token; try { const j = await call(fetchImpl, 'GET', `${FB}/${page.id}`, { fields: 'access_token', access_token: token }); if (j.access_token) pt = j.access_token; } catch {}
-  const url = f => `${site}/social/${f}`, text = String(post.caption || '').replace('Посилання в шапці профілю · Link in bio', FB_LINE);
+  const url = f => `${site}/social/${f}`, text = String(post.caption || '').replace(/^.*(?:в шапці профілю|link in bio).*$/gim, FB_LINE);   // будь-який рядок «…посилання в шапці профілю · …link in bio» → адреса сайту
   let j, noLink = false;
   if (post.type === 'STORY') {   // фото-сторіс: спершу неопубліковане фото, потім сторіс із нього
     const ph = await call(fetchImpl, 'POST', `${FB}/${page.id}/photos`, { url: url(post.files[0]), published: 'false', access_token: pt });
@@ -143,7 +143,7 @@ export async function runAutoPublish(env, { now = Date.now(), ...rest } = {}) {
 }
 export async function publishStatus(env, fetchImpl = fetch, site = SITE) {
   const st = await pubState(env), fbp = await getFbPage(env); let man = []; try { man = await loadManifest(fetchImpl, site); } catch {}
-  return { auto: st.auto, err: st.err, now: Date.now(), fbPage: fbp, posts: effective(man, await getPlan(env)).map(p => ({ id: p.id, type: p.type, format: p.format, title: p.title || null, files: p.files, cover: p.cover || null, caption: p.caption, defaultCaption: p.defaultCaption, edited: p.caption !== p.defaultCaption, at: p.at, ig: p.ig, fb: p.fb, done: st.done[p.id] || null, fbDone: st.fb[p.id] || null, complete: isComplete(st, p, !!fbp) })) };
+  return { auto: st.auto, err: st.err, now: Date.now(), fbPage: fbp, posts: effective(man, await getPlan(env)).map(p => ({ id: p.id, type: p.type, format: p.format, title: p.title || null, scene: p.scene || null, files: p.files, cover: p.cover || null, caption: p.caption, defaultCaption: p.defaultCaption, edited: p.caption !== p.defaultCaption, at: p.at, ig: p.ig, fb: p.fb, done: st.done[p.id] || null, fbDone: st.fb[p.id] || null, complete: isComplete(st, p, !!fbp) })) };
 }
 /** Зберігає сторінку Facebook: перевіряє токеном, що вона доступна, і запам'ятовує назву. */
 export async function saveFbPage(env, id, { fetchImpl = fetch } = {}) {

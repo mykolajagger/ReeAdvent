@@ -110,4 +110,12 @@ await saveFbPage(env, '', fo); assert.equal(await getFbPage(env), null);
 }
 // без токена
 await set('ig_token', ''); await set('ig_pub', ''); delete env.INSTAGRAM_TOKEN; r = await publishNext(env, { ...o, only: 'a' }); assert.equal(r.ok, false); assert.match(r.error, /не підключено/);
+// Facebook: різні формулювання рядка «посилання в шапці» замінюються на адресу сайту
+{
+  const f4 = async (url, o = {}) => { url = String(url); if (url.endsWith('/social/posts.json')) return new Response(JSON.stringify([{ id: 'v1', type: 'IMAGE', files: ['v.jpg'], caption: 'Привіт\n\nІдеї подарунків: посилання в шапці профілю · Gift ideas: link in bio\n\n#a' }])); if (url.includes('fields=access_token')) return new Response(JSON.stringify({ access_token: 'PAGE' })); if (url.includes('status_code')) return new Response(JSON.stringify({ status_code: 'FINISHED' })); if (url.endsWith('/media_publish')) return new Response(JSON.stringify({ id: 'M9' })); return new Response(JSON.stringify({ id: 'C9' })); };
+  await set('ig_token', 'T'.repeat(40)); await set('ig_mode', 'fb'); await set('ig_id', '17841400000000001'); await set('ig_pub', ''); await set('ig_plan', ''); await set('fb_page', JSON.stringify({ id: '99999', name: 'ReeAdvent.fun' })); const sent = [];
+  const f5 = async (url, o = {}) => { if (o.body && String(url).endsWith('/99999/photos')) sent.push(Object.fromEntries(new URLSearchParams(o.body))); return f4(url, o); };
+  const rr = await publishNext(env, { fetchImpl: f5, delay: 0 }); assert.equal(rr.ok, true, JSON.stringify(rr));
+  assert(sent[0].caption.includes('https://reeadvent.fun') && !/link in bio/i.test(sent[0].caption) && !/шапці/.test(sent[0].caption) && sent[0].caption.includes('#a'), sent[0].caption);
+}
 console.log('OK igpublish');
