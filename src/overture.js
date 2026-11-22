@@ -1,7 +1,7 @@
 // Збагачення бази закладів відкритими даними Overture Maps (places): рівень достовірності (confidence) як ознака популярності й актуальності,
 // статус «працює/закрито», нові заклади, яких ще немає в OpenStreetMap. Чисті функції + запис у D1 (без мережі).
 // Дані Overture Maps Foundation (places) поширюються за відкритою ліцензією CDLA Permissive 2.0.
-import { dist, RADIUS } from './venues.js';
+import { dist, RADIUS, dedupeByName } from './venues.js';
 
 const KEEP_OV = 40;
 /** Категорія Overture (taxonomy.primary) → наша категорія. Порядок важливий: перша відповідність. */
@@ -41,8 +41,11 @@ export function cityBox(lat, lon, radiusM = RADIUS) {
  *  - заклад є лише в Overture → додаємо як новий (osm = 'ov:<id>', ov_state 'ov').
  */
 export async function enrichCity(env, c, items, now = Date.now()) {
-  const { results: venues } = await env.DB.prepare('SELECT id, osm, cat, name, lat, lon FROM venues WHERE city_id = ?').bind(c.id).all();
-  const osmv = venues.filter(v => !String(v.osm).startsWith('ov:'));
+  const { results: venues } = await env.DB.prepare('SELECT id, osm, cat, name, lat, lon, prior, r_cnt FROM venues WHERE city_id = ?').bind(c.id).all();
+  // дублі OSM (той самий заклад точкою й будівлею): лишаємо один із вищим пріоритетом; дублі без оцінок видаляємо
+  const all = venues.filter(v => !String(v.osm).startsWith('ov:')).sort((a, b) => b.prior - a.prior), keptIds = new Set(), osmv = [];
+  for (const cat of new Set(all.map(v => v.cat))) for (const v of dedupeByName(all.filter(x => x.cat === cat))) { keptIds.add(v.id); osmv.push(v); }
+  const dups = all.filter(v => !keptIds.has(v.id) && !v.r_cnt).map(v => v.id);
   const ov = (items || []).map(x => ({ ...x, cat: catOfOverture(x.tp), conf: Number(x.conf) || 0 })).filter(x => x.cat && x.name && isFinite(x.lat) && isFinite(x.lon));
   const live = ov.filter(x => !isClosedStatus(x.st)).sort((a, b) => b.conf - a.conf), dead = ov.filter(x => isClosedStatus(x.st));
   const byCat = {}; for (const v of osmv) (byCat[v.cat] ||= []).push(v);
@@ -52,11 +55,11 @@ export async function enrichCity(env, c, items, now = Date.now()) {
   for (const p of dead) { const v = nearest(p, byCat[p.cat], 100); if (v) { used.add(v.id); upd.set(v.id, { conf: p.conf, state: 'closed' }); } }
   const covered = live.length >= 100;                                          // у місті Overture добре покриває: відсутність пари — підозра на закриття
   for (const v of osmv) if (!upd.has(v.id) && covered) upd.set(v.id, { conf: null, state: 'miss' });
-  const st = [];
+  const st = dups.map(id => env.DB.prepare('DELETE FROM venues WHERE id = ?').bind(id));
   for (const [id, u] of upd) st.push(env.DB.prepare('UPDATE venues SET ov_conf = ?, ov_state = ? WHERE id = ?').bind(u.conf, u.state, id));
   // нові заклади лише з Overture: до KEEP_OV найдостовірніших у кожній категорії
   const perCat = {}; let added = 0;
-  for (const p of only) {
+  for (const p of dedupeByName(only)) {                                         // `only` уже впорядкований за достовірністю; дублі Overture теж прибираємо
     const n = (perCat[p.cat] = (perCat[p.cat] || 0) + 1); if (n > KEEP_OV) continue;
     const centrality = Math.max(0, 1 - dist(p.lat, p.lon, c.lat, c.lon) / (RADIUS / 1000)) * 1.5;
     const prior = Math.round((p.conf * 3 + (p.web ? 0.7 : 0) + centrality) * 100) / 100;
@@ -67,5 +70,5 @@ export async function enrichCity(env, c, items, now = Date.now()) {
   // нові з Overture, яких більше немає в поточному релізі й без оцінок, прибираємо
   await env.DB.prepare("DELETE FROM venues WHERE city_id = ? AND osm LIKE 'ov:%' AND seen_at < ? AND r_cnt = 0").bind(c.id, now).run();
   await env.DB.prepare('UPDATE venue_cities SET ov_at = ? WHERE id = ?').bind(now, c.id).run();
-  return { matched: [...upd.values()].filter(u => u.state === 'match').length, missing: [...upd.values()].filter(u => u.state === 'miss').length, closed: [...upd.values()].filter(u => u.state === 'closed').length, added, ovTotal: ov.length };
+  return { matched: [...upd.values()].filter(u => u.state === 'match').length, missing: [...upd.values()].filter(u => u.state === 'miss').length, closed: [...upd.values()].filter(u => u.state === 'closed').length, duplicates: dups.length, added, ovTotal: ov.length };
 }

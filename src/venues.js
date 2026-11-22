@@ -332,7 +332,8 @@ export async function catalogCities(env, cc) {
 export async function catalogCity(env, id) {
   const city = await env.DB.prepare("SELECT id, country, name, status, venues_count, fetched_at, error, lat, lon, alias_of FROM venue_cities WHERE id = ?").bind(id).first(); if (!city) return null;
   const target = city.alias_of ? await env.DB.prepare('SELECT id, name FROM venue_cities WHERE id = ?').bind(city.alias_of).first() : null;
-  const { results } = await env.DB.prepare('SELECT id, cat, name, address, prior, r_sum, r_cnt, hours, lat, lon, hidden, closed_reports, edited, ov_conf, ov_state FROM venues WHERE city_id = ? ORDER BY cat, prior DESC LIMIT 2500').bind(target ? target.id : city.id).all();
+  const { results } = await env.DB.prepare('SELECT id, cat, name, address, prior, r_sum, r_cnt, hours, lat, lon, hidden, closed_reports, edited, ov_conf, ov_state FROM venues WHERE city_id = ? LIMIT 4000').bind(target ? target.id : city.id).all();
+  results.sort((a, b) => (a.cat < b.cat ? -1 : a.cat > b.cat ? 1 : 0) || (bayes(b) + b.prior * 0.35 + ovAdj(b)) - (bayes(a) + a.prior * 0.35 + ovAdj(a)));   // як у видачі: спершу найкращі
   return { city, alias: target, venues: results };
 }
 

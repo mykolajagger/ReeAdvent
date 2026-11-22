@@ -45,6 +45,9 @@ res = await enrichCity(env, city, [...ovItems.slice(0, 4), ...many], now + 10);
 assert.equal(st('n2').s, 'miss'); assert.equal(st('n4').s, 'miss'); assert.equal(st('n1').s, 'match');
 assert(raw.prepare("SELECT COUNT(*) AS n FROM venues WHERE osm LIKE 'ov:z%' AND cat = 'restaurant'").get().n === 40, 'не більше 40 нових на категорію');
 
+// каталог впорядкований як видача: підтверджені вище за підозрілих
+const ordered = (await (await import('../src/venues.js')).catalogCity(env, city.id)).venues.filter(v => v.cat === 'bar').map(v => v.name); assert(ordered.indexOf('Pub House') < ordered.indexOf('Клепач'), ordered.join('|'));
+
 // видача: підтверджений піднімається, «miss» опускається, закритий не показується
 assert(ovAdj({ ov_state: 'match', ov_conf: 0.99 }) > 1.2 && ovAdj({ ov_state: 'miss' }) < 0 && ovAdj({}) === 0);
 const shown = new Set(); for (const s of Array.from({ length: 30 }, (_, i) => 'k' + i)) for (const p of await venuePicks(env, { country: 'UA', city: 'Uzhgorod', cat: 'bar', seedKey: s })) shown.add(p.name);
@@ -64,4 +67,8 @@ assert(!shown3.has('Клепач'), 'давній без пари відсіка
 await storeCityVenues(env, city, [{ osm: 'n1', cat: 'bar', name: 'Pub House', address: '', lat: 48.6210, lon: 22.2881, prior: 3, hours: null }], null, now + 100000);
 assert.equal(raw.prepare("SELECT COUNT(*) AS n FROM venues WHERE osm = 'ov:a3'").get().n, 1, 'ov-заклад пережив оновлення OSM'); assert.equal(st('n1').s, 'match', 'позначка збереглась');
 assert.equal(raw.prepare("SELECT COUNT(*) AS n FROM venues WHERE osm = 'n2'").get().n, 0, 'зниклий з OSM без оцінок видалено');
+// дублі OSM (точка + будівля) і дублі Overture прибираються при збагаченні
+await storeCityVenues(env, city, [{ osm: 'n7', cat: 'cafe', name: 'Doppel Cafe', address: '', lat: 48.6300, lon: 22.2900, prior: 3, hours: null }, { osm: 'w8', cat: 'cafe', name: 'Doppel  Cafe', address: '', lat: 48.63002, lon: 22.29002, prior: 2, hours: null }], null, now + 5);
+const resDup = await enrichCity(env, city, [{ id: 'd1', name: 'Doppel Cafe', tp: 'cafe', conf: 0.9, st: null, lat: 48.6300, lon: 22.2900 }, { id: 'd2', name: 'Neu Kaffee', tp: 'cafe', conf: 0.8, st: null, lat: 48.6350, lon: 22.2950 }, { id: 'd3', name: 'Neu  Kaffee', tp: 'cafe', conf: 0.7, st: null, lat: 48.63502, lon: 22.29502 }], now + 6);
+assert.equal(resDup.duplicates, 1, JSON.stringify(resDup)); assert.equal(raw.prepare("SELECT COUNT(*) AS n FROM venues WHERE name LIKE 'Doppel%'").get().n, 1); assert.equal(raw.prepare("SELECT COUNT(*) AS n FROM venues WHERE name LIKE 'Neu%'").get().n, 1, 'дубль Overture не додано двічі');
 console.log('OVERTURE OK');
