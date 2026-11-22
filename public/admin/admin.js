@@ -350,6 +350,7 @@ async function renderAds(days) {
   const c = d.config, rp = d.report, t = rp.totals, today = new Date().toISOString().slice(0, 10), pct = c.budget ? Math.min(100, Math.round(rp.spentAllCents / 100 / c.budget * 100)) : 0;
   const status = (c.meta ? 'піксель Meta ✅' : 'піксель Meta ⏳') + ' · ' + (c.ga4 ? 'GA4 ✅' : 'GA4 ⏳') + ' · ' + (c.gads ? 'Google Ads ✅' : 'Google Ads ⏳');
   host.innerHTML = `<h2>Реклама</h2>
+  ${d.migrate ? '<div class="muted" style="color:#eb5757">Потрібне оновлення бази: виконайте SQL із файлу docs/d1-console-0010.sql у Cloudflare D1 Console (по одному рядку). До цього звіти й витрати не працюють, але ID відстеження можна вже зберегти.</div>' : ''}
   <div class="muted">Витрачено за весь час: <b>${usd(rp.spentAllCents)}</b> із бюджету <b>$${c.budget}</b> (${pct}%). Відстеження: ${status}.</div>
   <div style="height:8px;border-radius:6px;background:#23252f;overflow:hidden"><div style="width:${pct}%;height:100%;background:var(--accent)"></div></div>
   <h3 style="margin:14px 0 4px;font-size:15px">Відстеження (ID із кабінетів, не токени)</h3>

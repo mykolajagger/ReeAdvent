@@ -38,3 +38,5 @@ assert.equal(rep.totals.paid, 2); assert.equal(rep.totals.spend_cents, 3000); as
 db._raw.prepare('UPDATE orders SET refunded_at=? WHERE id=?').run(Date.now(), o2.orderId);
 assert.equal((await adsReport(env, 0, Date.now() + 864e5)).totals.paid, 1);
 console.log('OK ads');
+// без міграції: адмін-роут не падає (перевірка тексту помилки)
+assert(/no such (table|column)|utm_|ad_spend/i.test('SQLITE_ERROR: no such table: ad_spend'));
