@@ -23,7 +23,7 @@ const BLOCKED_COUNTRIES = ['RU', 'BY']; // не обслуговуємо (умо
 const MAX_START_DAYS = 90; // найдальша дата старту від завтрашнього дня
 
 const LOGIN_TTL = 30 * 60e3, WELCOME_TTL = 7 * 24 * 3600e3, SESSION_TTL = 60 * 24 * 3600e3;
-export const WELCOME_TTL_MS = WELCOME_TTL;
+export const WELCOME_TTL_MS = WELCOME_TTL, LOGIN_TTL_MS = LOGIN_TTL;
 
 export async function handle(request, env) {
   try {

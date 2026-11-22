@@ -3,7 +3,7 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "test": "node dev/test.js && node dev/test-admin.js && node dev/test-features.js && node dev/test-venues.js && node dev/test-d1rest.js && node dev/test-bulk.js && node dev/test-overture.js && node dev/test-instagram.js && node dev/test-igpublish.js && node dev/test-ads.js && node dev/test-usstates.js && node dev/test-cityfixes.js && node dev/test-agent.js && node dev/test-proposals.js && node dev/test-comms.js",
+    "test": "node dev/test.js && node dev/test-admin.js && node dev/test-features.js && node dev/test-venues.js && node dev/test-d1rest.js && node dev/test-bulk.js && node dev/test-overture.js && node dev/test-instagram.js && node dev/test-igpublish.js && node dev/test-ads.js && node dev/test-usstates.js && node dev/test-cityfixes.js && node dev/test-agent.js && node dev/test-proposals.js && node dev/test-comms.js && node dev/test-comms-restore.js",
     "dev": "node dev/devserver.js",
     "deploy": "wrangler pages deploy public --project-name reeadvent",
     "db:migrate": "wrangler d1 migrations apply reeadvent-db --remote"

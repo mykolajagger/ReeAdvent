@@ -23,9 +23,10 @@ export const DDL = [
   'CREATE INDEX IF NOT EXISTS idx_email_log_to ON email_log(to_email)'
 ];
 let ensured = false;
-async function ensureLog(env) { if (ensured) return; for (const sql of DDL) await env.DB.prepare(sql).run(); ensured = true; }
+export async function ensureLog(env) { if (ensured) return; for (const sql of DDL) await env.DB.prepare(sql).run(); ensured = true; }
 const noTable = e => /no such table|no such column/i.test(String((e && e.message) || e));
 const q1 = (env, sql, ...a) => env.DB.prepare(sql).bind(...a).first();
+export const RESTORED_KEY = 'comms_restored';   // settings: коли завершилось відновлення раніше надісланих листів
 const qa = async (env, sql, ...a) => (await env.DB.prepare(sql).bind(...a).all()).results;
 
 /** Прибирає з тексту листа секрети: у посиланнях лишає лише адресу сторінки, а шестизначні коди входу ховає. */
@@ -73,24 +74,26 @@ const like = s => '%' + String(s).replace(/[\\%_]/g, '\\$&') + '%';
 /** Список листів для розділу «Комунікації»: фільтри phase, kind, status, order, q (пошта, тема, ім'я клієнта, номер замовлення), курсор before (id). */
 export async function commsList(env, sp) {
   const phase = ['before', 'during', 'after'].includes(sp.get('phase')) ? sp.get('phase') : null;
-  const status = ['sent', 'failed'].includes(sp.get('status')) ? sp.get('status') : null;
+  const status = ['sent', 'failed', 'restored'].includes(sp.get('status')) ? sp.get('status') : null;
   const kind = /^[a-z0-9_]{3,30}$/.test(sp.get('kind') || '') ? sp.get('kind') : null;
   const order = /^[\w-]{3,64}$/.test(sp.get('order') || '') ? sp.get('order') : null;
-  const qtxt = String(sp.get('q') || '').trim().slice(0, 80), cursor = Math.max(0, Number(sp.get('before')) || 0), limit = Math.min(100, Math.max(1, Number(sp.get('limit')) || 50));
+  const qtxt = String(sp.get('q') || '').trim().slice(0, 80), cur = /^(\d{1,15}):(\d{1,12})$/.exec(sp.get('before') || ''), cursor = !!cur, limit = Math.min(100, Math.max(1, Number(sp.get('limit')) || 50));
   const where = [], args = [];
   if (phase) { where.push('l.phase = ?'); args.push(phase); }
   if (status) { where.push('l.status = ?'); args.push(status); }
   if (kind) { where.push('l.kind = ?'); args.push(kind); }
   if (order) { where.push('l.order_id = ?'); args.push(order); }
   if (qtxt) { const lk = like(qtxt); where.push("(l.to_email LIKE ? ESCAPE '\\' OR l.subject LIKE ? ESCAPE '\\' OR l.order_id = ? OR l.order_id IN (SELECT id FROM orders WHERE name_a LIKE ? ESCAPE '\\' OR name_b LIKE ? ESCAPE '\\'))"); args.push(lk, lk, qtxt, lk, lk); }
-  if (cursor) { where.push('l.id < ?'); args.push(cursor); }
+  if (cur) { where.push('(l.created_at < ? OR (l.created_at = ? AND l.id < ?))'); args.push(+cur[1], +cur[1], +cur[2]); }   // курсор «час:id»: листи впорядковано за часом, а не за номером запису
   return withLog(env, async () => {
-    const rows = await qa(env, `SELECT l.id, l.created_at, l.to_email, l.subject, l.kind, l.phase, l.order_id, l.status, l.error, o.name_a, o.name_b FROM email_log l LEFT JOIN orders o ON o.id = l.order_id ${where.length ? 'WHERE ' + where.join(' AND ') : ''} ORDER BY l.id DESC LIMIT ?`, ...args, limit + 1);
+    const rows = await qa(env, `SELECT l.id, l.created_at, l.to_email, l.subject, l.kind, l.phase, l.order_id, l.status, l.error, o.name_a, o.name_b FROM email_log l LEFT JOIN orders o ON o.id = l.order_id ${where.length ? 'WHERE ' + where.join(' AND ') : ''} ORDER BY l.created_at DESC, l.id DESC LIMIT ?`, ...args, limit + 1);
     const more = rows.length > limit; if (more) rows.pop();
     const out = { ok: true, labels: KINDS, phases: PHASES, rows: rows.map(r => ({ id: r.id, at: r.created_at, to: r.to_email, subject: r.subject, kind: r.kind, phase: r.phase, orderId: r.order_id, names: r.name_a ? `${r.name_a} і ${r.name_b}` : null, status: r.status, error: r.error })), more };
+    if (more) { const last = rows.at(-1); out.next = `${last.created_at}:${last.id}`; }
     if (!cursor) {
-      const s = await q1(env, 'SELECT COUNT(*) AS total, SUM(phase = ?) AS b, SUM(phase = ?) AS d, SUM(phase = ?) AS a, SUM(status = ?) AS f, SUM(created_at > ?) AS w, MIN(created_at) AS first FROM email_log', 'before', 'during', 'after', 'failed', Date.now() - 7 * 864e5);
-      out.stats = { total: s.total || 0, before: s.b || 0, during: s.d || 0, after: s.a || 0, failed: s.f || 0, week: s.w || 0, first: s.first || null };
+      const s = await q1(env, 'SELECT COUNT(*) AS total, SUM(phase = ?) AS b, SUM(phase = ?) AS d, SUM(phase = ?) AS a, SUM(status = ?) AS f, SUM(created_at > ?) AS w, MIN(created_at) AS first, SUM(status = ?) AS r, MIN(CASE WHEN status <> ? THEN created_at END) AS live FROM email_log', 'before', 'during', 'after', 'failed', Date.now() - 7 * 864e5, 'restored', 'restored');
+      out.stats = { total: s.total || 0, before: s.b || 0, during: s.d || 0, after: s.a || 0, failed: s.f || 0, week: s.w || 0, first: s.first || null, restored: s.r || 0, liveFirst: s.live || null };
+      const flag = await q1(env, 'SELECT value FROM settings WHERE key = ?', RESTORED_KEY); out.restore = { at: flag ? Number(flag.value) || 1 : null };
       out.kinds = (await qa(env, 'SELECT kind, COUNT(*) AS n FROM email_log GROUP BY kind ORDER BY n DESC')).map(k => ({ kind: k.kind, label: KINDS[k.kind] || k.kind, n: k.n }));
     }
     return out;
@@ -108,7 +111,7 @@ export async function commsGet(env, id) {
 export async function commsOrder(env, orderId, order) {
   if (!order) throw new HttpError(404, 'not_found');
   const cal = await q1(env, 'SELECT start_date FROM calendars WHERE order_id = ?', orderId);
-  const mails = await withLog(env, () => qa(env, 'SELECT id, created_at, to_email, subject, kind, phase, status, error FROM email_log WHERE order_id = ? ORDER BY id ASC LIMIT 300', orderId), null);
+  const mails = await withLog(env, () => qa(env, 'SELECT id, created_at, to_email, subject, kind, phase, status, error FROM email_log WHERE order_id = ? ORDER BY created_at ASC, id ASC LIMIT 300', orderId), null);
   if (!mails) return { ok: true, migrate: true, order, milestones: [], mails: [] };
   const ms = [{ at: order.created_at, key: 'created', label: 'Оформлення розпочато' }];
   if (order.paid_at) ms.push({ at: order.paid_at, key: 'paid', label: 'Оплачено' });

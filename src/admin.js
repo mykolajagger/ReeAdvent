@@ -12,6 +12,7 @@ import { listProposals, generateProposals, editProposal, reviseProposal, restore
 import { putMedia, mediaMode, MAX_R2 } from './media.js';
 import { hasClaude } from './claude.js';
 import { commsList, commsGet, commsOrder } from './comms.js';
+import { restoreComms } from './commsRestore.js';
 import { agentFlags, saveAgentFlags, getHist, runAgent, agentAction, syncMetaSpend } from './agent.js';
 import { trackConfig, saveTrackConfig, addSpend, deleteSpend, listSpend, adsReport, CHANNELS as AD_CHANNELS } from './ads.js';
 import { publishNext as igPublishNext, publishStatus as igPublishStatus, setAuto as igSetAuto, editPost as igEditPost, saveFbPage as igSaveFbPage, setOrder as igSetOrder, spread as igSpread, loadManifest as igManifest , pubState } from './igpublish.js';
@@ -95,6 +96,7 @@ export async function handleAdmin(request, env, path, m) {
   if (m === 'POST' && path === '/api/admin/media') { const len = Number(request.headers.get('content-length') || 0); if (len > MAX_R2) throw new HttpError(413, 'media_too_big'); const out = await putMedia(env, new Uint8Array(await request.arrayBuffer())); return json({ ok: true, id: out.id, mime: out.mime, size: out.size, url: '/api/media/' + out.id }); }
   // --- комунікації: журнал листів, надісланих клієнтам (до, під час і після замовлення) ---
   if (m === 'GET' && path === '/api/admin/comms') return json(await commsList(env, url.searchParams));
+  if (m === 'POST' && path === '/api/admin/comms/restore') { const out = await restoreComms(env, {}); await audit(env, admin, 'comms_restore', null, { added: out.added, remaining: out.remaining }); return json(out); }
   if (m === 'GET' && (r = path.match(/^\/api\/admin\/comms\/(\d{1,12})$/))) return json(await commsGet(env, +r[1]));
   if (m === 'GET' && (r = path.match(/^\/api\/admin\/comms\/order\/([\w-]{3,64})$/))) { const o = await q1(env, 'SELECT id, created_at, paid_at, refunded_at, name_a, name_b, email_a, email_b, payer_email, city, amount_kop FROM orders WHERE id = ?', r[1]); return json(await commsOrder(env, r[1], o && { ...o, status: statusOf(o) })); }
   if (m === 'GET' && path === '/api/admin/agent') { const hist = await getHist(env); return json({ ok: true, flags: await agentFlags(env), last: hist[0] || null, history: hist.slice(1, 8).map(h => ({ at: h.at, day: h.day, mode: h.mode, headline: h.headline })) }); }
