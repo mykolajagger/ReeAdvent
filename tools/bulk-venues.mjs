@@ -72,7 +72,7 @@ async function processCountry(cc) {
   if (!pbf) { log('УВАГА: у каталозі Geofabrik немає країни', cc, cname, '|', describeIndex(idx)); await skipCountry(cc, 'немає вигрузки Geofabrik', 1); return; }
   let url = null, gb = 0, herr;
   const variants = urlVariants(pbf.url).sort((a, b) => (hostFails.get(hostOf(a)) || 0) - (hostFails.get(hostOf(b)) || 0));   // хост без збоїв у цьому запуску — першим
-  for (const u of variants) { try { const head = await fetchRetry(u, { method: 'HEAD', headers: { 'User-Agent': UA } }, 1, 25000); url = u; gb = Number(head.headers.get('content-length') || 0) / 1e9; break; } catch (e) { herr = e; log('адреса не відповідає:', u); } }
+  for (const u of variants) { try { const head = await fetchRetry(u, { method: 'HEAD', headers: { 'User-Agent': UA } }, 1, 20000); url = u; log('джерело:', u); gb = Number(head.headers.get('content-length') || 0) / 1e9; break; } catch (e) { herr = e; log('адреса не відповідає:', u); } }
   if (!url) throw herr || new Error('вигрузка недоступна');
   pbf.url = url;
   log(`вигрузка ${pbf.id}: ${gb.toFixed(2)} ГБ`, pbf.shared ? '(спільна для кількох країн)' : '');

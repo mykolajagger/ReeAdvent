@@ -98,5 +98,7 @@ export function urlVariants(url) {
   const m = String(url).match(/^(.*)\/([^/]+)\/\2-latest\.osm\.pbf$/), forms = m ? [url, `${m[1]}/${m[2]}-latest.osm.pbf`] : [url];
   const out = [...forms];
   for (const f of forms) if (f.startsWith(GF_BASES[0])) out.push(GF_BASES[1] + f.slice(GF_BASES[0].length));          // те саме на дзеркалі
+  const g = String(url).match(/^https:\/\/download\.geofabrik\.de\/([^/]+)\/(?:.*\/)?([^/]+)-latest\.osm\.pbf$/);   // незалежне джерело: країнові вигрузки OSM-France
+  if (g) out.push(`https://download.openstreetmap.fr/extracts/${g[1]}/${g[2]}.osm.pbf`);
   return out;
 }

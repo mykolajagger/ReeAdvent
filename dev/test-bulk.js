@@ -28,7 +28,7 @@ assert(describeIndex(idx).includes('з pbf 4'), describeIndex(idx));
 const gccIdx = { features: [{ properties: { id: 'gcc-states', name: 'GCC States', urls: { pbf: 'https://x/asia/gcc-states-latest.osm.pbf' } } }, { properties: { id: 'israel-and-palestine', name: 'Israel and Palestine', urls: { pbf: 'https://x/asia/israel-and-palestine-latest.osm.pbf' } } }] };
 assert.equal(findPbf(gccIdx, 'AE', 'United Arab Emirates').id, 'gcc-states'); assert.equal(findPbf(gccIdx, 'SA').id, 'gcc-states'); assert.equal(findPbf(gccIdx, 'IL', 'Israel').id, 'israel-and-palestine'); assert.equal(findPbf(gccIdx, 'AE').shared, true);
 assert.deepEqual(urlVariants('https://d/europe/ukraine/ukraine-latest.osm.pbf'), ['https://d/europe/ukraine/ukraine-latest.osm.pbf', 'https://d/europe/ukraine-latest.osm.pbf']);
-const gv = urlVariants('https://download.geofabrik.de/europe/ukraine/ukraine-latest.osm.pbf'); assert.equal(gv.length, 4); assert(gv[2].startsWith('https://ftp5.gwdg.de/') && gv[2].endsWith('europe/ukraine/ukraine-latest.osm.pbf') && gv[3].endsWith('europe/ukraine-latest.osm.pbf'), gv.join(' '));
+const gv = urlVariants('https://download.geofabrik.de/europe/ukraine/ukraine-latest.osm.pbf'); assert.equal(gv.length, 5); assert.equal(gv[4], 'https://download.openstreetmap.fr/extracts/europe/ukraine.osm.pbf'); assert(gv[2].startsWith('https://ftp5.gwdg.de/') && gv[2].endsWith('europe/ukraine/ukraine-latest.osm.pbf') && gv[3].endsWith('europe/ukraine-latest.osm.pbf'), gv.join(' '));
 assert.deepEqual(urlVariants('https://d/asia/gcc-states-latest.osm.pbf'), ['https://d/asia/gcc-states-latest.osm.pbf']);
 
 // ----- розбір рядків geojsonseq
