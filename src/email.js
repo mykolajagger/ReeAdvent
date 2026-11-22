@@ -29,7 +29,7 @@ function layout(lang, title, paras, ctaUrl, ctaLabel, foot) {
   <h1 style="font-weight:400;font-size:30px;margin:10px 0 18px">${esc(title)}</h1>
   <div style="font:15px/1.6 sans-serif;color:#d9d6cc">${paras.map(p => `<p style="margin:0 0 12px">${p}</p>`).join('')}</div>
   <p><a href="${esc(ctaUrl)}" style="display:inline-block;background:#d6b46a;color:#14110a;padding:13px 26px;border-radius:99px;text-decoration:none;font:600 14px sans-serif">${esc(ctaLabel)}</a></p>
-  <p style="font:12px sans-serif;color:#9a9cab">${fallback}: ${esc(ctaUrl)}</p>${foot ? `<p style="font:12px sans-serif;color:#9a9cab">${foot}</p>` : ''}</div>`;
+  <p style="font:12px sans-serif;color:#9a9cab">${fallback}: ${esc(ctaUrl)}</p><p style="font:12px sans-serif;color:#9a9cab">Instagram: <a href="https://www.instagram.com/reeadvent/" style="color:#d6b46a">@reeadvent</a></p>${foot ? `<p style="font:12px sans-serif;color:#9a9cab">${foot}</p>` : ''}</div>`;
 }
 const strip = s => s.replace(/<[^>]+>/g, '');
 

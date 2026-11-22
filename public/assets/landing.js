@@ -169,3 +169,13 @@ $('#of').addEventListener('submit', async e => {
   } catch (er) { $('#oerr').textContent = errMsg(er.message); btn.disabled = false; if (tsWidget !== null && window.turnstile) { tsToken = ''; window.turnstile.reset(tsWidget); } }
 });
 })();
+
+/* ---------- Стрічка Instagram (з сервера; якщо акаунт не підключено, секція прихована) ---------- */
+(async () => {
+  try {
+    const r = await fetch('/api/instagram'), j = await r.json(); if (!j.ok || !j.posts || !j.posts.length) return;
+    const grid = document.getElementById('ig-grid'), sec = document.getElementById('ig'); if (!grid || !sec) return;
+    grid.innerHTML = j.posts.map(p => `<a class="ig-post" href="${encodeURI(p.link)}" target="_blank" rel="noopener noreferrer" aria-label="Instagram"><img src="${encodeURI(p.img)}" alt="${String(p.alt || 'Instagram').replace(/"/g, '&quot;').replace(/</g, '&lt;')}" loading="lazy" decoding="async" referrerpolicy="no-referrer"></a>`).join('');
+    sec.hidden = false;
+  } catch { /* стрічка необов'язкова */ }
+})();

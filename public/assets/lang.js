@@ -30,6 +30,7 @@
     q3: 'What about the intimate tasks?', a3: 'They are soft, romantic and playful. Three levels: «Romance», «Play» and «Bold night». The lower level of the two of you is used, so nobody is pushed. For adults only.',
     q4: 'Can I get a refund?', a4: 'Yes, see the public offer. In short: a full refund before the first window opens, by contacting support.',
     q5: 'Does my partner see my answers?', a5: 'No. The questionnaires are seen only by the system that builds the calendar. The gift you give is seen only by you. Answers to the «question of the day» are shown to your partner on purpose.',
+    ig_eyebrow: 'On Instagram', ig_h2: 'Inspiration for the two of you', ig_follow: 'Follow us on Instagram',
     ft_offer: 'Public offer', ft_privacy: 'Privacy policy', ft_support: 'Support',
     e_names: 'Please enter both names.', e_email: 'Please check the email addresses.', e_same: 'The emails must be different: one for each of you.', e_city: 'Please enter a city.', e_region: 'Please choose a region.', e_consent: 'Please confirm your age and accept the terms.', e_many: 'Too many attempts. Try again in an hour.',
     e_date: 'Choose a start date: from tomorrow and not later than in 90 days.', e_captcha: 'We could not confirm you are not a bot. Please try again.', e_bot: 'Please confirm that you are not a bot (the widget above).', e_gen: 'Could not create the order. Please try again.',

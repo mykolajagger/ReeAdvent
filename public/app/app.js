@@ -266,6 +266,30 @@ async function loadPlaces(day, k = 'act') {
     if (k === 'act' && v.length) { const ml = document.querySelector('.maplink .ml'); if (ml) ml.textContent = L('Шукати самим на мапі', 'Search the map yourself'); } // з рекомендаціями пошук стає альтернативою
   } catch { /* рекомендації необов'язкові */ }
 }
+/* Поділитися в Stories: картинка 1080×1920 малюється на пристрої (лише номер дня й слоган, жодного змісту вікон), далі системне меню «Поділитися» (Instagram) або збереження файлу */
+async function storyImage(day) {
+  const W = 1080, H = 1920, c = document.createElement('canvas'); c.width = W; c.height = H; const g = c.getContext('2d');
+  const bg = g.createLinearGradient(0, 0, 0, H); bg.addColorStop(0, '#0a0b12'); bg.addColorStop(1, '#17120a'); g.fillStyle = bg; g.fillRect(0, 0, W, H);
+  let seed = day * 9301 + 49297; const rnd = () => (seed = (seed * 9301 + 49297) % 233280) / 233280;   // зірки детерміновані за днем
+  for (let i = 0; i < 90; i++) { g.globalAlpha = 0.15 + rnd() * 0.5; g.fillStyle = '#f3efe6'; g.beginPath(); g.arc(rnd() * W, rnd() * H, 0.8 + rnd() * 2.2, 0, 7); g.fill(); }
+  g.globalAlpha = 1;
+  const img = await new Promise(res => { const i = new Image(); i.onload = () => res(i); i.onerror = () => res(null); i.src = '/assets/logo-full.png'; });
+  if (img) { const w = 860, h = img.height * w / img.width; g.drawImage(img, (W - w) / 2, 560, w, h); }
+  g.textAlign = 'center'; g.fillStyle = '#d6b46a';
+  g.font = '600 150px "Cormorant Garamond", Georgia, serif'; g.fillText(L('День ' + day, 'Day ' + day), W / 2, 1180);
+  g.fillStyle = '#f3efe6'; g.font = '400 54px "Cormorant Garamond", Georgia, serif'; g.fillText(L('із 24 днів лише для нас двох', 'of 24 days just for the two of us'), W / 2, 1270);
+  g.fillStyle = '#9a9cab'; g.font = '500 40px Inter, Arial, sans-serif'; g.fillText('@reeadvent · reeadvent.fun', W / 2, 1700);
+  return new Promise(res => c.toBlob(res, 'image/png'));
+}
+async function shareStory(day) {
+  try {
+    const blob = await storyImage(day), file = new File([blob], `reeadvent-day-${day}.png`, { type: 'image/png' });
+    const text = L('Наш ReeAdvent: 24 дні лише для двох ✦ @reeadvent', 'Our ReeAdvent: 24 days just for two ✦ @reeadvent');
+    if (navigator.canShare && navigator.canShare({ files: [file] })) { await navigator.share({ files: [file], text }); return; }
+    const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = file.name; document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(a.href), 4000);
+    toast(L('Картинку збережено: додайте її в Stories й позначте @reeadvent', 'Image saved: add it to your Story and tag @reeadvent'));
+  } catch (e) { if (e && e.name !== 'AbortError') toast(L('Не вдалося підготувати картинку', 'Could not prepare the image')); }
+}
 const TILES = () => [{ k: 'gift', t: L('Подарунок', 'Gift') }, { k: 'intim', t: L('Пригода для двох', 'Adventure for two') }, { k: 'act', t: L('Спільна активність', 'Shared activity') }];
 async function openDay(day) {
   const ov = document.createElement('div'); ov.className = 'overlay';
@@ -313,8 +337,9 @@ async function openDay(day) {
     if (d.needAnswer) return renderQuestion();
     ov.firstElementChild.innerHTML = `${head}${qTile()}
       ${TILES().map(t => `<div class="tile" data-k="${t.k}">${revealed[t.k] ? tileBody(t) : `<button class="wrap" data-rev="${t.k}">${ICONS[t.k].replace('class="ico"', 'class="ico sm"')}<b>${t.t}</b><small>${L('торкнись, щоб відкрити', 'tap to open')}</small></button>`}</div>`).join('')}
-      <div class="row"><button class="btn ghost sm" id="all">${L('Відкрити все', 'Open all')}</button></div>`;
+      <div class="row"><button class="btn ghost sm" id="all">${L('Відкрити все', 'Open all')}</button><button class="btn ghost sm" id="story">${L('Поділитися в Stories', 'Share to Stories')}</button></div>`;
     ov.querySelector('.x').onclick = close;
+    ov.querySelector('#story').onclick = () => shareStory(day);
     ov.querySelector('#all').onclick = () => { TILES().forEach(t => revealed[t.k] = true); render(); confetti(); };
     if (revealed.act) loadPlaces(day, 'act');
     if (revealed.gift) loadPlaces(day, 'gift');

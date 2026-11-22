@@ -77,3 +77,12 @@ footer a{color:var(--muted);margin:0 10px}
 @media(max-width:560px){.logo-img{height:44px}}
 .logo-img.logo-full{height:92px}
 @media(max-width:560px){.logo-img.logo-full{height:72px}}
+
+/* Instagram */
+.ig-ico{width:18px;height:18px;vertical-align:-3px}
+.ig-link{display:inline-flex;align-items:center;gap:6px;color:var(--gold2);text-decoration:none}.ig-link:hover{text-decoration:underline}
+.ig-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;max-width:760px;margin:0 auto 22px}
+@media(min-width:720px){.ig-grid{grid-template-columns:repeat(6,1fr);max-width:1100px}}
+.ig-post{display:block;aspect-ratio:1/1;overflow:hidden;border-radius:12px;border:1px solid var(--line);background:#ffffff08}
+.ig-post img{width:100%;height:100%;object-fit:cover;display:block;transition:transform .3s}.ig-post:hover img{transform:scale(1.05)}
+.ig-more{text-align:center}.ig-more .btn{display:inline-flex;align-items:center;gap:8px;text-decoration:none}
