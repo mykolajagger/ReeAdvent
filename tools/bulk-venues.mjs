@@ -7,6 +7,7 @@ import { spawnSync } from 'node:child_process';
 import { makeRestDb } from './d1-rest.mjs';
 import { pickVenues, storeCityVenues, resolveCoords } from '../src/venues.js';
 import { statesFor, childExtracts, planStates } from '../src/usstates.js';
+import { applyCityFixes } from '../src/city_fixes.js';
 import { osmiumExpressions, findPbf, describeIndex, urlVariants, GF_BASES, parseFeature, CityIndex, queueCountries, queueCities } from '../src/bulk.js';
 
 const { CLOUDFLARE_API_TOKEN: token, CLOUDFLARE_ACCOUNT_ID: accountId, D1_DATABASE_ID: databaseId } = process.env;
@@ -148,6 +149,7 @@ async function processCountry(cc) {
 const BULK_VER = '3';
 { const v = await env.DB.prepare("SELECT value FROM settings WHERE key = 'bulk_ver'").first();
   if (!v || v.value !== BULK_VER) { await env.DB.prepare("UPDATE venue_cities SET status = 'pending' WHERE status = 'ready' AND alias_of IS NULL").run(); await env.DB.prepare("INSERT INTO settings (key, value, updated_at) VALUES ('bulk_ver', ?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value, updated_at = excluded.updated_at").bind(BULK_VER, Date.now()).run(); log('нова версія правил: усі готові міста поставлено на повторне наповнення'); } }
+{ const fx = await applyCityFixes(env); if (!fx.skipped) log(`виправлено координат міст: ${fx.fixed}, додано міст: ${fx.added}`); }
 const forced = process.argv.slice(2).map(s => s.toUpperCase()).filter(s => /^[A-Z]{2}$/.test(s)), done = new Set();
 async function save(v) { await env.DB.prepare("INSERT INTO settings (key, value, updated_at) VALUES ('venues_last', ?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value, updated_at = excluded.updated_at").bind(JSON.stringify(v).slice(0, 900), Date.now()).run().catch(() => {}); }
 while (Date.now() - T0 < BUDGET) {
