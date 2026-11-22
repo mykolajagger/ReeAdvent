@@ -34,7 +34,7 @@ jobs:
           D1_DATABASE_ID: 8dd4d746-1746-4168-b724-1643f99925e6
           BUDGET_MIN: '300'
           MAX_PBF_GB: '8'
-          MAX_DOWNLOAD_GB: '12'
+          MAX_DOWNLOAD_GB: '30'
           WORK_DIR: ${{ runner.temp }}/bulk
           COUNTRIES: ${{ github.event.inputs.countries }}
         run: |
