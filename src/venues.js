@@ -271,10 +271,10 @@ export async function runVenuesLogged(env, opts) {
 }
 
 export async function venueStats(env) {
-  const r = await env.DB.prepare("SELECT COUNT(*) AS cities, SUM(status = 'ready') AS ready, SUM(status = 'pending') AS pending, SUM(status = 'working') AS working, SUM(status = 'failed') AS failed FROM venue_cities WHERE alias_of IS NULL").first();
+  const r = await env.DB.prepare("SELECT COUNT(*) AS cities, SUM(status = 'ready') AS ready, SUM(venues_count > 0) AS with_data, SUM(status = 'pending') AS pending, SUM(status = 'working') AS working, SUM(status = 'failed') AS failed FROM venue_cities WHERE alias_of IS NULL").first();
   const v = await env.DB.prepare('SELECT COUNT(*) AS n FROM venues').first(), rt = await env.DB.prepare('SELECT COUNT(*) AS n FROM venue_ratings').first();
   const lastRow = await env.DB.prepare("SELECT value FROM settings WHERE key = 'venues_last'").first(); let last = null; try { last = lastRow ? JSON.parse(lastRow.value) : null; } catch {}
-  return { paused: await venuesPaused(env), cities: r.cities || 0, ready: r.ready || 0, pending: r.pending || 0, working: r.working || 0, failed: r.failed || 0, venues: v.n, ratings: rt.n, last };
+  return { paused: await venuesPaused(env), cities: r.cities || 0, ready: r.ready || 0, withData: r.with_data || 0, pending: r.pending || 0, working: r.working || 0, failed: r.failed || 0, venues: v.n, ratings: rt.n, last };
 }
 
 // ---------- Видача рекомендацій і оцінки ----------
