@@ -148,7 +148,7 @@ async function renderVideo(browser, name, html, theme) {
   const mp4 = path.join(OUT, name + '.mp4');
   const r = spawnSync('ffmpeg', ['-y', '-loglevel', 'error', '-framerate', String(FPS), '-i', path.join(fdir, 'f%04d.jpg'), '-i', wav, '-shortest', '-c:v', 'libx264', '-pix_fmt', 'yuv420p', '-crf', '18', '-preset', 'medium', '-c:a', 'aac', '-b:a', '96k', '-movflags', '+faststart', mp4], { stdio: 'inherit' });
   if (r.status !== 0) throw new Error('ffmpeg failed');
-  fs.copyFileSync(path.join(fdir, `f${String(Math.min(FR - 1, Math.round(FPS * 3.4))).padStart(4, '0')}.jpg`), path.join(OUT, name + '-cover.jpg')); fs.rmSync(fdir, { recursive: true, force: true }); fs.copyFileSync(wav, path.join(OUT, name + '-music.wav')); fs.rmSync(wav);
+  fs.copyFileSync(path.join(fdir, `f${String(Math.min(FR - 1, Math.round(FPS * (name === 'story-video' ? 2.7 : 4.4)))).padStart(4, '0')}.jpg`), path.join(OUT, name + '-cover.jpg')); fs.rmSync(fdir, { recursive: true, force: true }); fs.copyFileSync(wav, path.join(OUT, name + '-music.wav')); fs.rmSync(wav);
   console.log('mp4', mp4, (fs.statSync(mp4).size / 1e6).toFixed(1) + ' МБ', dur + ' с');
 }
 const reels = {
