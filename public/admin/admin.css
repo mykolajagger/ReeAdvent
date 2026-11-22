@@ -134,3 +134,16 @@ td.num,th.num{text-align:right;font-variant-numeric:tabular-nums;white-space:now
 .st-ready{color:#6fcf97}.st-failed{color:#eb5757}.st-pending,.st-working{color:#f2c94c}
 .cat-chips{display:flex;flex-wrap:wrap;gap:6px;margin:10px 0 14px}
 .cat-group h3{margin:16px 0 6px;font-size:16px}.cat-v{padding:7px 2px;border-bottom:1px solid var(--line);overflow-wrap:anywhere}.cat-v a{color:var(--ink);text-decoration:none}.cat-v a:hover{color:var(--accent)}.cat-v .stars{color:var(--accent);margin-left:6px}
+/* Комунікації: текст листа й хронологія замовлення */
+.mailbody{white-space:pre-wrap;word-break:break-word;font:13px/1.6 var(--body);margin:0;max-height:52vh;overflow:auto;background:#ffffff06;border:1px solid var(--line);border-radius:10px;padding:12px 14px}
+.tl{position:relative;display:grid;gap:10px;padding-left:24px}
+.tl:before{content:"";position:absolute;left:7px;top:6px;bottom:6px;width:2px;background:var(--line2)}
+.tl .ms{position:relative;font-size:13px;padding:2px 0}
+.tl .ms:before{content:"";position:absolute;left:-22px;top:6px;width:10px;height:10px;border-radius:50%;background:var(--bg);border:2px solid var(--muted)}
+.tl .ms.k-paid:before,.tl .ms.k-start:before{border-color:var(--ok)}.tl .ms.k-refunded:before{border-color:var(--bad)}.tl .ms.k-end:before{border-color:var(--accent)}.tl .ms.fut{opacity:.6}
+.tl .ml{position:relative;border:1px solid var(--line);border-left:3px solid var(--c,#8e90a0);border-radius:10px;padding:9px 12px;background:var(--surface);cursor:pointer;display:grid;gap:2px}
+.tl .ml:before{content:"";position:absolute;left:-21px;top:15px;width:8px;height:8px;border-radius:50%;background:var(--c,#8e90a0)}
+.tl .ml:hover{border-color:var(--c,var(--accent))}
+#cmst .kpis{grid-template-columns:repeat(auto-fit,minmax(150px,1fr))}
+#cml td .pill{white-space:nowrap}
+@media (max-width:640px){#cmst .kpi .s{display:none}#cmst .kpi{padding:12px}}

@@ -80,7 +80,7 @@ async function catalogCityView(main, cc, id) {
 }
 
 /* ---------- Каркас ---------- */
-const NAV = [['dashboard', 'Дашборд'], ['orders', 'Замовлення'], ['customers', 'Клієнти'], ['promos', 'Промокоди'], ['social', 'Соцмережі й реклама'], ['inbox', 'Підтримка'], ['catalog', 'Каталог закладів'], ['settings', 'Налаштування'], ['audit', 'Журнал дій']];
+const NAV = [['dashboard', 'Дашборд'], ['orders', 'Замовлення'], ['customers', 'Клієнти'], ['promos', 'Промокоди'], ['social', 'Соцмережі й реклама'], ['inbox', 'Підтримка'], ['comms', 'Комунікації'], ['catalog', 'Каталог закладів'], ['settings', 'Налаштування'], ['audit', 'Журнал дій']];
 async function shell() {
   root.innerHTML = `<div class="shell"><aside class="side"><div class="logo"><img class="logo-img" src="/assets/logo.png" alt="ReeAdvent" width="120" height="44"></div>
     <nav class="nav">${NAV.map(([k, t]) => `<a data-v="${k}" class="${view === k ? 'on' : ''}" href="#/${k}">${t}${k === 'inbox' ? '<span class="badge" id="ib" hidden></span>' : ''}</a>`).join('')}</nav>
@@ -91,7 +91,7 @@ async function route() {
   if (!me) return;
   view = (location.hash.match(/^#\/(\w+)/) || [])[1] || 'dashboard'; if (!NAV.some(n => n[0] === view)) view = 'dashboard';
   await shell();
-  const views = { dashboard, orders, customers, promos, social, inbox, catalog, settings, audit };
+  const views = { dashboard, orders, customers, promos, social, inbox, catalog, settings, audit, ...window.ADM.views };
   try { await views[view](); } catch (e) { if (e.code !== 'admin_auth') $('#main').innerHTML = `<div class="empty">Помилка: ${esc(errText(e))}</div>`; }
   refreshBadge();
 }
@@ -198,6 +198,7 @@ async function openOrder(id) {
   ${cal ? `<div class="card sec"><h2>Календар</h2><dl class="kv"><dt>Старт</dt><dd>${dd(cal.start_date)} · ${cal.today ? `відкрито вікно ${cal.today} з 24` : 'ще не стартував'}</dd><dt>Розклад</dt><dd>${cal.ready ? 'складено' : 'чекаємо анкети'}</dd></dl>
     <div class="tw"><table style="min-width:0"><thead><tr><th>Учасник</th><th>Анкета</th><th class="num">Відкрито</th><th class="num">Виконано</th><th class="num">Відповідей</th></tr></thead><tbody>${r.members.map(m => `<tr><td>${esc(m.suggested_name)}<div class="muted">${esc(m.email)}</div></td><td>${m.survey_done ? '<span class="pill on">заповнена</span>' : '<span class="pill off">ні</span>'}</td><td class="num">${m.opened_days}</td><td class="num">${m.tasks_done}</td><td class="num">${m.answers_count}</td></tr>`).join('')}</tbody></table></div>
     <div class="muted">Зміст анкет і відповідей клієнтів адмінці недоступний (обіцяно в політиці конфіденційності).</div></div>` : '<div class="card muted">Календар ще не створено (немає оплати).</div>'}
+  <div class="card sec" id="oc"><h2>Листи клієнту</h2><div class="muted">Завантаження…</div></div>
   <div class="card sec"><h2>Дії</h2><div class="row">
     ${cal ? '<button class="btn ghost" id="rs">Надіслати доступ ще раз (обом)</button>' : ''}
     ${o.paid_at && !o.refunded_at ? '<button class="btn danger" id="rf">Оформити повернення…</button>' : ''}
@@ -211,6 +212,7 @@ async function openOrder(id) {
   <div class="card sec"><h2>Історія дій</h2><div class="log">${r.log.map(l => `<div>${dt(l.at)} · ${esc(l.admin_email)} · <b>${esc(l.action)}</b> ${l.detail ? esc(l.detail) : ''}</div>`).join('') || 'Дій ще не було'}</div></div></div>`;
   document.body.appendChild(ov);
   $('#x', ov).onclick = close;
+  if (window.ADM.orderMails) window.ADM.orderMails($('#oc', ov), id);
   const act = async (action, body, ok) => { try { const res = await api('POST', `/api/admin/orders/${id}/${action}`, body); toast(ok(res)); close(); route().then(() => openOrder(id)); } catch (e) { toast(errText(e)); } };
   $('#sv', ov).onclick = () => act('update', { nameA: $('#nA', ov).value, nameB: $('#nB', ov).value, emailA: $('#eA', ov).value, emailB: $('#eB', ov).value, ...(started ? {} : { startDate: $('#sd', ov).value }) }, res => res.changed.length ? 'Збережено' : 'Змін немає');
   const rs = $('#rs', ov); if (rs) rs.onclick = () => confirm('Надіслати обом новий лист із доступом?') && act('resend', {}, () => 'Листи надіслано');
@@ -508,13 +510,14 @@ async function audit() {
 }
 
 /* Спільні функції для окремих скриптів (пропозиції агента) */
-window.ADM = { $, esc, api, toast, errText, fdate, social: () => social() };
+window.ADM = { $, esc, api, toast, errText, fdate, dt, pill, openOrder: id => openOrder(id), social: () => social(), views: {} };
 
-/* ---------- Старт ---------- */
-(async () => {
+/* ---------- Старт: після виконання всіх скриптів сторінки (render.js, proposals.js, comms.js додають свої розділи) ---------- */
+const boot = async () => {
   if (!(await consumeLogin())) return;
   try { me = await api('GET', '/api/admin/me'); } catch { return; }
   if (!location.hash.startsWith('#/')) location.hash = '#/dashboard';
   route();
-})();
+};
+if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', boot); else boot();
 })();

@@ -7,6 +7,7 @@ import { refreshToken as refreshInstagramToken } from './instagram.js';
 import { runAutoPublish } from './igpublish.js';
 import { runAgent } from './agent.js';
 import { runRecovery } from './recovery.js';
+import { purgeComms } from './comms.js';
 import { nowOf, localParts, localDayNumber, hmac, toDateStr, fromDateStr, DAYS } from './util.js';
 
 const q = (env, sql, ...a) => env.DB.prepare(sql).bind(...a).all().then(r => r.results);
@@ -46,7 +47,7 @@ export async function runReminders(env) {
     try {
       const link = await issueLoginLink(env, r.mid, 3 * 24 * 3600e3);
       const mail = reminderEmail(env, kind, { name, day: d, startDate: r.start_date, link, unsubUrl: await unsubUrl(env, r.mid), lang: r.lang, beforeStart: d <= 0 });
-      await sendEmail(env, r.email, mail.subject, mail.html, mail.text);
+      await sendEmail(env, r.email, mail.subject, mail.html, mail.text, { meta: { kind: 'reminder_' + kind, memberId: r.mid, startDate: r.start_date } });
       sent++; out[kind]++;
     } catch (e) {
       console.error('reminder failed', e);
@@ -70,6 +71,7 @@ export async function purgeOld(env) {
       env.DB.prepare("UPDATE orders SET name_a = '—', name_b = '—', email_a = ?, email_b = ?, payer_email = NULL, note = NULL WHERE id = ?").bind(`deleted-a-${c.order_id}@deleted.invalid`, `deleted-b-${c.order_id}@deleted.invalid`, c.order_id));
     await env.DB.batch(stmts);
   }
+  await purgeComms(env, now, cals.map(c => c.order_id));        // журнал листів: разом із персональними даними календарів і не довше 24 місяців
   // листування підтримки: 24 місяці
   const msgCut = now - 730 * 864e5;
   await env.DB.prepare('DELETE FROM messages WHERE created_at < ?').bind(msgCut).run();

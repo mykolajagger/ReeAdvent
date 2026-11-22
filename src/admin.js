@@ -11,6 +11,7 @@ import { placesUsage } from './places.js';
 import { listProposals, generateProposals, editProposal, reviseProposal, restoreVersion, rejectProposal, approveProposal, withdrawProposal, proposalCounts, TEMPLATES, SCENES } from './proposals.js';
 import { putMedia, mediaMode, MAX_R2 } from './media.js';
 import { hasClaude } from './claude.js';
+import { commsList, commsGet, commsOrder } from './comms.js';
 import { agentFlags, saveAgentFlags, getHist, runAgent, agentAction, syncMetaSpend } from './agent.js';
 import { trackConfig, saveTrackConfig, addSpend, deleteSpend, listSpend, adsReport, CHANNELS as AD_CHANNELS } from './ads.js';
 import { publishNext as igPublishNext, publishStatus as igPublishStatus, setAuto as igSetAuto, editPost as igEditPost, saveFbPage as igSaveFbPage, setOrder as igSetOrder, spread as igSpread, loadManifest as igManifest , pubState } from './igpublish.js';
@@ -92,6 +93,10 @@ export async function handleAdmin(request, env, path, m) {
   if (m === 'POST' && path === '/api/admin/proposals/approve') { const b = await readJson(request); const out = await approveProposal(env, String(b.id || ''), { at: b.at, targets: b.targets, media: b.media, cover: b.cover }); await audit(env, admin, 'proposal_approve', String(b.id || ''), { entry: out.entry ? out.entry.id : null }); return json(await propsOut()); }
   if (m === 'POST' && path === '/api/admin/proposals/withdraw') { const b = await readJson(request); await withdrawProposal(env, String(b.id || ''), async eid => !!((await pubState(env)).done[eid] || (await pubState(env)).fb[eid])); await audit(env, admin, 'proposal_withdraw', String(b.id || ''), {}); return json(await propsOut()); }
   if (m === 'POST' && path === '/api/admin/media') { const len = Number(request.headers.get('content-length') || 0); if (len > MAX_R2) throw new HttpError(413, 'media_too_big'); const out = await putMedia(env, new Uint8Array(await request.arrayBuffer())); return json({ ok: true, id: out.id, mime: out.mime, size: out.size, url: '/api/media/' + out.id }); }
+  // --- комунікації: журнал листів, надісланих клієнтам (до, під час і після замовлення) ---
+  if (m === 'GET' && path === '/api/admin/comms') return json(await commsList(env, url.searchParams));
+  if (m === 'GET' && (r = path.match(/^\/api\/admin\/comms\/(\d{1,12})$/))) return json(await commsGet(env, +r[1]));
+  if (m === 'GET' && (r = path.match(/^\/api\/admin\/comms\/order\/([\w-]{3,64})$/))) { const o = await q1(env, 'SELECT id, created_at, paid_at, refunded_at, name_a, name_b, email_a, email_b, payer_email, city, amount_kop FROM orders WHERE id = ?', r[1]); return json(await commsOrder(env, r[1], o && { ...o, status: statusOf(o) })); }
   if (m === 'GET' && path === '/api/admin/agent') { const hist = await getHist(env); return json({ ok: true, flags: await agentFlags(env), last: hist[0] || null, history: hist.slice(1, 8).map(h => ({ at: h.at, day: h.day, mode: h.mode, headline: h.headline })) }); }
   if (m === 'POST' && path === '/api/admin/agent/settings') { const out = await saveAgentFlags(env, await readJson(request)); if (!out.ok) throw new HttpError(400, out.error); await audit(env, admin, 'agent_settings', null, {}); return json({ ok: true, flags: await agentFlags(env) }); }
   if (m === 'POST' && path === '/api/admin/agent/run') { const out = await runAgent(env, { force: true }); await audit(env, admin, 'agent_run', null, { mode: out.mode }); const hist = await getHist(env); return json({ ok: true, ...out, flags: await agentFlags(env), last: hist[0] || null, history: hist.slice(1, 8).map(h => ({ at: h.at, day: h.day, mode: h.mode, headline: h.headline })) }); }
@@ -198,7 +203,7 @@ async function orderAction(request, env, admin, id, action) {
       const mem = members[s], partner = members[1 - s];
       const link = await issueLoginLink(env, mem.id, WELCOME_TTL_MS), code = await issueLoginCode(env, mem.id, WELCOME_TTL_MS);
       const mail = s === 0 ? welcomeEmail(env, mem.suggested_name, partner.suggested_name, cal.start_date, link, cal.lang, code) : partnerInviteEmail(env, mem.suggested_name, partner.suggested_name, cal.start_date, link, cal.lang, code);
-      await sendEmail(env, mem.email, mail.subject, mail.html, mail.text);
+      await sendEmail(env, mem.email, mail.subject, mail.html, mail.text, { meta: { kind: 'access', orderId: id, memberId: mem.id, startDate: cal.start_date } });
     }
     await audit(env, admin, 'resend_access', id, { slots });
     return { ok: true };
@@ -220,7 +225,7 @@ async function orderAction(request, env, admin, id, action) {
     await run(env, 'UPDATE orders SET refunded_at = ?, refund_kop = ?, refund_status = ?, refund_ref = ? WHERE id = ?', Date.now(), amount, refundStatus, refundRef, id);
     if (b.revoke !== false) for (const mem of members) await run(env, 'DELETE FROM sessions WHERE member_id = ?', mem.id); // доступ закривається
     if (b.notify !== false && amount > 0) { // повідомлення покупцю (не критично, якщо не вдалось)
-      try { const mail = refundEmail(env, `${(amount / 100).toLocaleString('uk-UA', { minimumFractionDigits: amount % 100 ? 2 : 0 })} ₴`, o.lang || 'uk'); await sendEmail(env, o.payer_email || o.email_a, mail.subject, mail.html, mail.text); } catch (e) { console.error('refund email failed', e); }
+      try { const mail = refundEmail(env, `${(amount / 100).toLocaleString('uk-UA', { minimumFractionDigits: amount % 100 ? 2 : 0 })} ₴`, o.lang || 'uk'); await sendEmail(env, o.payer_email || o.email_a, mail.subject, mail.html, mail.text, { meta: { kind: 'refund', orderId: id } }); } catch (e) { console.error('refund email failed', e); }
     }
     await audit(env, admin, 'refund', id, { amountKop: amount, method: auto ? 'monobank_api' : 'manual', status: refundStatus, revoke: b.revoke !== false, note: cleanText(b.note, 300) });
     return { ok: true, method: auto ? 'api' : 'manual', status: refundStatus };
@@ -263,7 +268,7 @@ async function orderAction(request, env, admin, id, action) {
         const partner = members[1 - i], link = await issueLoginLink(env, mem.id, WELCOME_TTL_MS), code = await issueLoginCode(env, mem.id, WELCOME_TTL_MS);
         const nameMe = nm || mem.suggested_name, namePartner = (i === 0 ? patch.name_b : patch.name_a) || partner.suggested_name;
         const mail = i === 0 ? welcomeEmail(env, nameMe, namePartner, newStart || cal.start_date, link, cal.lang, code) : partnerInviteEmail(env, nameMe, namePartner, newStart || cal.start_date, link, cal.lang, code);
-        await sendEmail(env, em, mail.subject, mail.html, mail.text);
+        await sendEmail(env, em, mail.subject, mail.html, mail.text, { meta: { kind: 'access', orderId: id, memberId: mem.id, startDate: newStart || cal.start_date } });
         emailChanged.push(i);
       }
     }
@@ -415,7 +420,7 @@ async function inboxAction(request, env, admin, email, action) {
   const last = await q1(env, "SELECT msg_id FROM messages WHERE thread_email = ? AND direction = 'in' AND msg_id IS NOT NULL ORDER BY created_at DESC LIMIT 1", email);
   const lg = await q1(env, 'SELECT lang FROM orders WHERE email_a = ? OR email_b = ? ORDER BY created_at DESC LIMIT 1', email, email);
   const mail = supportReplyEmail(env, body, last?.msg_id, lg?.lang || 'uk');
-  await sendEmail(env, email, /^re:/i.test(subject) ? subject : 'Re: ' + subject, mail.html, mail.text, { from: env.EMAIL_SUPPORT_FROM || env.EMAIL_FROM, replyTo: env.SUPPORT_EMAIL || 'support@reeadvent.fun', headers: mail.headers });
+  await sendEmail(env, email, /^re:/i.test(subject) ? subject : 'Re: ' + subject, mail.html, mail.text, { from: env.EMAIL_SUPPORT_FROM || env.EMAIL_FROM, replyTo: env.SUPPORT_EMAIL || 'support@reeadvent.fun', headers: mail.headers, meta: { kind: 'support_reply' } });
   const mid = uid(), now = Date.now();
   await env.DB.batch([
     env.DB.prepare("INSERT INTO messages (id, thread_email, direction, from_email, from_name, to_email, subject, body_text, created_at) VALUES (?,?,?,?,?,?,?,?,?)").bind(mid, email, 'out', env.SUPPORT_EMAIL || 'support@reeadvent.fun', admin, email, subject, body, now),

@@ -240,8 +240,9 @@ export async function markPaid(env, orderId) {
   const linkA = await issueLoginLink(env, mA, WELCOME_TTL), linkB = await issueLoginLink(env, mB, WELCOME_TTL);
   const codeA = await issueLoginCode(env, mA, WELCOME_TTL), codeB = await issueLoginCode(env, mB, WELCOME_TTL);
   const mailA = welcomeEmail(env, o.name_a, o.name_b, startDate, linkA, lang, codeA), mailB = partnerInviteEmail(env, o.name_b, o.name_a, startDate, linkB, lang, codeB);
-  await sendEmail(env, o.email_a, mailA.subject, mailA.html, mailA.text);
-  await sendEmail(env, o.email_b, mailB.subject, mailB.html, mailB.text);
+  // збій пошти не має ламати підтвердження оплати (повторний вебхук уже нічого не надішле): помилка потрапляє в журнал «Комунікації», доступ можна надіслати повторно
+  try { await sendEmail(env, o.email_a, mailA.subject, mailA.html, mailA.text, { meta: { kind: 'welcome', orderId, memberId: mA, startDate } }); } catch (e) { console.error('welcome email failed', e && e.message); }
+  try { await sendEmail(env, o.email_b, mailB.subject, mailB.html, mailB.text, { meta: { kind: 'partner_invite', orderId, memberId: mB, startDate } }); } catch (e) { console.error('partner invite failed', e && e.message); }
 }
 
 // ---------- Авторизація (посилання на пошту) ----------
@@ -268,7 +269,7 @@ async function authRequest(request, env) {
     const recent = await q1(env, 'SELECT COUNT(*) AS n FROM login_tokens WHERE member_id = ? AND created_at > ?', mem.id, Date.now() - 3600e3);
     if (recent.n < 5) {
       const mail = loginEmail(env, mem.survey_json ? JSON.parse(mem.survey_json).name : mem.suggested_name, await issueLoginLink(env, mem.id, LOGIN_TTL), mem.lang, await issueLoginCode(env, mem.id, LOGIN_TTL));
-      await sendEmail(env, email, mail.subject, mail.html, mail.text);
+      await sendEmail(env, email, mail.subject, mail.html, mail.text, { meta: { kind: 'login', memberId: mem.id } });
     }
   }
   return json({ ok: true }); // відповідь однакова, щоб не розкривати, чи є така пошта
@@ -390,7 +391,7 @@ async function orderResend(env, id) {
   const mem = cal && await q1(env, 'SELECT id, email FROM members WHERE calendar_id = ? AND slot = 0', cal.id);
   if (!mem) throw new HttpError(409, 'not_ready');
   const mail = welcomeEmail(env, o.name_a, o.name_b, cal.start_date, await issueLoginLink(env, mem.id, WELCOME_TTL), o.lang || 'uk', await issueLoginCode(env, mem.id, WELCOME_TTL)); // лише покупцю
-  await sendEmail(env, mem.email, mail.subject, mail.html, mail.text);
+  await sendEmail(env, mem.email, mail.subject, mail.html, mail.text, { meta: { kind: 'access', orderId: id, memberId: mem.id, startDate: cal.start_date } });
   return json({ ok: true });
 }
 

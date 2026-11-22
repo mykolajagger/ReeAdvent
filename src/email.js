@@ -1,17 +1,27 @@
 // Листи. EMAIL_MODE=stub — запис в таблицю outbox (розробка); EMAIL_MODE=resend — реальна відправка через Resend.
 // Усі шаблони двомовні (uk/en): мова береться з календаря (lang).
 import { UNLOCK_HOUR } from './util.js';
+import { logEmail } from './comms.js';
 
-export async function sendEmail(env, to, subject, html, text, opts = {}) {
+async function deliver(env, to, subject, html, text, opts) {
   if (env.EMAIL_MODE !== 'resend') {
     await env.DB.prepare('INSERT INTO outbox (created_at, to_email, subject, body) VALUES (?,?,?,?)').bind(Date.now(), to, subject, text).run();
-    return;
+    return null;
   }
   const res = await fetch('https://api.resend.com/emails', {
     method: 'POST', headers: { Authorization: `Bearer ${env.RESEND_API_KEY}`, 'Content-Type': 'application/json' },
     body: JSON.stringify({ from: opts.from || env.EMAIL_FROM, to: [to], subject, html, text, ...(opts.replyTo ? { reply_to: opts.replyTo } : {}), ...(opts.headers ? { headers: opts.headers } : {}) })
   });
-  if (!res.ok) throw new Error('email_error');
+  if (!res.ok) { const err = new Error('email_error'); err.detail = `Resend ${res.status}: ${String(await res.text().catch(() => '')).replace(/\s+/g, ' ').slice(0, 160)}`; throw err; }
+  const j = await res.json().catch(() => ({})); return j && j.id ? j.id : null;
+}
+
+/** Надсилає лист. opts.meta ({ kind, orderId, memberId, startDate }) вмикає запис у журнал «Комунікації»; службові листи адміністраторам без meta не журналяться. */
+export async function sendEmail(env, to, subject, html, text, opts = {}) {
+  const meta = opts.meta; let extId = null;
+  try { extId = await deliver(env, to, subject, html, text, opts); }
+  catch (e) { if (meta) await logEmail(env, { ...meta, to, subject, text, status: 'failed', error: e.detail || e.message }); throw e; }
+  if (meta) await logEmail(env, { ...meta, to, subject, text, status: 'sent', extId });
 }
 
 const esc = s => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));

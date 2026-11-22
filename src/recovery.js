@@ -32,7 +32,7 @@ export async function runRecovery(env, { now = Date.now(), max = 25 } = {}) {
     if (bought) { s.x = now; skipped++; continue; }                                                                   // уже купили: більше не турбуємо
     try {
       const mail = recoveryEmail(env, { name: o.name_a, link: await resumeUrl(env, o.id), lang: o.lang, stage });
-      await sendEmail(env, to, mail.subject, mail.html, mail.text);
+      await sendEmail(env, to, mail.subject, mail.html, mail.text, { meta: { kind: 'recovery_' + stage, orderId: o.id } });
       s[stage === 1 ? 'a' : 'b'] = now; state[ek] = { t: now }; sent++;
     } catch (e) { console.error('recovery email', e && e.message); }
   }
