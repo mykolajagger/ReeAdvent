@@ -80,7 +80,7 @@ async function processCountry(cc) {
 
   const f = n => path.join(WORK, `${cc}-${n}`), inPbf = f('in.osm.pbf'), outPbf = f('f.osm.pbf'), seq = f('out.geojsonseq');
   try {
-    run('curl', ['-L', '--fail', '--retry', '4', '--retry-delay', '20', '--retry-all-errors', '--connect-timeout', '30', '--speed-limit', '200000', '--speed-time', '60', '-A', UA, '-sS', '-o', inPbf, pbf.url]);
+    run('curl', ['-L', '--fail', '--retry', '4', '--retry-delay', '20', '--retry-all-errors', '--connect-timeout', '30', '--speed-limit', '40000', '--speed-time', '120', '-A', UA, '-sS', '-o', inPbf, pbf.url]);
     downloaded += gb;
     log(`завантажено ${fileGB(inPbf).toFixed(2)} ГБ за ${Math.round((Date.now() - t1) / 1000)} с`);
     run('osmium', ['tags-filter', inPbf, ...osmiumExpressions(), '-o', outPbf, '--overwrite']); fs.rmSync(inPbf);
