@@ -8,7 +8,7 @@ on:
   workflow_dispatch:
     inputs:
       countries:
-        description: 'Необов’язково: коди країн через пробіл (наприклад UA PL). Порожньо — за чергою.'
+        description: 'Необов’язково: коди країн через пробіл (наприклад UA PL US). США обробляються по штатах. Порожньо — за чергою.'
         required: false
         default: ''
 
