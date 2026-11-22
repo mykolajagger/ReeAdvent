@@ -16,7 +16,7 @@ async function api(method, path, body) {
   if (!r.ok || j.ok === false) { const e = new Error(j.error || 'server_error'); e.code = j.error || 'server_error'; e.detail = j.detail; if (e.code === 'admin_auth') { me = null; showLogin(); } throw e; }
   return j;
 }
-const ERR = { fx_failed: 'Не вдалося отримати курси (сервіс недоступний)', refund_failed: 'Monobank не виконав повернення. Замовлення не змінено', bad_percent: 'Відсоток: число від 0 до 100', bad_rate: 'Курс: від 1 до 1000', bad_cap: 'Ліміт: ціле число від 0', bad_token: 'Токен має неправильний вигляд', token_rejected: 'Instagram не прийняв токен (перевірте токен і ID акаунта)', bad_id: 'ID акаунта: лише цифри', ig_unreachable: 'Instagram недоступний, спробуйте пізніше', bad_price: 'Ціна: від 1 до 100000 грн', admin_auth: 'Сесія закінчилась', code_exists: 'Такий код уже є', bad_code: 'Код: 3–32 символи (літери, цифри, - _)', bad_value: 'Невірне значення знижки', bad_max: 'Ліміт: ціле число від 1', bad_date: 'Невірна дата', already_started: 'Календар уже стартував: дату змінити не можна', same_email: 'Пошти мають бути різні', bad_email: 'Невірна пошта', bad_names: 'Вкажіть імена', not_paid: 'Замовлення не оплачене', already_refunded: 'Повернення вже оформлено', bad_amount: 'Сума більша за оплачену', empty: 'Напишіть текст відповіді', too_many: 'Забагато спроб', csrf: 'Помилка захисту, оновіть сторінку' };
+const ERR = { fx_failed: 'Не вдалося отримати курси (сервіс недоступний)', refund_failed: 'Monobank не виконав повернення. Замовлення не змінено', bad_percent: 'Відсоток: число від 0 до 100', bad_rate: 'Курс: від 1 до 1000', bad_cap: 'Ліміт: ціле число від 0', bad_token: 'Токен має неправильний вигляд', token_rejected: 'Instagram не прийняв токен (перевірте токен і ID акаунта)', bad_id: 'ID акаунта: лише цифри', ig_unreachable: 'Instagram недоступний, спробуйте пізніше', bad_price: 'Ціна: від 1 до 100000 грн', admin_auth: 'Сесія закінчилась', code_exists: 'Такий код уже є', bad_code: 'Код: 3–32 символи (літери, цифри, - _)', bad_value: 'Невірне значення знижки', bad_max: 'Ліміт: ціле число від 1', bad_date: 'Невірна дата', already_started: 'Календар уже стартував: дату змінити не можна', same_email: 'Пошти мають бути різні', bad_email: 'Невірна пошта', bad_names: 'Вкажіть імена', not_paid: 'Замовлення не оплачене', already_refunded: 'Повернення вже оформлено', bad_amount: 'Сума більша за оплачену', empty: 'Напишіть текст відповіді', too_many: 'Забагато спроб', csrf: 'Помилка захисту, оновіть сторінку', no_key: 'Потрібен секрет ANTHROPIC_API_KEY у Cloudflare', ai_failed: 'Claude зараз недоступний, спробуйте за хвилину', ai_invalid: 'Claude повернув незрозумілу відповідь, спробуйте переформулювати', empty_prompt: 'Напишіть, що змінити', bad_ref: 'Файл-референс не підійшов (фото JPEG/PNG, PDF, .txt або .md)', ref_too_big: 'Референси завеликі: до 4 файлів загалом до 4 МБ', proposal_locked: 'Погоджену пропозицію спершу відкличте з плану', proposal_invalid: 'Не вистачає даних у пропозиції', media_missing: 'Файл зображення не знайдено, спробуйте ще раз', media_count: 'Кількість файлів не збігається зі слайдами', media_too_big: 'Файл завеликий', media_need_r2: 'Відео потребує сховища R2 (див. docs/agent.md)', bad_media: 'Це не зображення JPEG/PNG і не відео MP4', already_published: 'Уже опубліковано: змінити не можна', bad_version: 'Такої версії немає', media_not_video: 'Для Reel потрібен файл MP4' };
 const errText = e => (ERR[e.code] || 'Щось пішло не так: ' + (e.code || e.message)) + (e.detail ? ` (${e.detail})` : '');
 function toast(t) { const el = $('#toast'); el.textContent = t; el.classList.add('show'); clearTimeout(toast.t); toast.t = setTimeout(() => el.classList.remove('show'), 2800); }
 
@@ -282,7 +282,7 @@ async function inbox() {
 
 /* ---------- Instagram: редактор публікацій (перегляд, підпис, розклад, порядок) ---------- */
 let igSel = null, igSlide = 0, igTab = 'post';
-const igMedia = f => '/social/' + encodeURIComponent(f);
+const igMedia = f => f.startsWith('/') ? f : '/social/' + encodeURIComponent(f);
 const dtLocal = t => t ? new Date(t - new Date(t).getTimezoneOffset() * 6e4).toISOString().slice(0, 16) : '';
 const igTitle = p => p.title || String(p.caption || '').split('\n')[0].slice(0, 48);
 const igKind = p => p.type === 'REELS' ? 'Reel' : p.type === 'CAROUSEL' ? 'Карусель · ' + p.files.length : p.type === 'STORY' ? 'Сторіс · фото' : p.type === 'STORY_VIDEO' ? 'Сторіс · відео' : 'Фото';
@@ -311,7 +311,7 @@ function renderIgPlan(pb, ig) {
   <div class="muted">Перегляньте публікацію, відредагуйте підпис і призначте дату й час (ваш місцевий час). З увімкненою автопублікацією вона виходить сама у призначений час (перевірка щогодини). Жовте «⚠» біля публікації означає повтор: та сама сцена чи формат поруч, змініть порядок кнопками ↑ ↓.</div>
   <div class="row" style="gap:8px">${tabBtn('post', 'Пости й Reels', nPost)}${nStory ? tabBtn('story', 'Сторіс', nStory) : ''}</div>
   <div style="display:flex;gap:18px;flex-wrap:wrap;align-items:flex-start">
-   <div style="flex:1 1 300px;min-width:260px;display:grid;gap:8px" id="iglist">${list.map((x, i) => `<div class="card" data-id="${esc(x.id)}" style="padding:8px;display:flex;gap:10px;align-items:center;cursor:pointer;${x.id === igSel ? 'border-color:var(--accent);box-shadow:0 0 0 1px var(--accent)' : ''}">
+   <div style="flex:1 1 300px;min-width:260px;display:grid;grid-template-columns:minmax(0,1fr);gap:8px" id="iglist">${list.map((x, i) => `<div class="card" data-id="${esc(x.id)}" style="padding:8px;display:flex;gap:10px;align-items:center;cursor:pointer;${x.id === igSel ? 'border-color:var(--accent);box-shadow:0 0 0 1px var(--accent)' : ''}">
       <img src="${igMedia(isVid(x) ? x.cover : x.files[0])}" alt="" style="width:${x.format === 'story' ? 36 : 48}px;height:60px;object-fit:cover;border-radius:6px;flex:none">
       <div style="flex:1;min-width:0"><div style="font-weight:600;font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${i + 1}. ${esc(igTitle(x))}</div><div class="muted" style="font-size:12px">${igKind(x)}${x.edited ? ' · змінено' : ''} · ${status(x)}</div>${x.complete ? '' : igRepeats(list, i).map(w => `<div style="font-size:11px;color:#e0a43a">⚠ ${w}</div>`).join('')}</div>
       ${x.complete ? '' : `<div style="display:grid;gap:2px"><button type="button" class="btn ghost sm igup" data-i="${i}" ${i === 0 ? 'disabled' : ''}>↑</button><button type="button" class="btn ghost sm igdn" data-i="${i}" ${i === list.length - 1 ? 'disabled' : ''}>↓</button></div>`}</div>`).join('')}
@@ -321,7 +321,7 @@ function renderIgPlan(pb, ig) {
     <label class="muted" style="display:flex;gap:6px;align-items:center"><input type="checkbox" id="igauto" ${pb.auto ? 'checked' : ''}> Автопублікація за розкладом ${ig && ig.connected ? '' : '(спершу підключіть Instagram)'}</label>
     ${pb.err ? `<div class="muted" style="color:#eb5757">Остання помилка (${esc(fdate(pb.err.at))}, ${esc(pb.err.id)}): ${esc(pb.err.error)}</div>` : ''}
    </div>
-   <div style="flex:1 1 330px;min-width:280px;display:grid;gap:10px">
+   <div style="flex:1 1 330px;min-width:280px;display:grid;grid-template-columns:minmax(0,1fr);gap:10px">
     <div class="card" style="padding:0;overflow:hidden;max-width:${story ? 260 : 380}px;background:#0e0f14;color:#f3efe6">
      <div style="display:flex;gap:8px;align-items:center;padding:10px 12px"><div style="width:30px;height:30px;border-radius:50%;background:linear-gradient(135deg,#d6b46a,#8a6a2a)"></div><b style="font-size:13px">reeadvent</b><span style="margin-left:auto;opacity:.6">${story ? '24 год' : '···'}</span></div>
      ${igMediaHtml(p)}
@@ -406,7 +406,8 @@ async function renderAgent(data) {
    ${tog('ag-daily', f.daily, 'Щоденний звіт із порадами (приблизно о 9:00 за Києвом)')}
    ${tog('ag-email', f.email, 'Надсилати дайджест на пошту адміністратора')}
    ${tog('ag-autoq', f.autoq, 'Автопілот черги: самому призначати час новим публікаціям (стрічка щодня о 18:00, сторіс двічі на день)')}
-   ${tog('ag-rec', f.recovery, 'Нагадувати про незавершену оплату (до двох листів на замовлення: через 2 і 26 годин)')}</div>
+   ${tog('ag-rec', f.recovery, 'Нагадувати про незавершену оплату (до двох листів на замовлення: через 2 і 26 годин)')}
+   ${tog('ag-prop', f.propose !== false, 'Готувати пропозиції публікацій, сторіс і Reels на ваше погодження (до чотирьох на розгляді одночасно)')}</div>
   <div class="row" style="flex-wrap:wrap;gap:10px;align-items:flex-end">
    <label class="f" style="margin:0">ID рекламного акаунта Meta (для автообліку витрат, лише читання)<input id="ag-acc" inputmode="numeric" value="${esc(f.metaAcc)}" placeholder="цифри з Ads Manager" style="width:230px"></label>
    <label class="f" style="margin:0">Дата старту календарів<input id="ag-launch" type="date" value="${esc(f.launch)}"></label>
@@ -421,8 +422,8 @@ async function renderAgent(data) {
    ${r.experiment ? `<div style="border:1px dashed var(--line2);border-radius:12px;padding:10px 12px"><b>Експеримент: ${esc(r.experiment.title)}</b><div class="muted" style="margin-top:4px">Гіпотеза: ${esc(r.experiment.hypothesis)}<br>Як перевірити: ${esc(r.experiment.how)}</div></div>` : ''}
    ${d.history && d.history.length ? `<details><summary class="muted" style="cursor:pointer">Попередні звіти (${d.history.length})</summary><div class="muted">${d.history.map(h => `${esc(h.day)} · ${esc(h.headline)}`).join('<br>')}</div></details>` : ''}</div>` : '<div class="muted">Звітів ще немає. Натисніть «Запустити агента зараз», і за кілька секунд з\'являться перші поради.</div>'}`;
   const post = async (path, body, ok) => { try { const x = await api('POST', '/api/admin/agent/' + path, body); if (ok) toast(typeof ok === 'function' ? ok(x) : ok); return x; } catch (e) { toast(errText(e)); return null; } };
-  const flagsBody = () => ({ daily: $('#ag-daily').checked, email: $('#ag-email').checked, autoq: $('#ag-autoq').checked, recovery: $('#ag-rec').checked });
-  ['ag-daily', 'ag-email', 'ag-autoq', 'ag-rec'].forEach(id => $('#' + id).onchange = async () => { const x = await post('settings', flagsBody(), 'Збережено'); if (x) d.flags = x.flags; });
+  const flagsBody = () => ({ daily: $('#ag-daily').checked, email: $('#ag-email').checked, autoq: $('#ag-autoq').checked, recovery: $('#ag-rec').checked, propose: $('#ag-prop').checked });
+  ['ag-daily', 'ag-email', 'ag-autoq', 'ag-rec', 'ag-prop'].forEach(id => $('#' + id).onchange = async () => { const x = await post('settings', flagsBody(), 'Збережено'); if (x) d.flags = x.flags; });
   $('#ag-save').onclick = async () => { const x = await post('settings', { ...flagsBody(), metaAcc: $('#ag-acc').value, launch: $('#ag-launch').value }, 'Збережено'); if (x) renderAgent(null); };
   $('#ag-run').onclick = async () => { const b = $('#ag-run'); b.disabled = true; b.textContent = 'Аналізую…'; const x = await post('run', {}, 'Звіт готовий'); if (x) renderAgent(x); else renderAgent(null); };
   if ($('#ag-sync')) $('#ag-sync').onclick = async () => { const b = $('#ag-sync'); b.disabled = true; const x = await post('sync', {}, x2 => x2.skipped ? 'Нічого синхронізувати' : `Синхронізовано кампаній: ${x2.campaigns}`); renderAds && renderAds(30); b.disabled = false; };
@@ -435,6 +436,7 @@ async function social() {
   const ig = await api('GET', '/api/admin/instagram').catch(() => ({ connected: false })), pb = await api('GET', '/api/admin/instagram/publish').catch(() => null);
   $('#main').innerHTML = `<div class="top"><div><h2>Маркетинг</h2><h1>Соцмережі й реклама</h1></div></div>
   <div class="card sec" id="agentcard" style="max-width:1000px"><h2>Агент росту</h2><div class="muted">Завантаження…</div></div>
+  <div class="card sec" id="propcard" style="max-width:1000px;margin-top:14px"><h2>Пропозиції агента</h2><div class="muted">Завантаження…</div></div>
   <div class="card sec" style="max-width:620px;margin-top:14px"><h2>Підключення: Instagram і Facebook</h2>
     ${ig.lastError ? `<div class="muted" style="color:#eb5757">Остання помилка Instagram (${esc(fdate(ig.lastError.at))}): ${esc(ig.lastError.error)}</div>` : ''}
     <div class="muted">${ig.connected ? `Підключено${ig.username ? ': <b>@' + esc(ig.username) + '</b>' : ''}${ig.viaSecret ? ' (через секрет середовища)' : ''}. ${ig.neverExpires ? 'Токен системного користувача: без терміну дії.' : ig.daysLeft != null ? `Токен діє ще ${ig.daysLeft} дн. і продовжується автоматично раз на тиждень.` : ''} Останні пости показуються на головній.` : 'Не підключено: на головній показується лише іконка й посилання на @reeadvent. Щоб показувати стрічку постів, додайте токен: або токен системного користувача (разом із числовим ID акаунта Instagram), або токен Instagram Login (ID не потрібен).'}</div>
@@ -447,7 +449,7 @@ async function social() {
     <div class="row"><button class="btn" id="igs" type="button">Підключити</button>${ig.connected ? '<button class="btn ghost" id="igtest" type="button">Перевірити зараз</button>' : ''}${ig.connected && !ig.viaSecret ? '<button class="btn ghost" id="igd" type="button">Відключити</button>' : ''}</div></div>
   <div class="card sec" id="igplan" style="max-width:1000px;margin-top:14px"></div>
   <div class="card sec" id="adscard" style="max-width:1000px;margin-top:14px"><h2>Реклама</h2><div class="muted">Завантаження…</div></div>`;
-  renderAds(30); renderAgent(null);
+  renderAds(30); renderAgent(null); if (window.renderProps) window.renderProps(null);
   $('#igse').onclick = async () => { try { const x = await api('POST', '/api/admin/instagram/embeds', { text: $('#ige').value }); toast(x.embeds ? `Збережено постів: ${x.embeds}` : 'Збережено: список порожній'); social(); } catch (e) { toast(errText(e)); } };
   renderIgPlan(pb, ig);
   $('#fbs').onclick = async () => { try { const x = await api('POST', '/api/admin/instagram/fbpage', { id: $('#fbid').value.trim() }); toast(x.fbPage ? 'Сторінку Facebook підключено: ' + x.fbPage.name : 'Facebook відключено'); social(); } catch (e) { toast(errText(e)); } };
@@ -504,6 +506,9 @@ async function audit() {
   const r = await api('GET', '/api/admin/audit');
   $('#main').innerHTML = `<div class="top"><div><h2>Безпека</h2><h1>Журнал дій</h1></div></div><div class="tw"><table><thead><tr><th>Коли</th><th>Хто</th><th>Дія</th><th>Об'єкт</th><th>Деталі</th></tr></thead><tbody>${r.rows.map(l => `<tr><td class="mono">${dt(l.at)}</td><td>${esc(l.admin_email)}</td><td><b>${esc(l.action)}</b></td><td class="mono">${esc(l.target || '')}</td><td class="muted" style="word-break:break-word">${esc(l.detail || '')}</td></tr>`).join('') || '<tr><td colspan="5" class="empty">Порожньо</td></tr>'}</tbody></table></div>`;
 }
+
+/* Спільні функції для окремих скриптів (пропозиції агента) */
+window.ADM = { $, esc, api, toast, errText, fdate, social: () => social() };
 
 /* ---------- Старт ---------- */
 (async () => {

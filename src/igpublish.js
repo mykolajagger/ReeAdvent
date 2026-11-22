@@ -9,11 +9,17 @@ const setSetting = (env, k, v) => env.DB.prepare('INSERT INTO settings (key, val
 const parse = s => { try { return s ? JSON.parse(s) : null; } catch { return null; } };
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 
-export async function loadManifest(fetchImpl = fetch, site = SITE) {
+/** Записи, створені із затверджених пропозицій агента (зберігаються в settings, файли віддає /api/media/<id>). */
+export const dynamicEntries = async env => (parse(await getSetting(env, 'ig_extra')) || []).filter(e => e && e.id && Array.isArray(e.files) && e.files.length);
+/** Готові публікації з репозиторію (/social/posts.json) плюс затверджені пропозиції; env потрібен для других. */
+export async function loadManifest(fetchImpl = fetch, site = SITE, env = null) {
   const r = await fetchImpl(`${site}/social/posts.json`, { signal: AbortSignal.timeout(8000) });
   if (!r.ok) throw new Error('manifest ' + r.status);
-  return await r.json();
+  const base = await r.json(); if (!env) return base;
+  let extra = []; try { extra = await dynamicEntries(env); } catch {}
+  const ids = new Set(base.map(x => x.id)); return [...base, ...extra.filter(e => !ids.has(e.id))];
 }
+const fileUrl = (site, f) => (String(f).startsWith('/') ? site + f : `${site}/social/${f}`);
 export async function pubState(env) { const s = parse(await getSetting(env, 'ig_pub')) || {}; return { done: s.done || {}, fb: s.fb || {}, err: s.err || null, auto: (await getSetting(env, 'ig_auto')) === '1' }; }
 export const getFbPage = async env => parse(await getSetting(env, 'fb_page')) || null;   // { id, name }
 export const FB_LINE = 'https://reeadvent.fun';
@@ -75,7 +81,7 @@ export async function publishPost(env, post, { fetchImpl = fetch, site = SITE, d
   const token = await getToken(env); if (!token) throw new Error('Instagram не підключено');
   const fb = (await getSetting(env, 'ig_mode')) === 'fb', id = fb ? await getSetting(env, 'ig_id') : 'me';
   if (!id) throw new Error('Не задано ID акаунта Instagram');
-  const base = fb ? FB : GRAPH, url = f => `${site}/social/${f}`, opts = { delay };
+  const base = fb ? FB : GRAPH, url = f => fileUrl(site, f), opts = { delay };
   let creation;
   if (post.type === 'IMAGE') creation = (await call(fetchImpl, 'POST', `${base}/${id}/media`, { image_url: url(post.files[0]), caption: post.caption, access_token: token })).id;
   else if (post.type === 'REELS') creation = (await call(fetchImpl, 'POST', `${base}/${id}/media`, { media_type: 'REELS', video_url: url(post.files[0]), caption: post.caption, share_to_feed: 'true', ...(post.cover ? { cover_url: url(post.cover) } : {}), access_token: token })).id;
@@ -98,7 +104,7 @@ export async function publishFb(env, post, { fetchImpl = fetch, site = SITE } = 
   const token = await getToken(env); if (!token) throw new Error('Токен не додано');
   const page = await getFbPage(env); if (!page) throw new Error('Не задано сторінку Facebook');
   let pt = token; try { const j = await call(fetchImpl, 'GET', `${FB}/${page.id}`, { fields: 'access_token', access_token: token }); if (j.access_token) pt = j.access_token; } catch {}
-  const url = f => `${site}/social/${f}`, text = String(post.caption || '').replace(/^.*(?:в шапці профілю|link in bio).*$/gim, FB_LINE);   // будь-який рядок «…посилання в шапці профілю · …link in bio» → адреса сайту
+  const url = f => fileUrl(site, f), text = String(post.caption || '').replace(/^.*(?:в шапці профілю|link in bio).*$/gim, FB_LINE);   // будь-який рядок «…посилання в шапці профілю · …link in bio» → адреса сайту
   let j, noLink = false;
   if (post.type === 'STORY') {   // фото-сторіс: спершу неопубліковане фото, потім сторіс із нього
     const ph = await call(fetchImpl, 'POST', `${FB}/${page.id}/photos`, { url: url(post.files[0]), published: 'false', access_token: pt });
@@ -122,7 +128,7 @@ export async function publishFb(env, post, { fetchImpl = fetch, site = SITE } = 
 /** Публікує наступний пост за чергою (або конкретний id) на всі ввімкнені майданчики, що ще не отримали його. */
 export async function publishNext(env, { only = null, fetchImpl = fetch, site = SITE, now = Date.now(), delay = 3000 } = {}) {
   const st = await pubState(env); let man;
-  try { man = await loadManifest(fetchImpl, site); } catch (e) { return { ok: false, error: 'Не вдалося прочитати список постів: ' + e.message }; }
+  try { man = await loadManifest(fetchImpl, site, env); } catch (e) { return { ok: false, error: 'Не вдалося прочитати список постів: ' + e.message }; }
   const fbp = await getFbPage(env), hasFb = !!fbp, eff = effective(man, await getPlan(env)), post = only ? eff.find(p => p.id === only) : eff.find(p => !isComplete(st, p, hasFb));
   if (!post) return { ok: false, error: only ? 'Немає такого поста' : 'Усі пости вже опубліковано' };
   if (isComplete(st, post, hasFb)) return { ok: false, error: 'Цей пост уже опубліковано' };
@@ -136,7 +142,7 @@ export async function publishNext(env, { only = null, fetchImpl = fetch, site = 
 export const SLOTS = { post: [[16, 0]], story: [[8, 0], [18, 0]] };
 /** Призначає час усім неопублікованим публікаціям без дати: стрічка раз на день, сторіс двічі на день, з найближчого вільного слота (не раніше ніж за 2 год). Уже призначені не чіпає. */
 export async function fillQueue(env, { now = Date.now(), fetchImpl = fetch, site = SITE, man = null, lead = 2 * 36e5 } = {}) {
-  man = man || await loadManifest(fetchImpl, site);
+  man = man || await loadManifest(fetchImpl, site, env);
   const st = await pubState(env), plan = await getPlan(env), hasFb = !!(await getFbPage(env)), eff = effective(man, plan), out = { post: 0, story: 0, first: null, last: null };
   for (const fmt of ['post', 'story']) {
     const taken = eff.filter(p => p.format === fmt && p.at).map(p => p.at), todo = eff.filter(p => p.format === fmt && !p.at && !isComplete(st, p, hasFb));
@@ -155,13 +161,13 @@ export async function fillQueue(env, { now = Date.now(), fetchImpl = fetch, site
 export async function runAutoPublish(env, { now = Date.now(), ...rest } = {}) {
   const st = await pubState(env); if (!st.auto) return { skipped: 'off' };
   if (st.err && st.err.at && now - st.err.at < 6 * 36e5) return { skipped: 'error_cooldown' };
-  let man; try { man = await loadManifest(rest.fetchImpl || fetch, rest.site || SITE); } catch { return { skipped: 'manifest' }; }
+  let man; try { man = await loadManifest(rest.fetchImpl || fetch, rest.site || SITE, env); } catch { return { skipped: 'manifest' }; }
   const hasFb = !!(await getFbPage(env)), due = effective(man, await getPlan(env)).filter(p => !isComplete(st, p, hasFb) && p.at && p.at <= now).sort((a, b) => a.at - b.at)[0];
   if (!due) return { skipped: 'none_due' };
   return publishNext(env, { now, only: due.id, ...rest });
 }
 export async function publishStatus(env, fetchImpl = fetch, site = SITE) {
-  const st = await pubState(env), fbp = await getFbPage(env); let man = []; try { man = await loadManifest(fetchImpl, site); } catch {}
+  const st = await pubState(env), fbp = await getFbPage(env); let man = []; try { man = await loadManifest(fetchImpl, site, env); } catch {}
   return { auto: st.auto, err: st.err, now: Date.now(), fbPage: fbp, posts: effective(man, await getPlan(env)).map(p => ({ id: p.id, type: p.type, format: p.format, title: p.title || null, scene: p.scene || null, files: p.files, cover: p.cover || null, caption: p.caption, defaultCaption: p.defaultCaption, edited: p.caption !== p.defaultCaption, at: p.at, ig: p.ig, fb: p.fb, done: st.done[p.id] || null, fbDone: st.fb[p.id] || null, complete: isComplete(st, p, !!fbp) })) };
 }
 /** Зберігає сторінку Facebook: перевіряє токеном, що вона доступна, і запам'ятовує назву. */

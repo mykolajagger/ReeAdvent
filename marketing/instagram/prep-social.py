@@ -70,3 +70,9 @@ for id_, typ, stem, title in STORIES:
 json.dump(man, open(os.path.join(DST, 'posts.json'), 'w', encoding='utf-8'), ensure_ascii=False, indent=1)
 for m in man: print(m['id'], m['type'], len(m['files']), len(m['caption']))
 print('public/social:', round(sum(os.path.getsize(f) for f in glob.glob(DST + '/*')) / 1e6, 1), 'МБ')
+
+# сцени для шаблонів зображень в адмінці (пропозиції агента): public/social/scenes/s-<назва>.jpg, 1080 px
+SC = os.path.join(DST, 'scenes'); os.makedirs(SC, exist_ok=True)
+for n in ['tree', 'pasta', 'pillow', 'book', 'stars', 'game', 'wrap', 'spa', 'market', 'movie']:
+    src = os.path.join(HERE, 'assets', f's-{n}.jpg')
+    if os.path.exists(src): Image.open(src).convert('RGB').resize((1080, 1080), Image.LANCZOS).save(os.path.join(SC, f's-{n}.jpg'), quality=84, optimize=True)

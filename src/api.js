@@ -9,6 +9,7 @@ import { findPromo, priceWith, rateLimit, normCode } from './promo.js';
 import { getPriceUah, getSettings } from './settings.js';
 import { cleanUtm, publicTrackConfig } from './ads.js';
 import { resumeValid } from './recovery.js';
+import { serveMedia } from './media.js';
 import { getFx, priceCurrency } from './currency.js';
 const listKop = async env => Math.round((await getPriceUah(env)) * 100);
 import { sendEmail, welcomeEmail, partnerInviteEmail, loginEmail } from './email.js';
@@ -35,6 +36,7 @@ export async function handle(request, env) {
     if (m === 'POST' && path === '/api/orders') return await createOrder(request, env);
     if (m === 'POST' && path === '/api/promo/check') return await promoCheck(request, env);
     let r;
+    if (m === 'GET' && (r = path.match(/^\/api\/media\/([\w-]{8,40}(?:\.(?:jpe?g|png|mp4))?)$/i))) return await serveMedia(env, r[1]);
     if (m === 'GET' && (r = path.match(/^\/api\/orders\/([\w-]+)\/resume$/))) return await resumeOrder(request, env, r[1]);
     if (m === 'GET' && (r = path.match(/^\/api\/orders\/([\w-]+)\/status$/))) return await orderStatus(env, r[1]);
     if (m === 'GET' && (r = path.match(/^\/api\/dev\/pay\/([\w-]+)$/))) return await devPay(env, r[1]);

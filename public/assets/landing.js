@@ -135,7 +135,8 @@ function initTurnstileLang() { if (tsOn && window.turnstile) renderTurnstile(); 
 /* ---------- Старт ---------- */
 const iso = d => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 const t0 = new Date(); t0.setDate(t0.getDate() + 1); const t1 = new Date(t0); t1.setDate(t1.getDate() + 90);
-$('#startDate').min = iso(t0); $('#startDate').max = iso(t1); $('#startDate').value = iso(t0);
+const DEFAULT_START = '2026-12-01'; // дата старту за замовчуванням: початок адвенту. Коли вона вже минула або поза межами дозволеного, ставимо завтра
+$('#startDate').min = iso(t0); $('#startDate').max = iso(t1); $('#startDate').value = iso(t0) <= DEFAULT_START && DEFAULT_START <= iso(t1) ? DEFAULT_START : iso(t0);
 renderDemo();
 fetch('/api/config').then(r => r.json()).then(async c => {
   basePrice = c.price; cur = c.currency || cur;
