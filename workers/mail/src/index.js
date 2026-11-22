@@ -22,3 +22,4 @@ export default {
     if (env.FORWARD_TO) { try { await message.forward(env.FORWARD_TO); } catch (e) { console.error('forward failed', e); } }
   }
 };
+// rebuild: instagram publish 1795355883

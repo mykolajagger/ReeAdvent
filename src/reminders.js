@@ -4,6 +4,7 @@ import { sendEmail, reminderEmail } from './email.js';
 import { issueLoginLink } from './api.js';
 import { refreshFx } from './currency.js';
 import { refreshToken as refreshInstagramToken } from './instagram.js';
+import { runAutoPublish } from './igpublish.js';
 import { nowOf, localParts, localDayNumber, hmac, toDateStr, fromDateStr, DAYS } from './util.js';
 
 const q = (env, sql, ...a) => env.DB.prepare(sql).bind(...a).all().then(r => r.results);
@@ -79,6 +80,7 @@ export async function purgeOld(env) {
 export async function runDaily(env) {
   const fx = await refreshFx(env); // курси валют оновлюються раз на добу
   try { await refreshInstagramToken(env); } catch (e) { console.error('instagram refresh', e); }
+  try { await runAutoPublish(env); } catch (e) { console.error('instagram publish', e); }
   const reminders = await runReminders(env);
   let purge = null;
   if (nowOf(env).getUTCHours() === 1) purge = await purgeOld(env);
