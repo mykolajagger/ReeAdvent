@@ -8,6 +8,7 @@ import { issueLoginLink, issueLoginCode, WELCOME_TTL_MS } from './api.js';
 import { getSettings, saveSettings, getPriceUah } from './settings.js';
 import { getFx, refreshFx } from './currency.js';
 import { placesUsage } from './places.js';
+import { trackConfig, saveTrackConfig, addSpend, deleteSpend, listSpend, adsReport, CHANNELS as AD_CHANNELS } from './ads.js';
 import { publishNext as igPublishNext, publishStatus as igPublishStatus, setAuto as igSetAuto, editPost as igEditPost, saveFbPage as igSaveFbPage, setOrder as igSetOrder, spread as igSpread, loadManifest as igManifest } from './igpublish.js';
 import { saveToken as igSaveToken, disconnect as igDisconnect, igStatus, saveEmbeds as igSaveEmbeds, igTest } from './instagram.js';
 import { venueStats, venueProblems, retryCities, queueCity, overpassProbe, setVenuesPaused, catalogCountries, catalogCities, catalogCity, setVenueHidden, mapUrl } from './venues.js';
@@ -76,6 +77,9 @@ export async function handleAdmin(request, env, path, m) {
   if (m === 'GET' && path === '/api/admin/venues/cities') return json({ ok: true, cities: await catalogCities(env, new URL(request.url).searchParams.get('country')) });
   if (m === 'GET' && (r = path.match(/^\/api\/admin\/venues\/city\/(\d+)$/))) { const x = await catalogCity(env, +r[1]); if (!x) throw new HttpError(404, 'not_found'); return json({ ok: true, ...x }); }
   if (m === 'POST' && path === '/api/admin/venues/hide') { const b = await readJson(request); const n = await setVenueHidden(env, Number(b.id), !!b.hidden); await audit(env, admin, b.hidden ? 'venue_hide' : 'venue_show', String(b.id), {}); return json({ ok: true, n }); }
+  if (m === 'GET' && path === '/api/admin/ads') { const days = Math.min(365, Math.max(1, Number(url.searchParams.get('days')) || 30)); return json({ ok: true, config: await trackConfig(env), channels: AD_CHANNELS, spend: await listSpend(env), report: await adsReport(env, Date.now() - days * 864e5, Date.now() + 864e5) }); }
+  if (m === 'POST' && path === '/api/admin/ads/config') { const out = await saveTrackConfig(env, await readJson(request)); if (!out.ok) throw new HttpError(400, out.error); await audit(env, admin, 'ads_config', null, {}); return json({ ok: true, config: await trackConfig(env) }); }
+  if (m === 'POST' && path === '/api/admin/ads/spend') { const b = await readJson(request); if (b.delete) { await deleteSpend(env, b.delete); await audit(env, admin, 'ads_spend_delete', String(b.delete), {}); return json({ ok: true }); } const out = await addSpend(env, b); if (!out.ok) throw new HttpError(400, out.error); await audit(env, admin, 'ads_spend', null, { channel: b.channel, amount: b.amount }); return json({ ok: true }); }
   if (m === 'GET' && path === '/api/admin/instagram') return json({ ok: true, ...(await igStatus(env)) });
   if (m === 'POST' && path === '/api/admin/instagram/token') { const b = await readJson(request); const out = await igSaveToken(env, b.token, { igId: b.igId }); if (!out.ok) throw new HttpError(400, out.error); await audit(env, admin, 'instagram_connect', null, { username: out.username }); return json({ ok: true, ...(await igStatus(env)) }); }
   if (m === 'POST' && path === '/api/admin/instagram/embeds') { const b = await readJson(request); const list = await igSaveEmbeds(env, b.text); await audit(env, admin, 'instagram_embeds', null, { n: list.length }); return json({ ok: true, ...(await igStatus(env)) }); }

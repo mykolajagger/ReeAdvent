@@ -6,6 +6,7 @@
 <body><canvas id="fx"></canvas><main><div class="center" id="c"><div class="spinner"></div><p class="muted" id="chk"></p></div></main>
 <p class="muted" style="text-align:center;margin:0 0 24px"><a href="https://www.instagram.com/reeadvent/" target="_blank" rel="noopener noreferrer" style="color:var(--gold2)">Instagram @reeadvent</a></p>
 <script src="/assets/fx.js?v=2"></script>
+<script src="/assets/track.js?v=1" defer></script>
 <script>
 (() => {
   let lang = 'uk'; try { const s = localStorage.getItem('lang'); lang = s === 'en' || s === 'uk' ? s : (/^uk/i.test(navigator.language || '') ? 'uk' : 'en'); } catch {}
@@ -24,6 +25,7 @@
           c.innerHTML = `<div class="eyebrow">${T.paid}</div><h2>${T.thanks}</h2><p class="muted" style="max-width:420px">${T.body}</p><a class="btn" href="/app/" style="text-decoration:none">${T.go}</a><div style="display:grid;gap:8px;justify-items:center"><button class="btn ghost sm" id="rs">${T.resend}</button><div class="muted" id="rm" style="font-size:13px;min-height:1.2em"></div></div>`;
           const rs = document.getElementById('rs'); rs.onclick = async () => { rs.disabled = true; const m = document.getElementById('rm');
             try { const r = await fetch(`/api/orders/${encodeURIComponent(id)}/resend`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' }); const x = await r.json(); m.textContent = x.ok ? T.sent : x.error === 'too_many' ? T.many : T.fail; if (x.ok) setTimeout(() => { rs.disabled = false; }, 30000); else rs.disabled = false; } catch { m.textContent = T.off; rs.disabled = false; } };
+          try { const pk = 'ra_p_' + id; if (!localStorage.getItem(pk) && j.value > 0) { localStorage.setItem(pk, '1'); const fire = n => window.raTrack ? window.raTrack('purchase', { id, value: j.value, currency: j.currency }) : n > 0 && setTimeout(() => fire(n - 1), 500); fire(10); } } catch {}
           window.confetti && window.confetti(innerWidth / 2, 200, 120); return; }
       } catch {}
       await new Promise(r => setTimeout(r, 3000));

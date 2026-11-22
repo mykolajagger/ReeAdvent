@@ -7,6 +7,7 @@ import { verifyTurnstile } from './turnstile.js';
 import { handleAdmin } from './admin.js';
 import { findPromo, priceWith, rateLimit, normCode } from './promo.js';
 import { getPriceUah, getSettings } from './settings.js';
+import { cleanUtm, publicTrackConfig } from './ads.js';
 import { getFx, priceCurrency } from './currency.js';
 const listKop = async env => Math.round((await getPriceUah(env)) * 100);
 import { sendEmail, welcomeEmail, partnerInviteEmail, loginEmail } from './email.js';
@@ -29,6 +30,7 @@ export async function handle(request, env) {
     const m = request.method;
     if (m === 'GET' && path === '/api/config') return await configResponse(request, env);
     if (m === 'GET' && path === '/api/instagram') return json({ ok: true, handle: IG_HANDLE, posts: await instagramFeed(env), embeds: await getEmbeds(env) }, 200, { 'cache-control': 'public, max-age=600' });
+    if (m === 'GET' && path === '/api/track-config') return json({ ok: true, ...(await publicTrackConfig(env)) });
     if (m === 'POST' && path === '/api/orders') return await createOrder(request, env);
     if (m === 'POST' && path === '/api/promo/check') return await promoCheck(request, env);
     let r;
@@ -112,12 +114,15 @@ async function createOrder(request, env) {
     promo = r.promo;
   }
   const price = priceWith(await listKop(env), promo);
-  const order = { id: uid(), amount_kop: price.final, ...o };
+  const order = { id: uid(), amount_kop: price.final, ...o }, utm = cleanUtm(b.utm);
   const free = price.final === 0;
   const inv = free ? { invoiceId: 'free_' + order.id, pageUrl: `${env.BASE_URL}/thanks.html?order=${order.id}` } : await createInvoice(env, order);
-  await run(env, `INSERT INTO orders (id, created_at, status, amount_kop, list_kop, discount_kop, promo_code, promo_id, name_a, email_a, name_b, email_b, city, region, start_date, payer_email, invoice_id, consent_at, lang, country, tz)
-    VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`, order.id, Date.now(), 'pending', price.final, price.list, price.discount, promo ? promo.code : null, promo ? promo.id : null,
-    o.name_a, o.email_a, o.name_b, o.email_b, o.city, o.region, o.start_date, o.payer_email, inv.invoiceId, Date.now(), o.lang, o.country, o.tz);
+  const baseArgs = [order.id, Date.now(), 'pending', price.final, price.list, price.discount, promo ? promo.code : null, promo ? promo.id : null, o.name_a, o.email_a, o.name_b, o.email_b, o.city, o.region, o.start_date, o.payer_email, inv.invoiceId, Date.now(), o.lang, o.country, o.tz];
+  try { await run(env, `INSERT INTO orders (id, created_at, status, amount_kop, list_kop, discount_kop, promo_code, promo_id, name_a, email_a, name_b, email_b, city, region, start_date, payer_email, invoice_id, consent_at, lang, country, tz, utm_source, utm_medium, utm_campaign, utm_content, utm_term)
+    VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`, ...baseArgs, utm.utm_source || null, utm.utm_medium || null, utm.utm_campaign || null, utm.utm_content || null, utm.utm_term || null); }
+  catch (e) { if (!/utm_/.test(String(e && e.message))) throw e;   // міграція 0010 ще не застосована: зберігаємо замовлення без міток
+    await run(env, `INSERT INTO orders (id, created_at, status, amount_kop, list_kop, discount_kop, promo_code, promo_id, name_a, email_a, name_b, email_b, city, region, start_date, payer_email, invoice_id, consent_at, lang, country, tz)
+    VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`, ...baseArgs); }
   await ensureCity(env, o.country, o.city); // місто ставиться в пріоритетну чергу наповнення бази закладів (якщо його ще немає)
   if (free) await markPaid(env, order.id); // 100% знижка: календар створюється одразу, без оплати
   return json({ ok: true, orderId: order.id, payUrl: inv.pageUrl, free, amountKop: price.final });
@@ -135,9 +140,9 @@ async function promoCheck(request, env) {
 }
 
 async function orderStatus(env, id) {
-  const o = await q1(env, 'SELECT status FROM orders WHERE id = ?', id);
+  const o = await q1(env, 'SELECT status, amount_kop FROM orders WHERE id = ?', id);
   if (!o) throw new HttpError(404, 'not_found');
-  return json({ ok: true, status: o.status });
+  return json({ ok: true, status: o.status, ...(o.status === 'paid' ? { value: Math.round(o.amount_kop) / 100, currency: 'UAH' } : {}) });
 }
 
 /** Діагностика налаштувань. Працює лише коли ввімкнено DEBUG=1; секрети не показує. */

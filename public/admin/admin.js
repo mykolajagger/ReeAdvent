@@ -342,6 +342,45 @@ function renderIgPlan(pb, ig) {
   $('#igspread').onclick = () => { const v = $('#igsp0').value; if (!v) return toast('Оберіть дату й час першого поста'); post('plan', { spread: true, start: new Date(v).getTime(), everyDays: +$('#igspn').value || 1 }, 'Час призначено'); };
   $('#igauto').onchange = async () => { try { const x = await api('POST', '/api/admin/instagram/auto', { on: $('#igauto').checked }); Object.assign(pb, x); toast($('#igauto').checked ? 'Автопублікацію ввімкнено' : 'Автопублікацію вимкнено'); } catch (e) { toast(errText(e)); } };
 }
+/* ---------- Реклама: ID трекінгу, UTM-посилання, витрати, результати за джерелами ---------- */
+const uah = kop => (kop / 100).toLocaleString('uk-UA', { maximumFractionDigits: 0 }) + ' ₴', usd = c => '$' + (c / 100).toLocaleString('en-US', { maximumFractionDigits: 2 });
+async function renderAds(days) {
+  const host = $('#adscard'); if (!host) return;
+  let d; try { d = await api('GET', '/api/admin/ads?days=' + days); } catch (e) { host.innerHTML = '<h2>Реклама</h2><div class="muted">Не вдалося завантажити: ' + esc(errText(e)) + '</div>'; return; }
+  const c = d.config, rp = d.report, t = rp.totals, today = new Date().toISOString().slice(0, 10), pct = c.budget ? Math.min(100, Math.round(rp.spentAllCents / 100 / c.budget * 100)) : 0;
+  const status = (c.meta ? 'піксель Meta ✅' : 'піксель Meta ⏳') + ' · ' + (c.ga4 ? 'GA4 ✅' : 'GA4 ⏳') + ' · ' + (c.gads ? 'Google Ads ✅' : 'Google Ads ⏳');
+  host.innerHTML = `<h2>Реклама</h2>
+  <div class="muted">Витрачено за весь час: <b>${usd(rp.spentAllCents)}</b> із бюджету <b>$${c.budget}</b> (${pct}%). Відстеження: ${status}.</div>
+  <div style="height:8px;border-radius:6px;background:#23252f;overflow:hidden"><div style="width:${pct}%;height:100%;background:var(--accent)"></div></div>
+  <h3 style="margin:14px 0 4px;font-size:15px">Відстеження (ID із кабінетів, не токени)</h3>
+  <div class="row" style="flex-wrap:wrap;gap:10px">
+   <label class="f" style="margin:0">ID піксела Meta<input id="tkm" inputmode="numeric" value="${esc(c.meta)}" placeholder="15–16 цифр"></label>
+   <label class="f" style="margin:0">GA4 (Measurement ID)<input id="tkg" value="${esc(c.ga4)}" placeholder="G-XXXXXXXXXX"></label>
+   <label class="f" style="margin:0">Google Ads ID<input id="tka" value="${esc(c.gads)}" placeholder="AW-1234567890"></label>
+   <label class="f" style="margin:0">Мітка конверсії Google Ads<input id="tkl" value="${esc(c.gads_label)}" placeholder="AbC-dEfGhIj"></label>
+   <label class="f" style="margin:0">Бюджет, $<input id="tkb" type="number" min="0" value="${c.budget}" style="width:100px"></label></div>
+  <div class="row"><button class="btn" id="tks" type="button">Зберегти відстеження</button><span class="muted">Порожнє поле вимикає інструмент. Банер згоди з'являється лише коли задано хоча б один ID.</span></div>
+  <h3 style="margin:14px 0 4px;font-size:15px">Посилання з мітками (UTM)</h3>
+  <div class="row" style="flex-wrap:wrap;gap:10px"><label class="f" style="margin:0">Джерело<select id="utms">${d.channels.map(x => `<option>${x}</option>`).join('')}</select></label><label class="f" style="margin:0">Кампанія<input id="utmc" value="start_ua" placeholder="start_ua"></label><label class="f" style="margin:0">Креатив / блогер<input id="utmk" placeholder="reel1"></label></div>
+  <div class="row"><input id="utmo" readonly style="flex:1;min-width:260px"><button class="btn ghost" id="utmcp" type="button">Скопіювати</button></div>
+  <h3 style="margin:14px 0 4px;font-size:15px">Витрати</h3>
+  <div class="row" style="flex-wrap:wrap;gap:10px;align-items:flex-end"><label class="f" style="margin:0">Дата<input id="spd" type="date" value="${today}"></label><label class="f" style="margin:0">Канал<select id="spch">${d.channels.map(x => `<option>${x}</option>`).join('')}</select></label><label class="f" style="margin:0">Кампанія<input id="spc" placeholder="start_ua"></label><label class="f" style="margin:0">Сума, $<input id="spa" type="number" step="0.01" min="0" style="width:100px"></label><button class="btn" id="spadd" type="button">Додати</button></div>
+  ${d.spend.length ? `<div class="muted">${d.spend.slice(0, 12).map(x => `${esc(x.day)} · ${esc(x.channel)}${x.campaign ? ' / ' + esc(x.campaign) : ''} · <b>${usd(x.amount_cents)}</b> <a href="#" class="spdel" data-id="${x.id}">видалити</a>`).join('<br>')}${d.spend.length > 12 ? `<br>… ще ${d.spend.length - 12}` : ''}</div>` : '<div class="muted">Витрат ще не додано. Вносьте суми з рекламних кабінетів щодня.</div>'}
+  <h3 style="margin:14px 0 4px;font-size:15px">Результати <select id="adsdays" style="margin-left:8px">${[7, 14, 30, 90].map(n => `<option value="${n}" ${n === days ? 'selected' : ''}>за ${n} днів</option>`).join('')}</select></h3>
+  <div style="overflow:auto"><table style="width:100%;border-collapse:collapse;font-size:13px"><thead><tr style="text-align:left;color:var(--muted)"><th>Джерело</th><th>Оформлень</th><th>Оплат</th><th>Виручка</th><th>Витрати</th><th>CPA</th><th>ROAS</th></tr></thead><tbody>
+  ${rp.rows.map(x => `<tr style="border-top:1px solid var(--line)"><td>${esc(x.source)}</td><td>${x.started}</td><td>${x.paid}</td><td>${uah(x.revenue_kop)}</td><td>${x.spend_cents ? usd(x.spend_cents) : '—'}</td><td>${x.cpa_usd != null ? '$' + x.cpa_usd : '—'}</td><td>${x.roas != null ? x.roas + '×' : '—'}</td></tr>`).join('') || '<tr><td colspan="7" class="muted">Даних поки немає</td></tr>'}
+  <tr style="border-top:2px solid var(--line2);font-weight:600"><td>Разом</td><td>${t.started}</td><td>${t.paid}</td><td>${uah(t.revenue_kop)}</td><td>${usd(t.spend_cents)}</td><td>${t.cpa_usd != null ? '$' + t.cpa_usd : '—'}</td><td>${t.roas != null ? t.roas + '×' : '—'}</td></tr></tbody></table></div>
+  <div class="muted">ROAS = виручка / витрати за курсом ${rp.rate} ₴ за $1. Оформлення = створені замовлення, оплата = оплачені без повернення.</div>
+  ${rp.campaigns.length ? `<details><summary class="muted" style="cursor:pointer">Кампанії та креативи (${rp.campaigns.length})</summary><div class="muted">${rp.campaigns.map(x => `${esc(x.source)} / ${esc(x.campaign || '—')} / ${esc(x.content || '—')}: оформлень ${x.started}, оплат ${x.paid}, ${uah(x.revenue_kop)}`).join('<br>')}</div></details>` : ''}`;
+  const base = location.origin + '/', utm = () => { const q = new URLSearchParams({ utm_source: $('#utms').value, utm_medium: $('#utms').value === 'influencer' ? 'social' : 'paid', utm_campaign: $('#utmc').value.trim().toLowerCase() }); if ($('#utmk').value.trim()) q.set('utm_content', $('#utmk').value.trim().toLowerCase()); $('#utmo').value = base + '?' + q; };
+  ['utms', 'utmc', 'utmk'].forEach(i => $('#' + i).oninput = utm); utm();
+  $('#utmcp').onclick = async () => { try { await navigator.clipboard.writeText($('#utmo').value); toast('Скопійовано'); } catch { $('#utmo').select(); toast('Виділено, скопіюйте вручну'); } };
+  $('#tks').onclick = async () => { try { await api('POST', '/api/admin/ads/config', { meta: $('#tkm').value, ga4: $('#tkg').value, gads: $('#tka').value, gads_label: $('#tkl').value, budget: $('#tkb').value }); toast('Збережено'); renderAds(days); } catch (e) { toast(errText(e)); } };
+  $('#spadd').onclick = async () => { try { await api('POST', '/api/admin/ads/spend', { day: $('#spd').value, channel: $('#spch').value, campaign: $('#spc').value, amount: $('#spa').value }); toast('Додано'); renderAds(days); } catch (e) { toast(errText(e)); } };
+  host.querySelectorAll('.spdel').forEach(a => a.onclick = async e => { e.preventDefault(); if (!confirm('Видалити запис про витрату?')) return; try { await api('POST', '/api/admin/ads/spend', { delete: a.dataset.id }); renderAds(days); } catch (er) { toast(errText(er)); } });
+  $('#adsdays').onchange = () => renderAds(+$('#adsdays').value);
+}
+
 /* ---------- Соцмережі й реклама: Instagram, Facebook, публікації; сюди ж додаватимемо рекламу ---------- */
 async function social() {
   const ig = await api('GET', '/api/admin/instagram').catch(() => ({ connected: false })), pb = await api('GET', '/api/admin/instagram/publish').catch(() => null);
@@ -357,7 +396,8 @@ async function social() {
     <div class="row"><button class="btn ghost" id="fbs" type="button">Зберегти сторінку Facebook</button><span class="muted">${pb && pb.fbPage ? 'Підключено: <b>' + esc(pb.fbPage.name) + '</b>' : 'Не підключено. Залиште поле порожнім і збережіть, щоб відключити.'}</span></div>
     <div class="row"><button class="btn" id="igs" type="button">Підключити</button>${ig.connected ? '<button class="btn ghost" id="igtest" type="button">Перевірити зараз</button>' : ''}${ig.connected && !ig.viaSecret ? '<button class="btn ghost" id="igd" type="button">Відключити</button>' : ''}</div></div>
   <div class="card sec" id="igplan" style="max-width:1000px;margin-top:14px"></div>
-  <div class="card sec" style="max-width:620px;margin-top:14px"><h2>Реклама</h2><div class="muted">Тут з'являться дані по рекламі: бюджети, кампанії, результати та посилання з мітками UTM.</div></div>`;
+  <div class="card sec" id="adscard" style="max-width:1000px;margin-top:14px"><h2>Реклама</h2><div class="muted">Завантаження…</div></div>`;
+  renderAds(30);
   $('#igse').onclick = async () => { try { const x = await api('POST', '/api/admin/instagram/embeds', { text: $('#ige').value }); toast(x.embeds ? `Збережено постів: ${x.embeds}` : 'Збережено: список порожній'); social(); } catch (e) { toast(errText(e)); } };
   renderIgPlan(pb, ig);
   $('#fbs').onclick = async () => { try { const x = await api('POST', '/api/admin/instagram/fbpage', { id: $('#fbid').value.trim() }); toast(x.fbPage ? 'Сторінку Facebook підключено: ' + x.fbPage.name : 'Facebook відключено'); social(); } catch (e) { toast(errText(e)); } };

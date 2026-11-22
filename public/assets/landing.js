@@ -160,12 +160,12 @@ $('#of').addEventListener('submit', async e => {
   if (tsOn && !tsToken) { $('#oerr').textContent = LG() === 'en' ? t('e_bot') : 'Підтвердіть, що ви не бот (віджет вище).'; return; }
   const cityPicked = yCombo.getPicked(), city = cityPicked && norm(cityPicked.label) === norm(yIn.value) ? cityPicked.label : v('city'); // назва мовою інтерфейсу: запити на мапі збігаються з мовою календаря
   const body = { nameA: v('nameA'), nameB: v('nameB'), emailA: v('emailA'), emailB: v('emailB'), city, country: countryCode, region, startDate: $('#startDate').value, lang: LG(), tz: (Intl.DateTimeFormat().resolvedOptions().timeZone || 'Europe/Kyiv'),
-    age18: $('#age18').checked, terms: $('#terms').checked, turnstileToken: tsToken, promo: $('#promo').value.trim() };
+    age18: $('#age18').checked, terms: $('#terms').checked, turnstileToken: tsToken, promo: $('#promo').value.trim(), utm: window.raUtm ? window.raUtm() : undefined };
   const btn = $('#ob'); btn.disabled = true; $('#oerr').textContent = '';
   try {
     const r = await fetch('/api/orders', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) }); const j = await r.json();
     if (!j.ok) throw new Error(j.error);
-    try { localStorage.setItem('lang', LG()); } catch {} location.href = j.payUrl;
+    try { localStorage.setItem('lang', LG()); } catch {} if (window.raTrack) { window.raTrack('checkout', j.amountKop ? { value: j.amountKop / 100, currency: 'UAH' } : {}); await new Promise(r => setTimeout(r, 300)); } location.href = j.payUrl;
   } catch (er) { $('#oerr').textContent = errMsg(er.message); btn.disabled = false; if (tsWidget !== null && window.turnstile) { tsToken = ''; window.turnstile.reset(tsWidget); } }
 });
 })();
