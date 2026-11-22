@@ -16,7 +16,7 @@ const DAY = 864e5, FRESH = 25 * DAY;
 let total = 0, failedBatches = 0;
 
 while (Date.now() - T0 < BUDGET && failedBatches < 3) {
-  const { results: cities } = await env.DB.prepare("SELECT id, country, name, lat, lon FROM venue_cities WHERE status = 'ready' AND alias_of IS NULL AND lat IS NOT NULL AND (ov_at IS NULL OR ov_at < ?) ORDER BY country, id LIMIT ?").bind(Date.now() - FRESH, BATCH).all();
+  const { results: cities } = await env.DB.prepare("SELECT id, country, name, lat, lon FROM venue_cities WHERE (status = 'ready' OR venues_count > 0) AND alias_of IS NULL AND lat IS NOT NULL AND (ov_at IS NULL OR ov_at < ?) ORDER BY country, id LIMIT ?").bind(Date.now() - FRESH, BATCH).all();
   if (!cities.length) { log('усі міста збагачено'); break; }
   const inFile = path.join(WORK, 'cities.json'), outFile = path.join(WORK, 'places.ndjson');
   fs.writeFileSync(inFile, JSON.stringify(cities.map(c => ({ id: c.id, lat: c.lat, lon: c.lon, box: cityBox(c.lat, c.lon) }))));
