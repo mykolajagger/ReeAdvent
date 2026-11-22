@@ -50,6 +50,8 @@ slides['06-carousel-questions'] = [
   qSlide(2, 1, 22), qSlide(11, 2, 23), qSlide(22, 3, 24), qSlide(31, 4, 25), qSlide(40, 5, 26),
   page4x5(`<div class="wrap"><img class="logo" src="${LOGO}"><div class="line"></div><div class="big" style="font-size:64px">Такі питання щодня, 24 дні</div><div class="en" style="font-size:40px">Questions like these every day, for 24 days</div><div class="en" style="margin-top:44px;color:var(--gold)">Посилання в шапці · Link in bio</div></div><div class="foot">REEADVENT.FUN</div>`, 27)];
 // ---- 04: ілюстрація пари (вигадана ілюстрація, не фото реальних людей)
+const COUPLE = path.join(root, 'marketing/instagram/assets/couple.png');
+const cutoutUri = fs.existsSync(COUPLE) ? 'data:image/png;base64,' + fs.readFileSync(COUPLE).toString('base64') : null;
 const coupleSVG = `<svg width="1080" height="1350" viewBox="0 0 1080 1350" style="position:absolute;inset:0">
 <defs><radialGradient id="g" cx="50%" cy="46%" r="60%"><stop offset="0" stop-color="#ffd993"/><stop offset=".45" stop-color="#c98a3c"/><stop offset="1" stop-color="#3a2410"/></radialGradient>
 <radialGradient id="glow" cx="50%" cy="50%" r="50%"><stop offset="0" stop-color="#ffe3a6" stop-opacity=".9"/><stop offset="1" stop-color="#ffe3a6" stop-opacity="0"/></radialGradient>
@@ -64,12 +66,12 @@ const coupleSVG = `<svg width="1080" height="1350" viewBox="0 0 1080 1350" style
 ${[[-20, -90], [30, -40], [-50, 20], [55, 70], [-10, 100], [75, 130], [-85, 130]].map(([x, y]) => `<circle cx="${x}" cy="${y}" r="7" fill="#ffd36a"/><circle cx="${x}" cy="${y}" r="16" fill="#ffd36a" opacity=".25"/>`).join('')}<path d="M0 -168 l8 18 l20 2 l-15 13 l5 20 l-18 -11 l-18 11 l5 -20 l-15 -13 l20 -2 Z" fill="#ffe08a"/></g>
 <path d="M-20 110 Q270 230 540 150 T1100 130" fill="none" stroke="#3a2a14" stroke-width="3"/>
 ${Array.from({ length: 15 }, (_, i) => { const x = i * 76 - 10; const y = 110 + Math.sin(i * 0.9) * 24 + (i < 7 ? i * 6 : (14 - i) * 6) + 50; return `<circle cx="${x}" cy="${y}" r="9" fill="#ffd36a"/><circle cx="${x}" cy="${y}" r="26" fill="#ffd36a" opacity=".22"/>`; }).join('')}
-<rect x="0" y="940" width="1080" height="410" fill="#0b0a08"/>
+${cutoutUri ? `<ellipse cx="540" cy="900" rx="470" ry="380" fill="url(#glow)" opacity=".55"/><defs><linearGradient id="fade" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#fff"/><stop offset=".78" stop-color="#fff"/><stop offset="1" stop-color="#000"/></linearGradient><mask id="mk"><rect width="1080" height="1350" fill="#000"/><rect x="0" y="330" width="1080" height="900" fill="url(#fade)"/></mask><filter id="rim" x="-20%" y="-20%" width="140%" height="140%"><feDropShadow dx="0" dy="0" stdDeviation="14" flood-color="#ffc878" flood-opacity=".55"/></filter></defs><g mask="url(#mk)"><image href="${cutoutUri}" x="90" y="330" width="900" height="900" preserveAspectRatio="xMidYMax meet" filter="url(#rim)"/></g>` : `<rect x="0" y="940" width="1080" height="410" fill="#0b0a08"/>
 <path d="M120 1350 V1010 Q120 940 190 940 H890 Q960 940 960 1010 V1350 Z" fill="#17120c"/>
 <g stroke="#a8782f" stroke-width="3" stroke-opacity=".75"><g fill="#07080b"><path d="M468 880 C380 890 340 960 330 1130 H640 C630 960 580 890 500 880 Z"/><circle cx="470" cy="820" r="60"/><circle cx="470" cy="760" r="22"/></g>
 <g fill="#0d0e14"><path d="M590 866 C490 880 460 960 440 1140 H780 C760 960 720 880 614 866 Z"/><circle cx="594" cy="798" r="62"/></g></g>
 <path d="M300 1140 C420 1105 560 1120 700 1150 L720 1350 H280 Z" fill="#2a1d10"/><path d="M330 1150 C450 1120 570 1135 690 1165" stroke="#d6b46a" stroke-width="3" fill="none" opacity=".5"/>
-<g><rect x="820" y="1010" width="40" height="60" rx="6" fill="#3a2a14"/><path d="M840 1000 q-12 -22 0 -40 q12 18 0 40" fill="#ffd36a"/><circle cx="840" cy="990" r="46" fill="#ffd36a" opacity=".2"/></g></svg>`;
+`}${cutoutUri ? '' : `<g><rect x="820" y="1010" width="40" height="60" rx="6" fill="#3a2a14"/><path d="M840 1000 q-12 -22 0 -40 q12 18 0 40" fill="#ffd36a"/><circle cx="840" cy="990" r="46" fill="#ffd36a" opacity=".2"/></g>`}</svg>`;
 slides['04-couple-illustration'] = [`<!doctype html><meta charset="utf-8"><style>${CSS}body{width:1080px;height:1350px}</style><body>${coupleSVG}<div style="position:absolute;left:0;right:0;bottom:0;height:230px;background:linear-gradient(180deg,transparent,#08090dee 40%);"></div><div style="position:absolute;left:0;right:0;bottom:62px;text-align:center"><div class="big" style="font-size:58px">Ваша історія. Ваш <span class="gold" style="font-style:italic">адвент</span>.</div><div class="en" style="margin-top:14px;font-size:34px">Your story. Your advent.</div></div></body>`];
 // ---- 05: «24 вікна»
 const wins = Array.from({ length: 24 }, (_, i) => { const n = i + 1, open = n <= 5, hot = n === 7; return `<div class="w ${open ? 'o' : ''} ${hot ? 'h' : ''}"><span>${n}</span></div>`; }).join('');
@@ -82,7 +84,8 @@ const shoot = async (name, htmls, w, h) => {
   for (const [i, html] of htmls.entries()) { await p.setContent(html, { waitUntil: 'networkidle' }); await p.evaluate(() => document.fonts.ready); await p.waitForTimeout(250); const file = htmls.length > 1 ? `${name}-${i + 1}.png` : `${name}.png`; await p.screenshot({ path: path.join(OUT, file) }); console.log('png', file); }
   await p.close();
 };
-for (const [name, htmls] of Object.entries(slides)) await shoot(name, htmls, 1080, 1350);
+const ONLY = process.env.ONLY || '';   // напр. ONLY=04 — перегенерувати лише одну публікацію
+for (const [name, htmls] of Object.entries(slides)) if (!ONLY || name.startsWith(ONLY)) await shoot(name, htmls, 1080, 1350);
 
 // ---- 02: Reel 1080×1920, 12,5 с, 24 к/с (кадри за часом → mp4)
 const FPS = 24, DUR = 12.5, FR = Math.round(FPS * DUR);
@@ -121,7 +124,7 @@ window.setT=t=>{
  all('.card').forEach((c,k)=>{const p=E.out(ramp(t,7.0+k*1.0,7.55+k*1.0));c.style.opacity=p;c.style.transform='translateX('+(40*(1-p))+'px)';});
  sc('#d',10.1,12.5,.5,0.01);
 };setT(0);</script></body>`;
-{
+if (!ONLY || ONLY === '02') {
   const p = await browser.newPage({ viewport: { width: 540, height: 960 }, deviceScaleFactor: 2 });
   await p.setContent(reel, { waitUntil: 'networkidle' }); await p.evaluate(() => document.fonts.ready); await p.waitForTimeout(400);
   const fdir = path.join(OUT, '_frames'); fs.rmSync(fdir, { recursive: true, force: true }); fs.mkdirSync(fdir);
