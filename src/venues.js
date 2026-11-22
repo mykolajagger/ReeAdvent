@@ -293,3 +293,19 @@ export async function rateVenue(env, { memberId, country, city, venueId, stars }
   ]);
   return { ok: true };
 }
+
+// ---------- Каталог для адмінки: країни → міста → заклади ----------
+export async function catalogCountries(env) {
+  const { results } = await env.DB.prepare("SELECT country, COUNT(*) AS cities, SUM(status = 'ready') AS ready, SUM(status IN ('pending','working')) AS pending, SUM(status = 'failed') AS failed, SUM(venues_count) AS venues, MAX(fetched_at) AS last FROM venue_cities WHERE alias_of IS NULL GROUP BY country ORDER BY venues DESC, cities DESC, country").all();
+  return results;
+}
+export async function catalogCities(env, cc) {
+  const { results } = await env.DB.prepare("SELECT id, name, status, venues_count, fetched_at, error, lat, lon, alias_of FROM venue_cities WHERE country = ? ORDER BY venues_count DESC, name LIMIT 1000").bind(String(cc || '').toUpperCase()).all();
+  return results;
+}
+export async function catalogCity(env, id) {
+  const city = await env.DB.prepare("SELECT id, country, name, status, venues_count, fetched_at, error, lat, lon, alias_of FROM venue_cities WHERE id = ?").bind(id).first(); if (!city) return null;
+  const target = city.alias_of ? await env.DB.prepare('SELECT id, name FROM venue_cities WHERE id = ?').bind(city.alias_of).first() : null;
+  const { results } = await env.DB.prepare('SELECT id, cat, name, address, prior, r_sum, r_cnt, hours, lat, lon FROM venues WHERE city_id = ? ORDER BY cat, prior DESC LIMIT 1500').bind(target ? target.id : city.id).all();
+  return { city, alias: target, venues: results };
+}

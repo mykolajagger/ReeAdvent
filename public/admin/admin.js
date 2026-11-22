@@ -37,8 +37,48 @@ async function consumeLogin() {
   try { await api('POST', '/api/admin/auth/verify', { token: m[1] }); return true; } catch { showLogin('Посилання недійсне або застаріле. Запросіть нове.'); return false; }
 }
 
+/* ---------- Каталог закладів: країни → міста → заклади ---------- */
+const CATL = { cafe: 'Кав’ярні', restaurant: 'Ресторани', bar: 'Бари й паби', pastry: 'Кондитерські', cinema: 'Кінотеатри', theatre: 'Театри й арт-центри', museum: 'Музеї', park: 'Парки', viewpoint: 'Оглядові майданчики',
+  bowling: 'Боулінг', billiards: 'Більярд', pool: 'Басейни', spa: 'SPA, сауни, масаж', rink: 'Ковзанки', climbing: 'Скеледроми', yoga: 'Йога й пілатес', church: 'Храми', garden: 'Сади', castle: 'Замки й фортеці',
+  books: 'Книгарні', florist: 'Квіти', market: 'Ринки', shelter: 'Притулки для тварин', gift: 'Сувеніри', coffee: 'Кава (магазини)', tea: 'Чай', wine: 'Вино', beer: 'Пиво й напої', cheese: 'Сир', photo: 'Фото',
+  jewelry: 'Прикраси', toys: 'Ігри та іграшки', beauty: 'Косметика й парфуми' };
+const STL = { ready: 'готове', pending: 'у черзі', working: 'в обробці', failed: 'помилка' };
+const flag = cc => /^[A-Z]{2}$/.test(cc) ? String.fromCodePoint(...[...cc].map(c => 0x1f1a5 + c.charCodeAt(0))) : '';
+const cname = cc => { try { return new Intl.DisplayNames(['uk'], { type: 'region' }).of(cc) || cc; } catch { return cc; } };
+const fdate = t => t ? new Date(t).toLocaleString('uk-UA', { dateStyle: 'short', timeStyle: 'short' }) : '—';
+async function catalog() {
+  const parts = location.hash.split('/'), cc = (parts[2] || '').toUpperCase(), cid = parts[3];
+  const main = $('#main');
+  if (cid) return catalogCityView(main, cc, +cid);
+  if (cc) return catalogCountry(main, cc);
+  const r = await api('GET', '/api/admin/venues/countries');
+  main.innerHTML = `<div class="head"><h1>Каталог закладів</h1><div class="muted">Країни та міста, для яких зібрано заклади (дані © OpenStreetMap contributors). Оберіть країну.</div></div>
+    <input id="cq" class="catq" placeholder="Пошук країни або коду…" autocomplete="off">
+    <div class="cat-list" id="cl">${r.countries.map(c => `<a class="cat-row" data-t="${esc((cname(c.country) + ' ' + c.country).toLowerCase())}" href="#/catalog/${esc(c.country)}"><span class="cat-main"><b>${flag(c.country)} ${esc(cname(c.country))}</b> <span class="muted">${esc(c.country)}</span></span><span class="cat-sub">міст ${c.ready}/${c.cities}${c.pending ? `, у черзі ${c.pending}` : ''}${c.failed ? `, помилок ${c.failed}` : ''}</span><span class="cat-num">${c.venues || 0}</span></a>`).join('') || '<div class="empty">Каталог порожній: міст ще немає</div>'}</div>`;
+  $('#cq').oninput = e => { const q = e.target.value.trim().toLowerCase(); document.querySelectorAll('#cl .cat-row').forEach(a => a.hidden = !!q && !a.dataset.t.includes(q)); };
+}
+async function catalogCountry(main, cc) {
+  const r = await api('GET', '/api/admin/venues/cities?country=' + encodeURIComponent(cc));
+  main.innerHTML = `<div class="head"><a href="#/catalog" class="back">← Усі країни</a><h1>${flag(cc)} ${esc(cname(cc))}</h1><div class="muted">${r.cities.length} міст у черзі та каталозі. Оберіть місто, щоб побачити його заклади.</div></div>
+    <input id="cq" class="catq" placeholder="Пошук міста…" autocomplete="off">
+    <div class="cat-list" id="cl">${r.cities.map(c => `<a class="cat-row" data-t="${esc(c.name.toLowerCase())}" href="#/catalog/${esc(cc)}/${c.id}"><span class="cat-main"><b>${esc(c.name)}</b>${c.alias_of ? ' <span class="muted">(та сама агломерація, що й іншого міста)</span>' : ''}</span><span class="cat-sub"><span class="chip st-${esc(c.status)}">${STL[c.status] || esc(c.status)}</span> ${c.fetched_at ? esc(fdate(c.fetched_at)) : ''}${c.error ? ` · <span class="muted">${esc(c.error)}</span>` : ''}</span><span class="cat-num">${c.venues_count || 0}</span></a>`).join('') || '<div class="empty">Міст немає</div>'}</div>`;
+  $('#cq').oninput = e => { const q = e.target.value.trim().toLowerCase(); document.querySelectorAll('#cl .cat-row').forEach(a => a.hidden = !!q && !a.dataset.t.includes(q)); };
+}
+async function catalogCityView(main, cc, id) {
+  const r = await api('GET', '/api/admin/venues/city/' + id), c = r.city, byCat = {};
+  for (const v of r.venues) (byCat[v.cat] ||= []).push(v);
+  const cats = Object.keys(byCat).sort((a, b) => byCat[b].length - byCat[a].length);
+  const gm = v => `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(v.name + ' ' + c.name)}`;
+  const draw = sel => `<div class="cat-list">${(sel ? [sel] : cats).map(k => `<div class="cat-group"><h3>${esc(CATL[k] || k)} <span class="muted">${byCat[k].length}</span></h3>${byCat[k].map(v => `<div class="cat-v"><a href="${esc(gm(v))}" target="_blank" rel="noopener noreferrer"><b>${esc(v.name)}</b></a>${v.r_cnt ? ` <span class="stars">★ ${(v.r_sum / v.r_cnt).toFixed(1)} <small>(${v.r_cnt})</small></span>` : ''}<div class="muted">${[v.address, v.hours].filter(Boolean).map(esc).join(' · ') || '—'}</div></div>`).join('')}</div>`).join('') || '<div class="empty">Закладів поки немає</div>'}</div>`;
+  main.innerHTML = `<div class="head"><a href="#/catalog/${esc(cc)}" class="back">← ${esc(cname(cc))}</a><h1>${esc(c.name)}</h1>
+    <div class="muted"><span class="chip st-${esc(c.status)}">${STL[c.status] || esc(c.status)}</span> закладів ${r.venues.length}${c.fetched_at ? ' · оновлено ' + esc(fdate(c.fetched_at)) : ''}${c.error ? ' · ' + esc(c.error) : ''}${r.alias ? ` · показано дані міста «${esc(r.alias.name)}»` : ''}${c.lat != null ? ` · <a href="https://www.openstreetmap.org/?mlat=${c.lat}&mlon=${c.lon}#map=12/${c.lat}/${c.lon}" target="_blank" rel="noopener noreferrer">на мапі</a>` : ''}</div></div>
+    <div class="cat-chips" id="cc"><button class="chip on" data-k="">Усі</button>${cats.map(k => `<button class="chip" data-k="${esc(k)}">${esc(CATL[k] || k)} · ${byCat[k].length}</button>`).join('')}</div>
+    <div id="cv">${draw(null)}</div>`;
+  document.querySelectorAll('#cc .chip').forEach(b => b.onclick = () => { document.querySelectorAll('#cc .chip').forEach(x => x.classList.toggle('on', x === b)); $('#cv').innerHTML = draw(b.dataset.k || null); });
+}
+
 /* ---------- Каркас ---------- */
-const NAV = [['dashboard', 'Дашборд'], ['orders', 'Замовлення'], ['customers', 'Клієнти'], ['promos', 'Промокоди'], ['inbox', 'Підтримка'], ['settings', 'Налаштування'], ['audit', 'Журнал дій']];
+const NAV = [['dashboard', 'Дашборд'], ['orders', 'Замовлення'], ['customers', 'Клієнти'], ['promos', 'Промокоди'], ['inbox', 'Підтримка'], ['catalog', 'Каталог закладів'], ['settings', 'Налаштування'], ['audit', 'Журнал дій']];
 async function shell() {
   root.innerHTML = `<div class="shell"><aside class="side"><div class="logo"><img class="logo-img" src="/assets/logo.png" alt="ReeAdvent" width="120" height="44"></div>
     <nav class="nav">${NAV.map(([k, t]) => `<a data-v="${k}" class="${view === k ? 'on' : ''}" href="#/${k}">${t}${k === 'inbox' ? '<span class="badge" id="ib" hidden></span>' : ''}</a>`).join('')}</nav>
@@ -49,7 +89,7 @@ async function route() {
   if (!me) return;
   view = (location.hash.match(/^#\/(\w+)/) || [])[1] || 'dashboard'; if (!NAV.some(n => n[0] === view)) view = 'dashboard';
   await shell();
-  const views = { dashboard, orders, customers, promos, inbox, settings, audit };
+  const views = { dashboard, orders, customers, promos, inbox, catalog, settings, audit };
   try { await views[view](); } catch (e) { if (e.code !== 'admin_auth') $('#main').innerHTML = `<div class="empty">Помилка: ${esc(errText(e))}</div>`; }
   refreshBadge();
 }
@@ -251,6 +291,7 @@ async function settings() {
     <div class="muted">Безкоштовна власна база: ${r.venues.ready} із ${r.venues.cities} міст готові, у черзі ${r.venues.pending}, в обробці ${r.venues.working}, з помилкою ${r.venues.failed}. Закладів: <b>${r.venues.venues}</b>, оцінок користувачів: <b>${r.venues.ratings}</b>. Нові міста наповнюються за 20–40 хв, оновлення щотижня вночі. Дані © OpenStreetMap contributors.</div>
     <div class="muted" style="margin-top:8px;font-size:13px">${r.venues.paused ? '<b>⏸ Наповнення призупинено.</b> ' : ''}Останній запуск наповнення: ${r.venues.last ? `<b>${new Date(r.venues.last.at).toLocaleString('uk-UA')}</b> — ${r.venues.last.error ? 'помилка: ' + esc(r.venues.last.error) : esc(JSON.stringify(r.venues.last.out))}` : 'ще не було (запуск за розкладом Worker не відбувся)'}</div>
     ${r.venues.problems.length ? `<div class="vwrap"><table class="tbl vtbl"><thead><tr><th>Місто</th><th>Стан</th><th>Причина</th><th></th></tr></thead><tbody>${r.venues.problems.map(p => `<tr><td>${esc(p.country)} · ${esc(p.name)}</td><td>${p.status === 'failed' ? 'помилка' : p.status === 'ready' ? 'частково' : 'у черзі'}</td><td class="muted">${esc(p.error || '')}</td><td>${p.status === 'failed' ? `<button class="btn ghost vr" data-id="${p.id}" type="button">Повторити</button>` : ''}</td></tr>`).join('')}</tbody></table></div>` : ''}
+    <div class="row" style="margin-top:10px"><a class="btn" href="#/catalog">Відкрити каталог закладів</a></div>
     <div class="row vadd"><input id="vc" placeholder="Країна (UA)" maxlength="2" title="Код країни з 2 літер, наприклад UA, PL, DE"><input id="vn" placeholder="Назва міста"><button class="btn ghost" id="va" type="button">Додати в чергу</button><button class="btn ghost" id="vt" type="button">Перевірити Overpass</button><button class="btn ghost" id="vp" type="button">${r.venues.paused ? 'Продовжити наповнення' : 'Призупинити наповнення'}</button>${r.venues.failed ? '<button class="btn ghost" id="vra" type="button">Повторити всі невдалі</button>' : ''}</div></div>
   <div class="card sec" style="max-width:620px;margin-top:14px"><h2>Рекомендації закладів (Google Places)</h2>
     <div class="muted">${r.places.enabled ? 'Ключ <code>GOOGLE_PLACES_KEY</code> додано: у картці активності показуються 2–3 заклади з найкращим рейтингом Google Maps.' : 'Вимкнено: ключ <code>GOOGLE_PLACES_KEY</code> не додано. Картки показують лише кнопку пошуку на мапі.'} Платний сервіс Google, тому є жорсткий ліміт.</div>

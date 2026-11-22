@@ -124,3 +124,13 @@ td.num,th.num{text-align:right;font-variant-numeric:tabular-nums;white-space:now
 .vtbl td{display:block;padding:0;border:0;min-width:0;overflow-wrap:anywhere;word-break:break-word}
 .vtbl td:nth-child(1){font-weight:600}.vtbl td:nth-child(2){text-align:right;white-space:nowrap}.vtbl td:nth-child(3){grid-column:1/-1}.vtbl td:nth-child(4){grid-column:1/-1}.vtbl td:nth-child(4):empty{display:none}
 .vadd{gap:8px;margin-top:10px}.vadd input{min-width:0}.vadd #vc{width:110px;text-transform:uppercase}.vadd #vn{flex:1 1 150px}.vadd .btn{flex:0 0 auto}
+
+/* каталог закладів */
+.back{display:inline-block;color:var(--accent);text-decoration:none;font-size:13px;margin-bottom:6px}
+.catq{width:100%;max-width:420px;margin:10px 0 12px}
+.cat-list{display:grid;gap:0}.cat-row{display:grid;grid-template-columns:1fr auto;gap:2px 12px;padding:11px 4px;border-bottom:1px solid var(--line);text-decoration:none;color:inherit}
+.cat-row:hover{background:#ffffff08}.cat-row[hidden]{display:none}.cat-main{grid-column:1}.cat-num{grid-column:2;grid-row:1/3;align-self:center;font-weight:600;font-size:18px;color:var(--accent)}.cat-sub{grid-column:1;font-size:13px;color:var(--muted);overflow-wrap:anywhere}
+.chip{display:inline-block;border:1px solid var(--line2);border-radius:99px;padding:2px 10px;font-size:12px;background:none;color:var(--ink);cursor:pointer}.chip.on{background:var(--accent);color:#14110a;border-color:var(--accent)}
+.st-ready{color:#6fcf97}.st-failed{color:#eb5757}.st-pending,.st-working{color:#f2c94c}
+.cat-chips{display:flex;flex-wrap:wrap;gap:6px;margin:10px 0 14px}
+.cat-group h3{margin:16px 0 6px;font-size:16px}.cat-v{padding:7px 2px;border-bottom:1px solid var(--line);overflow-wrap:anywhere}.cat-v a{color:var(--ink);text-decoration:none}.cat-v a:hover{color:var(--accent)}.cat-v .stars{color:var(--accent);margin-left:6px}
