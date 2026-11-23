@@ -24,7 +24,7 @@
     if (loaded || !cfg) return; loaded = true;
     if (cfg.meta) { !function (f, b, e, v, n, t, s) { if (f.fbq) return; n = f.fbq = function () { n.callMethod ? n.callMethod.apply(n, arguments) : n.queue.push(arguments); }; if (!f._fbq) f._fbq = n; n.push = n; n.loaded = !0; n.version = '2.0'; n.queue = []; t = b.createElement(e); t.async = !0; t.src = v; s = b.getElementsByTagName(e)[0]; s.parentNode.insertBefore(t, s); }(window, document, 'script', 'https://connect.facebook.net/en_US/fbevents.js'); fbq('init', cfg.meta); fbq('track', 'PageView'); }
     const gid = cfg.ga4 || cfg.gads;
-    if (gid) { const s = document.createElement('script'); s.async = true; s.src = 'https://www.googletagmanager.com/gtag/js?id=' + encodeURIComponent(gid); document.head.appendChild(s); window.dataLayer = window.dataLayer || []; window.gtag = function () { dataLayer.push(arguments); }; gtag('js', new Date()); if (cfg.ga4) gtag('config', cfg.ga4); if (cfg.gads) gtag('config', cfg.gads); }
+    if (gid) { const s = document.createElement('script'); s.async = true; s.src = 'https://www.googletagmanager.com/gtag/js?id=' + encodeURIComponent(gid); document.head.appendChild(s); window.dataLayer = window.dataLayer || []; window.gtag = window.gtag || function () { dataLayer.push(arguments); }; gtag('js', new Date()); if (cfg.ga4) gtag('config', cfg.ga4); if (cfg.gads) gtag('config', cfg.gads); }
     while (queue.length) send(...queue.shift());
   }
   function send(ev, d = {}) {
@@ -37,7 +37,11 @@
       window.gtag && cfg.gads && cfg.gadsLabel && gtag('event', 'conversion', { send_to: cfg.gads + '/' + cfg.gadsLabel, value: d.value, currency: cur, transaction_id: d.id });
     }
   }
-  window.raTrack = (ev, d) => { if (ev === 'checkout') once('ra_c', 'checkout'); if (ls.get('ra_consent') !== 'all') return; if (loaded) send(ev, d); else queue.push([ev, d]); };
+  // --- Google Tag Manager (у <head> сторінки) працює в Consent Mode: банер лише перемикає згоду, а події йдуть у dataLayer
+  const consent = on => { if (window.RA_GTM && window.gtag) { const v = on ? 'granted' : 'denied'; gtag('consent', 'update', { ad_storage: v, ad_user_data: v, ad_personalization: v, analytics_storage: v }); } };
+  const dl = (ev, d = {}) => { if (!window.RA_GTM || !window.dataLayer) return; const cur = d.currency || 'UAH', name = { view: 'view_item', checkout: 'begin_checkout', purchase: 'purchase' }[ev]; if (!name) return;
+    dataLayer.push({ ecommerce: null }); dataLayer.push({ event: name, ecommerce: { currency: cur, value: d.value || undefined, transaction_id: d.id || undefined, items: [{ item_id: 'reeadvent', item_name: 'ReeAdvent', price: d.value || undefined, quantity: 1 }] } }); };
+  window.raTrack = (ev, d) => { if (ev === 'checkout') once('ra_c', 'checkout'); dl(ev, d); if (ls.get('ra_consent') !== 'all') return; if (loaded) send(ev, d); else queue.push([ev, d]); };
   // --- банер
   function banner() {
     const L = T[lang()]; document.getElementById('ra-ck')?.remove();
@@ -45,11 +49,11 @@
     el.style.cssText = 'position:fixed;left:12px;right:12px;bottom:12px;z-index:99999;max-width:560px;margin:0 auto;background:#12131a;color:#f3efe6;border:1px solid #d6b46a;border-radius:14px;padding:14px 16px;font:14px/1.45 Inter,system-ui,sans-serif;box-shadow:0 10px 40px #000a';
     const priv = lang() === 'en' ? '/legal/privacy.en.html#cookies' : '/legal/privacy.html#cookies', btn = 'border-radius:10px;padding:8px 14px;font:600 13px Inter,sans-serif;cursor:pointer;border:1px solid #d6b46a;';
     el.innerHTML = `<b>${L.t}</b><div style="color:#b8bac6;margin:4px 0 10px">${L.p} <a href="${priv}" style="color:#d6b46a">${L.m}</a></div><div style="display:flex;gap:8px;flex-wrap:wrap"><button type="button" data-v="all" style="${btn}background:#d6b46a;color:#17130a">${L.a}</button><button type="button" data-v="necessary" style="${btn}background:transparent;color:#f3efe6">${L.n}</button></div>`;
-    el.querySelectorAll('button').forEach(b => b.onclick = () => { ls.set('ra_consent', b.dataset.v); el.remove(); if (b.dataset.v === 'all') { const u2 = ss.get('ra_utm'); if (u2) ls.set('ra_utm', u2); load(); if (/^\/(index\.html)?$/.test(location.pathname)) window.raTrack('view'); } });
+    el.querySelectorAll('button').forEach(b => b.onclick = () => { ls.set('ra_consent', b.dataset.v); el.remove(); consent(b.dataset.v === 'all'); if (b.dataset.v === 'all') { const u2 = ss.get('ra_utm'); if (u2) ls.set('ra_utm', u2); load(); if (/^\/(index\.html)?$/.test(location.pathname)) window.raTrack('view'); } });
     document.body.appendChild(el);
   }
   function init() {
-    if (!cfg || !(cfg.meta || cfg.ga4 || cfg.gads)) return;   // нічого не підключено: банер не потрібен
+    if (!cfg || !(cfg.meta || cfg.ga4 || cfg.gads || window.RA_GTM)) return;   // нічого не підключено: банер не потрібен
     const c = ls.get('ra_consent'); if (c === 'all') { load(); if (/^\/(index\.html)?$/.test(location.pathname)) window.raTrack('view'); } else if (!c) banner();
     const open = document.getElementById('ck-open'); if (open) { open.hidden = false; open.textContent = T[lang()].open; open.onclick = e => { e.preventDefault(); banner(); }; }
   }

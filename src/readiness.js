@@ -59,6 +59,7 @@ export async function readiness(env, { now = Date.now(), fetchImpl = fetch } = {
   let utmCols = false; try { utmCols = ((await env.DB.prepare('PRAGMA table_info(orders)').all()).results || []).some(c => c.name === 'utm_source'); } catch {}
   add('Відстеження реклами', 'utm', 'Мітки UTM зберігаються в замовленнях', utmCols, utmCols ? 'Колонки в базі є' : 'Виконайте docs/d1-console-0010.sql у консолі D1');
   add('Відстеження реклами', 'pixel', 'Піксель Meta', !!tr.meta, tr.meta ? `ID ${tr.meta}` : 'Events Manager → ID піксела → Реклама → Відстеження', 'Соцмережі й реклама → Реклама');
+  add('Відстеження реклами', 'gtm', 'Google Tag Manager у коді сайту', true, 'GTM-TTT3ZSPD у режимі згоди (Consent Mode v2) на головній, сторінці оплати й юридичних сторінках');
   add('Відстеження реклами', 'ga4', 'Google Analytics 4', !!tr.ga4, tr.ga4 || 'Measurement ID G-… → Реклама → Відстеження', 'Соцмережі й реклама → Реклама');
   add('Відстеження реклами', 'gads', 'Конверсія Google Ads', tr.gads && tr.gads_label ? true : tr.gads ? 'warn' : false, tr.gads ? (tr.gads_label ? `${tr.gads} / мітка є` : `${tr.gads}, але бракує мітки конверсії`) : 'Conversion ID AW-… і мітка → Реклама → Відстеження', 'Соцмережі й реклама → Реклама');
   const utm7 = await one(env, 'SELECT COUNT(*) n FROM orders WHERE utm_source IS NOT NULL AND created_at > ?', now - 7 * DAY);
