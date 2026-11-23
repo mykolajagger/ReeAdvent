@@ -149,8 +149,17 @@ async function dashboard() {
     <div class="card"><h2>Топ міст</h2><div style="margin-top:12px">${hbars(d.cities, r => r.orders, r => `${r.orders} · ${UAH(r.revenue_kop)}`)}</div></div>
   </div>
   <div class="card" style="margin-top:14px"><h2>Промокоди за період</h2><div class="tw" style="margin-top:12px"><table><thead><tr><th>Код</th><th class="num">Замовлень</th><th class="num">Знижок</th><th class="num">Виручка</th></tr></thead><tbody>${d.promos.map(p => `<tr><td><b>${esc(p.name)}</b></td><td class="num">${p.orders}</td><td class="num">−${UAH(p.discount_kop)}</td><td class="num">${UAH(p.revenue_kop)}</td></tr>`).join('') || '<tr><td colspan="4" class="empty">Промокодами ще не користувались</td></tr>'}</tbody></table></div></div>
+  <div class="card sec" id="rtcard" style="margin-top:14px"><h2>Оцінки клієнтів</h2><div class="muted">Завантаження…</div></div>
   <p class="muted" style="margin-top:16px;font-size:12px">Прибуток орієнтовний: комісія Monobank ${k.fee_pct}% (українські картки) і ${k.fee_foreign_pct}% (іноземні), податки ${k.tax_pct}% (${k.tax_single_pct}% єдиний податок + ${k.tax_military_pct}% військовий збір) задаються в розділі <a href="#/settings">Налаштування</a>; ЄСВ та інші витрати не враховано. Звіряйте з бухгалтером.</p>`;
   $('#seg').onclick = e => { const b = e.target.closest('[data-p]'); if (b) { period = b.dataset.p; dashboard(); } };
+  // оцінки пунктів календаря (1–5 зірок): найкращі частіше потрапляють у нові календарі, слабкі рідше
+  api('GET', '/api/admin/ratings').then(rt => {
+    const K = [['gift', 'Подарунки'], ['intim', 'Пригоди'], ['act', 'Активності'], ['q', 'Питання дня']], row = x => `<tr><td>${esc(x.title)}</td><td class="num">★ ${String(x.avg).replace('.', ',')}</td><td class="num muted">${x.n}</td></tr>`;
+    const tbl = (list, empty) => list.length ? `<div class="tw"><table style="min-width:0"><tbody>${list.map(row).join('')}</tbody></table></div>` : `<div class="muted">${empty}</div>`;
+    const total = K.reduce((t, [k]) => t + rt[k].total, 0);
+    $('#rtcard').innerHTML = `<h2>Оцінки клієнтів</h2><div class="muted">Клієнти оцінюють кожен пункт дня від 1 до 5 зірок. Високо оцінене частіше потрапляє в нові календарі, слабке рідше, а пара, що замовляє знову, не отримує вже отриманого. Усього оцінок: ${total}.</div>
+      <div class="grid" style="grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:14px">${K.map(([k, t]) => `<div class="sec"><b>${t}</b><span class="muted" style="font-size:12px">оцінок: ${rt[k].total}, пунктів: ${rt[k].items}</span><div class="muted" style="font-size:12px">Найкращі</div>${tbl(rt[k].best, 'Поки замало оцінок (потрібно від двох на пункт)')}${rt[k].worst.length ? `<div class="muted" style="font-size:12px">Найслабші</div>${tbl(rt[k].worst, '')}` : ''}</div>`).join('')}</div>`;
+  }).catch(() => { const c = $('#rtcard'); if (c) c.innerHTML = '<h2>Оцінки клієнтів</h2><div class="muted">Не вдалося завантажити.</div>'; });
   const ab = $('#ab'); if (ab) ab.onclick = () => { ordersState = { status: 'abandoned', q: '', page: 1 }; };
   let table = false; $('#tg').onclick = () => { table = !table; $('#tg').textContent = table ? 'Графік' : 'Таблиця';
     $('#chartbox').innerHTML = table ? `<div class="tw"><table><thead><tr><th>Дата</th><th class="num">Замовлень</th><th class="num">Виручка</th></tr></thead><tbody>${[...d.series].reverse().map(s => `<tr><td>${dd(s.date)}</td><td class="num">${s.orders}</td><td class="num">${UAH(s.revenue_kop)}</td></tr>`).join('')}</tbody></table></div>` : barChart(d.series); };

@@ -45,7 +45,10 @@ function errText(e) {
   const m = {
     auth: ['Сесія закінчилась. Увійдіть знову', 'Your session has expired. Please sign in again'], not_yet: ['Ще зарано', 'It is too early'], locked: ['Анкету вже не можна змінити', 'The questionnaire can no longer be changed'],
     bad_name: ['Вкажіть ім’я', 'Please enter a name'], bad_email: ['Перевірте адресу пошти', 'Please check the email address'], bad_token: ['Посилання недійсне. Запросіть нове', 'The link is not valid. Please request a new one'],
-    too_many: ['Забагато спроб. Спробуйте пізніше', 'Too many attempts. Please try again later'], answer_short: ['Напишіть хоча б кілька слів', 'Please write at least a few words'], bad_day: ['Це вікно ще не відкрите', 'This window is not open yet'],
+    too_many: ['Забагато спроб. Спробуйте пізніше', 'Too many attempts. Please try again later'],
+    video_unavailable: ['Відео поки недоступні, додайте фото', 'Videos are not available yet, please add a photo'], video_too_big: ['Відео завелике: до 60 МБ (приблизно хвилина)', 'The video is too large: up to 60 MB (about a minute)'],
+    photo_too_big: ['Фото завелике', 'The photo is too large'], too_many_files: ['Не більше 4 файлів до відповіді', 'No more than 4 files per answer'], too_many_videos: ['Не більше 2 відео до відповіді', 'No more than 2 videos per answer'],
+    bad_media: ['Цей файл не підходить: потрібне фото чи відео', 'This file does not work: a photo or video is needed'], answer_first: ['Спершу дайте відповідь на питання дня', 'Answer the question of the day first'], answer_short: ['Напишіть хоча б кілька слів', 'Please write at least a few words'], bad_day: ['Це вікно ще не відкрите', 'This window is not open yet'],
     no_access: ['Цієї пошти немає серед учасників календаря', 'This email is not a participant of the calendar'], bad_code: ['Невірний або прострочений код', 'The code is wrong or has expired'], already_answered: ['Ви вже відповіли на це питання', 'You have already answered this question']
   }[e.code];
   return m ? L(m[0], m[1]) : L('Щось пішло не так. Спробуйте ще раз.', 'Something went wrong. Please try again.');
@@ -119,8 +122,14 @@ const ACT_OPTS = { home: ['Затишок удома', 'Cosy at home'], out: ['�
 const LEVELS = [['Романтика', 'Romance', 'I', 'Ніжність, свічки, обійми, масаж і слова', 'Tenderness, candles, hugs, massage and words'], ['Гра', 'Play', 'II', 'Флірт, пікантні ігри, дотики із зав’язаними очима', 'Flirting, spicy games, blindfolded touch'], ['Смілива ніч', 'Bold night', 'III', 'Відверто, але завжди з повагою до комфорту обох', 'Explicit, but always respecting the comfort of both']];
 const ACT_BUDGETS = () => [['Безкоштовно', 'Free', 'Лише те, що не коштує грошей', 'Only things that cost nothing'], [`До ${fmtCur(300).replace('≈ ', '~')} на двох`, `Up to ${fmtCur(300).replace('≈ ', '~')} for two`, 'Кава, кіно, невеличкі розваги', 'Coffee, cinema, small fun'], [`До ${fmtCur(800).replace('≈ ', '~')}`, `Up to ${fmtCur(800).replace('≈ ', '~')}`, 'Ресторан, майстер-клас, концерт', 'Restaurant, workshop, concert'], ['Без обмежень', 'No limit', 'Термальні води, подорожі, свята', 'Thermal baths, trips, celebrations']];
 
-let ans = { name: '', budget: 300, giftLikes: [], avoid: [], level: 1, intimLikes: [], actLikes: [], actBudget: 1, car: false };
-let step = 0, budgetVal = null;
+let ans = { name: '', budget: 300, giftLikes: [], avoid: [], level: 1, intimLikes: [], actLikes: [], actBudget: 1, car: false, gifts: 12, outDays: 3 };
+let step = 0, budgetVal = null, giftCustom = false, outCustom = false;
+// Темп календаря: скільки подарунків за 24 дні й скільки днів на тиждень виходити з дому (береться середнє з двох анкет)
+const GIFT_N = [[24, 'Щодня', 'Every day', '24 подарунки', '24 gifts'], [12, 'Через день', 'Every other day', '12 подарунків', '12 gifts'], [8, 'Кожні 3 дні', 'Every 3 days', '8 подарунків', '8 gifts'], [4, 'Кожні 6 днів', 'Every 6 days', '4 подарунки', '4 gifts']];
+const OUT_N = [[7, 'Щодня', 'Every day'], [5, '5 днів на тиждень', '5 days a week'], [3, '3 дні на тиждень', '3 days a week'], [2, '2 дні на тиждень', '2 days a week'], [1, '1 день на тиждень', '1 day a week']];
+const paceOpts = (key, list, custom, min, max, unit) => `<div class="opts two">${list.map(g => `<button type="button" class="opt ${ans[key] === g[0] && !custom ? 'on' : ''}" data-pace="${key}" data-v="${g[0]}"><b>${L(g[1], g[2])}</b>${g[3] ? `<small>${L(g[3], g[4])}</small>` : ''}</button>`).join('')}
+  <button type="button" class="opt ${custom ? 'on' : ''}" data-pace="${key}" data-v="c"><b>${L('Свій варіант', 'Custom')}</b><small>${L(`від ${min} до ${max}`, `from ${min} to ${max}`)}</small></button></div>
+  <div class="paceIn" ${custom ? '' : 'hidden'}><input type="number" inputmode="numeric" min="${min}" max="${max}" value="${ans[key]}" data-pacein="${key}"> <span class="muted">${unit}</span></div>`;
 const chips = (key, opts) => `<div class="chips">${Object.entries(opts).map(([k, v]) => `<button type="button" class="chip ${ans[key].includes(k) ? 'on' : ''}" data-chip="${key}" data-v="${k}">${esc(L(v[0], v[1]))}</button>`).join('')}</div>`;
 const budgetShown = () => { const c = budgetCfg(); return c.show(budgetVal ?? c.def); };
 
@@ -131,13 +140,17 @@ const STEPS = [
     <div><label class="lbl">${L('Мій бюджет на один подарунок', 'My budget for one gift')}</label><div class="big" id="bv">${budgetShown()}</div>
     ${(() => { const c = budgetCfg(); return `<input class="range" id="bg" type="range" min="${c.min}" max="${c.max}" step="${c.step}" value="${budgetVal ?? c.def}">`; })()}</div>
     <div><label class="lbl">${L('Що люблю отримувати', 'What I love to receive')}</label>${chips('giftLikes', GIFT_OPTS)}</div>
-    <div><label class="lbl">${L('Мені краще без…', 'I would rather avoid…')}</label>${chips('avoid', AVOID_OPTS)}</div>`,
+    <div><label class="lbl">${L('Мені краще без…', 'I would rather avoid…')}</label>${chips('avoid', AVOID_OPTS)}</div>
+    <div><label class="lbl">${L('Скільки подарунків за календар', 'How many gifts in the calendar')}</label><p class="muted small">${L('Якщо щоденні подарунки — це забагато, оберіть рідше. Береться середнє з ваших двох відповідей, а подарунки рівномірно розподіляться до останнього дня.', 'If a gift every day is too much, choose fewer. The average of your two answers is used, and gifts are spread evenly up to the last day.')}</p>
+    ${paceOpts('gifts', GIFT_N, giftCustom, 1, 24, L('подарунків за 24 дні', 'gifts over 24 days'))}</div>`,
   () => `<h2>${L('Пригоди для двох', 'Adventures for two')}</h2><p class="muted">${L('Береться менший рівень із двох: ніхто нікого не змушує.', 'The lower of your two levels is used, so nobody is pushed.')}</p>
     <div class="opts">${LEVELS.map((l, i) => `<button type="button" class="opt ${ans.level === i + 1 ? 'on' : ''}" data-level="${i + 1}"><b>${l[2]} · ${L(l[0], l[1])}</b><small>${L(l[3], l[4])}</small></button>`).join('')}</div>
     <div><label class="lbl">${L('Що мені до вподоби', 'What I enjoy')}</label>${chips('intimLikes', INTIM_OPTS)}</div>`,
   () => `<h2>${L('Спільні активності', 'Shared activities')}</h2>
     <div><label class="lbl">${L('Що ми любимо робити', 'What we love to do')}</label>${chips('actLikes', ACT_OPTS)}</div>
     <div><label class="lbl">${L('Бюджет на день для двох', 'Daily budget for two')}</label><div class="opts">${ACT_BUDGETS().map((b, i) => `<button type="button" class="opt ${ans.actBudget === i ? 'on' : ''}" data-ab="${i}"><b>${L(b[0], b[1])}</b><small>${L(b[2], b[3])}</small></button>`).join('')}</div></div>
+    <div><label class="lbl">${L('Скільки днів на тиждень виходити з дому', 'How many days a week to go out')}</label><p class="muted small">${L('Решту днів пропонуватимемо щось цікаве разом удома. Береться середнє з ваших двох відповідей; виходи переважно на вихідні.', 'On the other days we suggest something fun to do together at home. The average of your two answers is used; outings mostly fall on weekends.')}</p>
+    ${paceOpts('outDays', OUT_N, outCustom, 0, 7, L('днів на тиждень', 'days a week'))}</div>
     <div><label class="lbl">${L('Є машина для поїздок околицями?', 'Do you have a car for day trips?')}</label><div class="opts two">
       <button type="button" class="opt ${ans.car ? 'on' : ''}" data-car="1"><b>${L('Є', 'Yes')}</b></button><button type="button" class="opt ${!ans.car ? 'on' : ''}" data-car="0"><b>${L('Ні', 'No')}</b></button></div></div>`,
   () => `<div class="center" style="min-height:0">${ICONS.gift}<h2>${L('Усе готово', 'All set')}</h2><p>${L('Після відправки анкету змінити не можна. Календар складеться, коли відповість і другий з вас, і все ж ви не знатимете, що чекає. Це секрет.', 'Once sent, the questionnaire cannot be changed. The calendar will be built when your partner answers too, and you will still not know what is waiting. It is a secret.')}</p></div>`
@@ -163,8 +176,16 @@ app.addEventListener('click', e => {
   const c = e.target.closest('[data-chip]'); if (c) { const arr = ans[c.dataset.chip], v = c.dataset.v, i = arr.indexOf(v); i < 0 ? arr.push(v) : arr.splice(i, 1); c.classList.toggle('on'); return; }
   const l = e.target.closest('[data-level]'); if (l) { ans.level = +l.dataset.level; document.querySelectorAll('[data-level]').forEach(x => x.classList.toggle('on', x === l)); return; }
   const a = e.target.closest('[data-ab]'); if (a) { ans.actBudget = +a.dataset.ab; document.querySelectorAll('[data-ab]').forEach(x => x.classList.toggle('on', x === a)); return; }
-  const k = e.target.closest('[data-car]'); if (k) { ans.car = k.dataset.car === '1'; document.querySelectorAll('[data-car]').forEach(x => x.classList.toggle('on', x === k)); }
+  const k = e.target.closest('[data-car]'); if (k) { ans.car = k.dataset.car === '1'; document.querySelectorAll('[data-car]').forEach(x => x.classList.toggle('on', x === k)); return; }
+  const pc = e.target.closest('[data-pace]'); if (pc) {
+    const key = pc.dataset.pace, custom = pc.dataset.v === 'c';
+    if (key === 'gifts') giftCustom = custom; else outCustom = custom;
+    if (!custom) ans[key] = +pc.dataset.v;
+    document.querySelectorAll(`[data-pace="${key}"]`).forEach(x => x.classList.toggle('on', x === pc));
+    const box = pc.closest('div').parentElement.querySelector('.paceIn'); if (box) { box.hidden = !custom; if (custom) { const i = box.querySelector('input'); i.value = ans[key]; i.focus(); } }
+  }
 });
+app.addEventListener('input', e => { const i = e.target.closest('[data-pacein]'); if (!i) return; const key = i.dataset.pacein, max = key === 'gifts' ? 24 : 7, min = key === 'gifts' ? 1 : 0, v = Math.round(Number(i.value)); if (isFinite(v) && v >= min && v <= max) ans[key] = v; });
 
 /* ---------- Очікування партнера ---------- */
 let pollT;
@@ -222,8 +243,8 @@ async function showHistory() {
   const items = h.days.map(d => `<article class="hist ${d.opened ? '' : 'new'}" data-d="${d.day}" tabindex="0" role="button" aria-label="${L('Вікно', 'Window')} ${d.day}">
     <header><b>${L('Вікно', 'Window')} №${d.day}</b><span class="muted">${dayDate(d.day)}${d.opened_at ? L(' · відкрито ', ' · opened ') + dtime(d.opened_at) : ''}</span></header>
     <div class="q">${esc(d.question)}</div>
-    ${d.answered ? `<div class="ans"><span class="who">${L('Ви', 'You')}</span><p>${esc(d.mine)}</p></div>${d.partner ? `<div class="ans them"><span class="who">${esc(h.partnerName)}</span><p>${esc(d.partner)}</p></div>` : `<div class="hint">${L(`${esc(h.partnerName)} ще не відповів(ла)`, `${esc(h.partnerName)} has not answered yet`)}</div>`}` : `<div class="muted" style="font-size:13px">${L('Ще не відкрито. Торкніться, щоб відповісти й відкрити вікно.', 'Not opened yet. Tap to answer and open the window.')}</div>`}
-    ${d.opened ? `<ul class="tasks"><li class="${d.done.gift ? 'done' : ''}">${L('Подарунок', 'Gift')}: ${esc(d.gift)}</li><li class="${d.done.intim ? 'done' : ''}">${L('Пригода', 'Adventure')}: ${esc(d.intim)}</li><li class="${d.done.act ? 'done' : ''}">${L('Активність', 'Activity')}: ${esc(d.act)}</li></ul>` : ''}</article>`).join('');
+    ${d.answered ? `<div class="ans"><span class="who">${L('Ви', 'You')}</span>${d.mine ? `<p>${esc(d.mine)}</p>` : ''}${mediaHtml(d.mineMedia)}</div>${d.partner != null ? `<div class="ans them"><span class="who">${esc(h.partnerName)}</span>${d.partner ? `<p>${esc(d.partner)}</p>` : ''}${mediaHtml(d.partnerMedia)}</div>` : `<div class="hint">${L(`${esc(h.partnerName)} ще не відповів(ла)`, `${esc(h.partnerName)} has not answered yet`)}</div>`}` : `<div class="muted" style="font-size:13px">${L('Ще не відкрито. Торкніться, щоб відповісти й відкрити вікно.', 'Not opened yet. Tap to answer and open the window.')}</div>`}
+    ${d.opened ? `<ul class="tasks">${d.gift ? `<li class="${d.done.gift ? 'done' : ''}">${L('Подарунок', 'Gift')}: ${esc(d.gift)}</li>` : ''}<li class="${d.done.intim ? 'done' : ''}">${L('Пригода', 'Adventure')}: ${esc(d.intim)}</li><li class="${d.done.act ? 'done' : ''}">${L('Активність', 'Activity')}: ${esc(d.act)}</li></ul>` : ''}</article>`).join('');
   app.innerHTML = head(h.finished ? L('. Календар завершено, але все збережено тут', '. The calendar is complete, but everything is kept here') : '') + `<div class="histlist">${items || `<div class="muted" style="text-align:center">${L('Тут з’являться відкриті вікна, щойно календар стартує.', 'Opened windows will appear here once the calendar starts.')}</div>`}</div>${footTools()}`;
   bindTools();
   const open = el => { const a = el.closest('.hist'); if (a) openDay(+a.dataset.d); };
@@ -291,6 +312,26 @@ async function shareStory(day) {
   } catch (e) { if (e && e.name !== 'AbortError') toast(L('Не вдалося підготувати картинку', 'Could not prepare the image')); }
 }
 const TILES = () => [{ k: 'gift', t: L('Подарунок', 'Gift') }, { k: 'intim', t: L('Пригода для двох', 'Adventure for two') }, { k: 'act', t: L('Спільна активність', 'Shared activity') }];
+/* Фото й відео у відповідях: бачать лише ви двоє (партнер — після власної відповіді) */
+const mediaHtml = list => list && list.length ? `<div class="amedia">${list.map(m => m.kind === 'video' ? `<video src="/api/answer-media/${esc(m.id)}" controls playsinline preload="metadata"></video>` : `<a href="/api/answer-media/${esc(m.id)}" target="_blank" rel="noopener"><img src="/api/answer-media/${esc(m.id)}" alt="" loading="lazy"></a>`).join('')}</div>` : '';
+/* Оцінка пункту: допомагає підбирати найкраще в нових календарях */
+const starsHtml = (kind, val) => `<div class="irate" data-kind="${kind}"><small>${L('Ваша оцінка', 'Your rating')}</small>${[1, 2, 3, 4, 5].map(n => `<button type="button" data-istar="${n}" class="${val >= n ? 'on' : ''}" aria-label="${n}">★</button>`).join('')}</div>`;
+async function prepImage(file) {
+  let bmp; try { bmp = await createImageBitmap(file); } catch { throw Object.assign(new Error('bad_media'), { code: 'bad_media' }); }
+  const k = Math.min(1, 1600 / Math.max(bmp.width, bmp.height)), c = document.createElement('canvas'); c.width = Math.round(bmp.width * k); c.height = Math.round(bmp.height * k);
+  c.getContext('2d').drawImage(bmp, 0, 0, c.width, c.height);
+  for (const q of [0.86, 0.78, 0.68, 0.55]) { const b = await new Promise(r => c.toBlob(r, 'image/jpeg', q)); if (b && b.size <= 1.4 * 1024 * 1024) return b; }
+  throw Object.assign(new Error('photo_too_big'), { code: 'photo_too_big' });
+}
+async function uploadAnswerFile(day, file) {
+  const video = /^video\//.test(file.type) || /\.(mp4|mov|webm|m4v)$/i.test(file.name);
+  if (video && file.size > 60 * 1024 * 1024) throw Object.assign(new Error('video_too_big'), { code: 'video_too_big' });
+  const blob = video ? file : await prepImage(file);
+  const r = await fetch('/api/answer-media?day=' + day, { method: 'POST', credentials: 'same-origin', headers: { 'X-Upload': '1', 'Content-Type': blob.type || 'application/octet-stream' }, body: blob });
+  let j = {}; try { j = await r.json(); } catch {}
+  if (!r.ok || j.ok === false) { const e = new Error(j.error || 'server_error'); e.code = j.error || 'server_error'; throw e; }
+  return j;
+}
 async function openDay(day) {
   const ov = document.createElement('div'); ov.className = 'overlay';
   ov.innerHTML = `<div class="sheet"><div class="center"><div class="spinner"></div></div></div>`;
@@ -308,12 +349,29 @@ async function openDay(day) {
     ov.firstElementChild.innerHTML = `${head}
       <div class="reveal qcard"><div class="tag">${L('Питання дня · для', 'Question of the day · for')} ${esc(d.forName)}</div><h3>${esc(d.question.text)}</h3>
         <p class="muted" style="font-size:14px">${L(`Напишіть відповідь для ${esc(d.forName)}: вона її прочитає. Після відповіді відкриються завдання на день. Змінити відповідь потім не можна.`, `Write an answer for ${esc(d.forName)}: they will read it. After you answer, the tasks of the day open. You cannot change the answer later.`)}</p>
+        ${d.question.media ? `<div class="hint">${d.question.media === 'video' ? L('Сюди просто проситься відео: зніміть кілька секунд.', 'This one asks for a video: record a few seconds.') : L('Сюди просто проситься фото: додайте його до відповіді.', 'This one asks for a photo: add it to your answer.')}${d.question.media === 'video' && !d.video ? L(' (Відео поки недоступні, тож додайте фото.)', ' (Videos are not available yet, so add a photo.)') : ''}</div>` : ''}
         <textarea id="ans" maxlength="600" rows="5" placeholder="${L('Ваша відповідь…', 'Your answer…')}"></textarea>
         <div class="meta"><span id="cnt">0 / 600</span></div>
+        <div class="uprow"><label class="btn ghost sm upl">${d.video ? L('Додати фото чи відео', 'Add a photo or video') : L('Додати фото', 'Add a photo')}<input type="file" id="upf" accept="image/*${d.video ? ',video/*' : ''}" multiple hidden></label><span class="muted small">${L(`до ${d.maxFiles || 4} файлів, бачите лише ви двоє`, `up to ${d.maxFiles || 4} files, only the two of you can see them`)}</span></div>
+        <div class="ups" id="ups"></div>
         <button class="btn" id="send" disabled>${L('Надіслати й відкрити день', 'Send and open the day')}</button></div>`;
     ov.querySelector('.x').onclick = close;
-    const ta = ov.querySelector('#ans'), btn = ov.querySelector('#send');
-    ta.oninput = () => { ov.querySelector('#cnt').textContent = ta.value.length + ' / 600'; btn.disabled = ta.value.trim().length < 2; };
+    const ta = ov.querySelector('#ans'), btn = ov.querySelector('#send'), ups = ov.querySelector('#ups');
+    let uploads = (d.uploads || []).slice(), busy = 0;
+    const can = () => { btn.disabled = busy > 0 || (ta.value.trim().length < 2 && !uploads.length); };
+    const drawUps = () => { ups.innerHTML = uploads.map(u => `<div class="up">${u.kind === 'video' ? `<video src="/api/answer-media/${esc(u.id)}" muted playsinline preload="metadata"></video>` : `<img src="/api/answer-media/${esc(u.id)}" alt="">`}<button type="button" class="rm" data-rm="${esc(u.id)}" aria-label="${L('Прибрати', 'Remove')}">✕</button></div>`).join('') + (busy ? `<div class="up wait"><div class="spinner"></div></div>` : ''); can(); };
+    drawUps();
+    ta.oninput = () => { ov.querySelector('#cnt').textContent = ta.value.length + ' / 600'; can(); };
+    ov.querySelector('#upf').onchange = async ev => {
+      const files = [...ev.target.files]; ev.target.value = '';
+      for (const f of files) {
+        if (uploads.length + busy >= (d.maxFiles || 4)) { toast(errText({ code: 'too_many_files' })); break; }
+        busy++; drawUps();
+        try { const u = await uploadAnswerFile(day, f); uploads.push({ id: u.id, kind: u.kind }); } catch (er) { toast(errText(er)); }
+        busy--; drawUps();
+      }
+    };
+    ups.onclick = async ev => { const b = ev.target.closest('[data-rm]'); if (!b) return; try { await api('POST', `/api/answer-media/${b.dataset.rm}/delete`); uploads = uploads.filter(u => u.id !== b.dataset.rm); drawUps(); } catch (er) { toast(errText(er)); } };
     ta.focus({ preventScroll: true });
     btn.onclick = async () => {
       btn.disabled = true;
@@ -322,25 +380,25 @@ async function openDay(day) {
     };
   };
   const qTile = () => `<div class="reveal"><div class="tag">${L('Питання дня', 'Question of the day')}</div><h3>${esc(d.question.text)}</h3>
-      <div class="ans"><span class="who">${L('Ви', 'You')}</span><p>${esc(d.question.mine)}</p></div>
-      ${d.question.partner ? `<div class="ans them"><span class="who">${esc(d.forName)}</span><p>${esc(d.question.partner)}</p></div>` : `<div class="hint">${L(`${esc(d.forName)} ще не відповів(ла). Зазирніть сюди пізніше: відповідь з’явиться тут.`, `${esc(d.forName)} has not answered yet. Check back later: the answer will appear here.`)}</div>`}</div>`;
+      <div class="ans"><span class="who">${L('Ви', 'You')}</span>${d.question.mine ? `<p>${esc(d.question.mine)}</p>` : ''}${mediaHtml(d.question.mineMedia)}</div>
+      ${d.question.partner != null ? `<div class="ans them"><span class="who">${esc(d.forName)}</span>${d.question.partner ? `<p>${esc(d.question.partner)}</p>` : ''}${mediaHtml(d.question.partnerMedia)}</div>` : `<div class="hint">${L(`${esc(d.forName)} ще не відповів(ла). Зазирніть сюди пізніше: відповідь з’явиться тут.`, `${esc(d.forName)} has not answered yet. Check back later: the answer will appear here.`)}</div>`}${starsHtml('q', (d.ratings || {}).q)}</div>`;
   const tileBody = (t) => {
     const x = d[t.k]; let meta = '', hint = '', tag = t.t;
     if (t.k === 'gift') { tag = L(`Подарунок для: ${d.forName}`, `Gift for: ${d.forName}`); meta = `<span>${x.price ? money(x.price) : L('у межах твого бюджету', 'within your budget')}</span>`; hint = `<div class="hint">${L('Це сюрприз: не показуй і не розповідай.', 'It is a surprise: do not show or tell.')}</div>`; }
     if (t.k === 'intim') { meta = `<span>${L(LEVELS[x.level - 1][0], LEVELS[x.level - 1][1])}</span>`; hint = `<div class="hint">${L('Лише для вас двох. Зупиняйтесь, якщо комусь некомфортно.', 'Just for the two of you. Stop if anyone feels uncomfortable.')}</div>`; }
-    if (t.k === 'act') { meta = `<span>${[L('безкоштовно', 'free'), L(`до ${fmtCur(300).replace('≈ ', '~')}`, `up to ${fmtCur(300).replace('≈ ', '~')}`), L(`до ${fmtCur(800).replace('≈ ', '~')}`, `up to ${fmtCur(800).replace('≈ ', '~')}`), L('дорожче / далі', 'pricier / farther')][x.cost]}</span>${x.car ? `<span>${L('потрібна машина', 'car needed')}</span>` : ''}`; }
+    if (t.k === 'act') { if (x.out === true) tag = L('Спільна активність · виходимо', 'Shared activity · going out'); else if (x.out === false) tag = L('Спільна активність · вдома', 'Shared activity · at home'); meta = `<span>${[L('безкоштовно', 'free'), L(`до ${fmtCur(300).replace('≈ ', '~')}`, `up to ${fmtCur(300).replace('≈ ', '~')}`), L(`до ${fmtCur(800).replace('≈ ', '~')}`, `up to ${fmtCur(800).replace('≈ ', '~')}`), L('дорожче / далі', 'pricier / farther')][x.cost]}</span>${x.car ? `<span>${L('потрібна машина', 'car needed')}</span>` : ''}`; }
     return `<div class="reveal"><div class="tag">${esc(tag)}</div><h3>${esc(x.title)}</h3><p>${esc(x.desc)}</p>
       <div class="meta">${meta}</div>${t.k === 'act' || t.k === 'gift' ? `<div class="places" id="places-box-${t.k}">${placesHtml(day, t.k)}</div>` : ''}${x.link ? `<a class="link ${t.k === 'act' ? 'maplink' : ''}" href="${esc(x.link.url)}" target="_blank" rel="noopener noreferrer"><span class="ml">${esc(x.link.label)}</span> ↗</a>` : ''}${hint}
-      <label class="tick"><input type="checkbox" data-mark="${t.k}" ${d.done[t.k] ? 'checked' : ''}> ${L('Виконано', 'Done')}</label></div>`;
+      ${starsHtml(t.k, (d.ratings || {})[t.k])}<label class="tick"><input type="checkbox" data-mark="${t.k}" ${d.done[t.k] ? 'checked' : ''}> ${L('Виконано', 'Done')}</label></div>`;
   };
   const render = () => {
     if (d.needAnswer) return renderQuestion();
     ov.firstElementChild.innerHTML = `${head}${qTile()}
-      ${TILES().map(t => `<div class="tile" data-k="${t.k}">${revealed[t.k] ? tileBody(t) : `<button class="wrap" data-rev="${t.k}">${ICONS[t.k].replace('class="ico"', 'class="ico sm"')}<b>${t.t}</b><small>${L('торкнись, щоб відкрити', 'tap to open')}</small></button>`}</div>`).join('')}
+      ${TILES().map(t => !d[t.k] ? `<div class="tile" data-k="${t.k}"><div class="reveal nogift"><div class="tag">${esc(t.t)}</div><p>${L('Сьогодні без подарунка: відпочиньте від покупок.', 'No gift today: take a break from shopping.')}${d.nextGiftDay ? L(` Наступний подарунок у вікні №${d.nextGiftDay}, ${dayDate(d.nextGiftDay)}.`, ` The next gift is in window ${d.nextGiftDay}, ${dayDate(d.nextGiftDay)}.`) : ''}</p></div></div>` : `<div class="tile" data-k="${t.k}">${revealed[t.k] ? tileBody(t) : `<button class="wrap" data-rev="${t.k}">${ICONS[t.k].replace('class="ico"', 'class="ico sm"')}<b>${t.t}</b><small>${L('торкнись, щоб відкрити', 'tap to open')}</small></button>`}</div>`).join('')}
       <div class="row"><button class="btn ghost sm" id="all">${L('Відкрити все', 'Open all')}</button><button class="btn ghost sm" id="story">${L('Поділитися в Stories', 'Share to Stories')}</button></div>`;
     ov.querySelector('.x').onclick = close;
     ov.querySelector('#story').onclick = () => shareStory(day);
-    ov.querySelector('#all').onclick = () => { TILES().forEach(t => revealed[t.k] = true); render(); confetti(); };
+    ov.querySelector('#all').onclick = () => { TILES().forEach(t => { if (d[t.k]) revealed[t.k] = true; }); render(); confetti(); };
     if (revealed.act) loadPlaces(day, 'act');
     if (revealed.gift) loadPlaces(day, 'gift');
   };
@@ -348,6 +406,8 @@ async function openDay(day) {
   ov.addEventListener('click', async e => {
     const r = e.target.closest('[data-rev]');
     if (r) { revealed[r.dataset.rev] = true; render(); confetti(e.clientX, e.clientY, 60); return; }
+    const sb = e.target.closest('[data-istar]');
+    if (sb) { const box = sb.closest('.irate'), kind = box.dataset.kind, n = +sb.dataset.istar; try { await api('POST', '/api/rate', { day, kind, stars: n }); d.ratings = { ...(d.ratings || {}), [kind]: n }; box.querySelectorAll('button').forEach(b => b.classList.toggle('on', +b.dataset.istar <= n)); toast(L('Дякуємо за оцінку!', 'Thanks for rating!')); } catch (er) { toast(errText(er)); } return; }
     const c = e.target.closest('[data-mark]');
     if (c) { try { await api('POST', '/api/mark', { day, key: c.dataset.mark, done: c.checked }); d.done[c.dataset.mark] = c.checked; if (c.checked) { confetti(e.clientX, e.clientY, 30); toast(L('Чудово', 'Lovely')); } } catch (er) { c.checked = !c.checked; toast(errText(er)); } }
   });

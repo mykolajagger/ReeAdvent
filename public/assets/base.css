@@ -162,3 +162,21 @@ textarea:focus{outline:none;border-color:var(--gold)}
 
 .plist .rep{grid-column:1/-1;justify-self:start;background:none;border:0;padding:0;color:var(--muted);font:12px var(--body);text-decoration:underline;cursor:pointer}
 .plist .rep:hover{color:var(--gold2)}
+/* Темп календаря, фото-відповіді, оцінки */
+.small{font-size:13px}
+input[type=number]{width:120px;padding:12px 14px;border-radius:12px;border:1px solid var(--line);background:#ffffff08;color:var(--ink);font:500 17px var(--body)}
+input[type=number]:focus{outline:none;border-color:var(--gold)}
+.paceIn{display:flex;align-items:center;gap:10px;margin-top:10px}.paceIn[hidden]{display:none}
+.uprow{display:flex;align-items:center;gap:10px;flex-wrap:wrap}.upl{cursor:pointer}
+.ups{display:flex;gap:8px;flex-wrap:wrap}.ups:empty{display:none}
+.up{position:relative;width:86px;height:86px;border-radius:12px;overflow:hidden;border:1px solid var(--line);background:#ffffff08;display:grid;place-items:center}
+.up img,.up video{width:100%;height:100%;object-fit:cover;display:block}
+.up .rm{position:absolute;top:4px;right:4px;width:24px;height:24px;border-radius:50%;border:0;background:#000a;color:#fff;cursor:pointer;font-size:12px;line-height:24px;padding:0}
+.up.wait .spinner{width:22px;height:22px}
+.amedia{display:grid;grid-template-columns:repeat(auto-fill,minmax(120px,1fr));gap:8px;margin-top:8px}
+.amedia img,.amedia video{width:100%;max-height:320px;object-fit:cover;border-radius:12px;display:block;background:#000}
+.amedia video{object-fit:contain;grid-column:1/-1}
+.irate{display:flex;align-items:center;gap:2px;margin-top:4px}.irate small{color:var(--muted);font-size:12px;margin-right:6px;letter-spacing:.04em}
+.irate button{background:none;border:0;padding:2px 3px;font-size:20px;line-height:1;color:#ffffff30;cursor:pointer}
+.irate button.on,.irate button:hover{color:var(--gold)}
+.reveal.nogift{border-style:dashed;border-color:var(--line);animation:none}.reveal.nogift p{color:var(--muted)}

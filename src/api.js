@@ -5,6 +5,8 @@ import { ensureCity, runVenuesLogged as runVenues, venuePicks, rateVenue, report
 import { createInvoice, verifyPaid, invoiceStatus, invoiceOf } from './payments.js';
 import { listFor, getPrices } from './pricing.js';
 import { ensureSchema } from './schema.js';
+import { uploadAnswerMedia, deleteAnswerMedia, listAnswerMedia, mediaByDay, serveAnswerMedia, videoAllowed, MAX_FILES } from './answerMedia.js';
+import { rateItem, myRatings, ratingStats, seenFor } from './feedback.js';
 import { verifyTurnstile } from './turnstile.js';
 import { handleAdmin } from './admin.js';
 import { findPromo, priceWith, rateLimit, normCode } from './promo.js';
@@ -63,6 +65,14 @@ export async function handle(request, env) {
     if (m === 'POST' && path === '/api/survey') return json(await saveSurvey(request, env, member));
     if (m === 'GET' && (r = path.match(/^\/api\/day\/(\d+)$/))) return json(await getDay(env, member, +r[1]));
     if (m === 'POST' && path === '/api/answer') return json(await saveAnswer(request, env, member));
+    if (m === 'POST' && path === '/api/rate') return json(await rateItem(env, member, await readJson(request)));
+    if (m === 'POST' && path === '/api/answer-media') {   // сирий файл у тілі; власний заголовок змушує браузер робити preflight (захист від CSRF)
+      if (request.headers.get('x-upload') !== '1') throw new HttpError(403, 'csrf');
+      const len = Number(request.headers.get('content-length') || 0); if (len > 61 * 1024 * 1024) throw new HttpError(413, 'video_too_big');
+      return json(await uploadAnswerMedia(env, member, Math.round(Number(url.searchParams.get('day'))), new Uint8Array(await request.arrayBuffer())));
+    }
+    if (m === 'GET' && (r = path.match(/^\/api\/answer-media\/([\w-]{8,40})$/))) return await serveAnswerMedia(env, member, r[1], request);
+    if (m === 'POST' && (r = path.match(/^\/api\/answer-media\/([\w-]{8,40})\/delete$/))) return json(await deleteAnswerMedia(env, member, r[1]));
     if (m === 'GET' && (r = path.match(/^\/api\/places\/(\d+)$/))) return json(await placesFor(env, member, +r[1], url.searchParams.get('k')));
     if (m === 'POST' && (r = path.match(/^\/api\/venues\/(\d+)\/rate$/))) { const b = await readJson(request); const out = await rateVenue(env, { memberId: member.id, country: member.country, city: member.city, venueId: +r[1], stars: Number(b.stars) }); if (!out.ok) throw new HttpError(out.error === 'too_many' ? 429 : out.error === 'not_found' ? 404 : 400, out.error); return json(out); }
     if (m === 'POST' && (r = path.match(/^\/api\/venues\/(\d+)\/report$/))) { const out = await reportVenue(env, { memberId: member.id, country: member.country, city: member.city, venueId: +r[1] }); if (!out.ok) throw new HttpError(out.error === 'too_many' ? 429 : 404, out.error); return json(out); }
@@ -342,7 +352,8 @@ async function saveSurvey(request, env, mem) {
   await run(env, 'UPDATE members SET survey_json = ? WHERE id = ?', JSON.stringify(clean), mem.id);
   const both = (await env.DB.prepare('SELECT slot, survey_json FROM members WHERE calendar_id = ? ORDER BY slot').bind(mem.calendar_id).all()).results;
   if (both.length === 2 && both.every(r => r.survey_json)) {
-    const sched = generateSchedule(both.map(r => JSON.parse(r.survey_json)), 1 + Math.floor(Math.random() * 2147483646), windowDates(mem.start_date), mem.region, mem.country);
+    const sched = generateSchedule(both.map(r => JSON.parse(r.survey_json)), 1 + Math.floor(Math.random() * 2147483646), windowDates(mem.start_date), mem.region, mem.country,
+      { ratings: await ratingStats(env), seen: await seenFor(env, mem.calendar_id) });   // рейтинг пунктів від усіх користувачів і те, що пара вже отримувала
     // умовне оновлення: якщо обидва зберегли одночасно, спрацює лише один
     await run(env, 'UPDATE calendars SET schedule_json = ? WHERE id = ? AND schedule_json IS NULL', JSON.stringify(sched), mem.calendar_id);
   }
@@ -360,15 +371,17 @@ async function getDay(env, mem, d) {
   const question = QUESTIONS[plan.q];
   const mine = await q1(env, 'SELECT text FROM answers WHERE member_id = ? AND day = ?', mem.id, d);
   // Спершу відповідь на питання дня: поки її немає, завдань сервер не віддає
-  if (!mine) return { ok: true, day: d, needAnswer: true, forName: surveyName(partner), question: { text: questionText(question, mem.lang) } };
+  const sched = JSON.parse(mem.schedule_json), myGift = plan.gift ? plan.gift[mem.slot] : null;
+  const nextGift = myGift == null ? (Object.keys(sched.days).map(Number).filter(x => x > d && sched.days[x].gift && sched.days[x].gift[mem.slot] != null).sort((a, b) => a - b)[0] || null) : null;
+  if (!mine) return { ok: true, day: d, needAnswer: true, forName: surveyName(partner), question: { text: questionText(question, mem.lang), media: question.media || null }, uploads: await listAnswerMedia(env, mem.id, d), maxFiles: MAX_FILES, video: videoAllowed(env) };
   const theirs = await q1(env, 'SELECT text FROM answers WHERE member_id = ? AND day = ?', partner.id, d);
   await run(env, `INSERT INTO progress (member_id, day, opened, opened_at) VALUES (?,?,1,?) ON CONFLICT(member_id, day) DO UPDATE SET opened = 1, opened_at = COALESCE(opened_at, excluded.opened_at)`, mem.id, d, Date.now());
   const pr = await q1(env, 'SELECT * FROM progress WHERE member_id = ? AND day = ?', mem.id, d);
   return {
     ok: true, day: d, forName: surveyName(partner),
-    question: { text: questionText(question, mem.lang), mine: mine.text, partner: theirs ? theirs.text : null },
-    gift: giftView(GIFTS[plan.gift[mem.slot]], mem.city, mem.lang, mem.country), intim: intimView(INTIMATE[plan.intim], mem.lang), act: actView(ACTIVITIES[plan.act], mem.city, mem.lang),
-    done: { gift: !!pr.done_gift, intim: !!pr.done_intim, act: !!pr.done_act }
+    question: { text: questionText(question, mem.lang), media: question.media || null, mine: mine.text, partner: theirs ? theirs.text : null, mineMedia: await listAnswerMedia(env, mem.id, d), partnerMedia: theirs ? await listAnswerMedia(env, partner.id, d) : [] },
+    gift: myGift == null ? null : giftView(GIFTS[myGift], mem.city, mem.lang, mem.country), nextGiftDay: nextGift, intim: intimView(INTIMATE[plan.intim], mem.lang), act: { ...actView(ACTIVITIES[plan.act], mem.city, mem.lang), out: plan.out ?? null },
+    done: { gift: !!pr.done_gift, intim: !!pr.done_intim, act: !!pr.done_act }, ratings: await myRatings(env, mem.id, d)
   };
 }
 
@@ -378,7 +391,8 @@ async function saveAnswer(request, env, mem) {
   if (!(d >= 1 && d <= DAYS) || d > todayIndex(mem.start_date, nowOf(env), mem.tz)) throw new HttpError(400, 'bad_day');
   if (!mem.schedule_json) throw new HttpError(409, 'not_ready');
   const text = String(b.text || '').replace(/[<>]/g, '').replace(/\r/g, '').replace(/\n{3,}/g, '\n\n').trim().slice(0, 600);
-  if (text.length < 2) throw new HttpError(400, 'answer_short');
+  const files = text.length < 2 ? (await listAnswerMedia(env, mem.id, d)).length : 0;   // відповідь може бути й лише фото чи відео
+  if (text.length < 2 && !files) throw new HttpError(400, 'answer_short');
   const ins = await run(env, 'INSERT OR IGNORE INTO answers (member_id, day, text, created_at) VALUES (?,?,?,?)', mem.id, d, text, Date.now());
   if (!ins.meta?.changes) throw new HttpError(409, 'already_answered'); // відповідь не редагується
   return { ok: true };
@@ -457,17 +471,18 @@ async function history(env, mem) {
   const theirs = (await env.DB.prepare('SELECT day, text, created_at FROM answers WHERE member_id = ?').bind(partner.id).all()).results;
   const prog = (await env.DB.prepare('SELECT day, opened, opened_at, done_gift, done_intim, done_act FROM progress WHERE member_id = ?').bind(mem.id).all()).results;
   const byDay = (arr, k = 'day') => new Map(arr.map(r => [r[k], r]));
-  const M = byDay(mine), T = byDay(theirs), P = byDay(prog);
+  const M = byDay(mine), T = byDay(theirs), P = byDay(prog), MM = await mediaByDay(env, mem.id), TM = await mediaByDay(env, partner.id);
   const days = [];
   for (let d = last; d >= 1; d--) {
     const plan = sched.days[d], a = M.get(d), p = P.get(d);
     const row = { day: d, opened: !!(a && p && p.opened), question: questionText(QUESTIONS[plan.q], mem.lang), answered: !!a };
     if (a) { // питання й відповіді видно лише після власної відповіді (як і в самому вікні)
       row.mine = a.text; row.mine_at = a.created_at; const t = T.get(d); row.partner = t ? t.text : null; row.partner_at = t ? t.created_at : null;
+      row.mineMedia = MM.get(d) || []; row.partnerMedia = t ? TM.get(d) || [] : [];
     }
     if (row.opened) {
       row.opened_at = p.opened_at || null;
-      row.gift = giftView(GIFTS[plan.gift[mem.slot]], mem.city, mem.lang, mem.country).title; row.intim = intimView(INTIMATE[plan.intim], mem.lang).title; row.act = actView(ACTIVITIES[plan.act], mem.city, mem.lang).title;
+      row.gift = plan.gift && plan.gift[mem.slot] != null ? giftView(GIFTS[plan.gift[mem.slot]], mem.city, mem.lang, mem.country).title : null; row.intim = intimView(INTIMATE[plan.intim], mem.lang).title; row.act = actView(ACTIVITIES[plan.act], mem.city, mem.lang).title;
       row.done = { gift: !!p.done_gift, intim: !!p.done_intim, act: !!p.done_act };
     }
     days.push(row);

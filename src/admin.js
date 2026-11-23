@@ -21,6 +21,8 @@ import { venueStats, venueProblems, retryCities, queueCity, overpassProbe, setVe
 import { cancelInvoice, toInvoiceUnits } from './payments.js';
 import { getPrices, toUah, moneyText } from './pricing.js';
 import { recoveryState } from './recovery.js';
+import { purgeAnswerMedia } from './answerMedia.js';
+import { ratingsReport } from './feedback.js';
 
 const ADMIN_LOGIN_TTL = 30 * 60e3, ADMIN_SESSION_TTL = 14 * 24 * 3600e3;
 const q1 = (env, sql, ...a) => env.DB.prepare(sql).bind(...a).first();
@@ -101,6 +103,7 @@ export async function handleAdmin(request, env, path, m) {
   if (m === 'POST' && path === '/api/admin/comms/restore') { const out = await restoreComms(env, {}); await audit(env, admin, 'comms_restore', null, { added: out.added, remaining: out.remaining }); return json(out); }
   if (m === 'GET' && (r = path.match(/^\/api\/admin\/comms\/(\d{1,12})$/))) return json(await commsGet(env, +r[1]));
   if (m === 'GET' && (r = path.match(/^\/api\/admin\/comms\/order\/([\w-]{3,64})$/))) { const o = await q1(env, 'SELECT id, created_at, paid_at, refunded_at, name_a, name_b, email_a, email_b, payer_email, city, amount_kop FROM orders WHERE id = ?', r[1]); return json(await commsOrder(env, r[1], o && { ...o, status: statusOf(o) })); }
+  if (m === 'GET' && path === '/api/admin/ratings') return json({ ok: true, ...(await ratingsReport(env)) });
   if (m === 'GET' && path === '/api/admin/agent') { const hist = await getHist(env); return json({ ok: true, flags: await agentFlags(env), last: hist[0] || null, history: hist.slice(1, 8).map(h => ({ at: h.at, day: h.day, mode: h.mode, headline: h.headline })) }); }
   if (m === 'POST' && path === '/api/admin/agent/settings') { const out = await saveAgentFlags(env, await readJson(request)); if (!out.ok) throw new HttpError(400, out.error); await audit(env, admin, 'agent_settings', null, {}); return json({ ok: true, flags: await agentFlags(env) }); }
   if (m === 'POST' && path === '/api/admin/agent/run') { const out = await runAgent(env, { force: true }); await audit(env, admin, 'agent_run', null, { mode: out.mode }); const hist = await getHist(env); return json({ ok: true, ...out, flags: await agentFlags(env), last: hist[0] || null, history: hist.slice(1, 8).map(h => ({ at: h.at, day: h.day, mode: h.mode, headline: h.headline })) }); }
@@ -195,7 +198,8 @@ async function deleteOrder(env, admin, o) {
   const cal = await q1(env, 'SELECT id FROM calendars WHERE order_id = ?', o.id);
   const mem = cal ? await qa(env, 'SELECT id FROM members WHERE calendar_id = ?', cal.id) : [];
   const stmts = [];
-  for (const m of mem) for (const t of ['answers', 'progress', 'sessions', 'login_tokens', 'login_codes', 'reminders_sent', 'venue_ratings', 'venue_reports']) stmts.push(env.DB.prepare(`DELETE FROM ${t} WHERE member_id = ?`).bind(m.id));
+  await purgeAnswerMedia(env, mem.map(m => m.id));   // фото й відео з відповідей
+  for (const m of mem) for (const t of ['answers', 'progress', 'sessions', 'login_tokens', 'login_codes', 'reminders_sent', 'venue_ratings', 'venue_reports', 'item_ratings']) stmts.push(env.DB.prepare(`DELETE FROM ${t} WHERE member_id = ?`).bind(m.id));   // оцінки тестових замовлень не впливають на рейтинг
   if (cal) stmts.push(env.DB.prepare('DELETE FROM members WHERE calendar_id = ?').bind(cal.id), env.DB.prepare('DELETE FROM calendars WHERE id = ?').bind(cal.id));
   if (o.paid_at && o.promo_id) stmts.push(env.DB.prepare('UPDATE promo_codes SET used_count = MAX(0, used_count - 1) WHERE id = ?').bind(o.promo_id));   // ліміт промокоду знову доступний
   stmts.push(env.DB.prepare('DELETE FROM orders WHERE id = ?').bind(o.id));

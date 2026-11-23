@@ -8,6 +8,7 @@ import { runAutoPublish } from './igpublish.js';
 import { runAgent } from './agent.js';
 import { runRecovery } from './recovery.js';
 import { purgeComms } from './comms.js';
+import { purgeAnswerMedia, purgeOrphanMedia } from './answerMedia.js';
 import { nowOf, localParts, localDayNumber, hmac, toDateStr, fromDateStr, DAYS } from './util.js';
 
 const q = (env, sql, ...a) => env.DB.prepare(sql).bind(...a).all().then(r => r.results);
@@ -65,13 +66,15 @@ export async function purgeOld(env) {
   const cals = await q(env, 'SELECT c.id, c.order_id FROM calendars c WHERE c.start_date < ? LIMIT 50', cutoff);
   for (const c of cals) {
     const mem = await q(env, 'SELECT id FROM members WHERE calendar_id = ?', c.id);
+    await purgeAnswerMedia(env, mem.map(m => m.id));   // фото й відео з відповідей (і з R2)
     const stmts = [];
     for (const m of mem) for (const t of ['answers', 'progress', 'sessions', 'login_tokens', 'login_codes', 'reminders_sent', 'venue_ratings', 'venue_reports']) stmts.push(env.DB.prepare(`DELETE FROM ${t} WHERE member_id = ?`).bind(m.id));
     stmts.push(env.DB.prepare('DELETE FROM members WHERE calendar_id = ?').bind(c.id), env.DB.prepare('DELETE FROM calendars WHERE id = ?').bind(c.id),
       env.DB.prepare("UPDATE orders SET name_a = '—', name_b = '—', email_a = ?, email_b = ?, payer_email = NULL, note = NULL WHERE id = ?").bind(`deleted-a-${c.order_id}@deleted.invalid`, `deleted-b-${c.order_id}@deleted.invalid`, c.order_id));
     await env.DB.batch(stmts);
   }
-  await purgeComms(env, now, cals.map(c => c.order_id));        // журнал листів: разом із персональними даними календарів і не довше 24 місяців
+  await purgeComms(env, now, cals.map(c => c.order_id));
+  await purgeOrphanMedia(env, now);                             // файли, до яких так і не надіслали відповідь        // журнал листів: разом із персональними даними календарів і не довше 24 місяців
   // листування підтримки: 24 місяці
   const msgCut = now - 730 * 864e5;
   await env.DB.prepare('DELETE FROM messages WHERE created_at < ?').bind(msgCut).run();
