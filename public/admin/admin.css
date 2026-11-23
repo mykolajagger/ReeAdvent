@@ -147,3 +147,22 @@ td.num,th.num{text-align:right;font-variant-numeric:tabular-nums;white-space:now
 #cmst .kpis{grid-template-columns:repeat(auto-fit,minmax(150px,1fr))}
 #cml td .pill{white-space:nowrap}
 @media (max-width:640px){#cmst .kpi .s{display:none}#cmst .kpi{padding:12px}}
+/* Календар публікацій */
+.pcal{border:1px solid var(--line);border-radius:12px;overflow:hidden}
+.pwk,.pgrid{display:grid;grid-template-columns:repeat(7,minmax(0,1fr))}
+.pwk div{font:600 11px var(--body);letter-spacing:.1em;text-transform:uppercase;color:var(--muted);padding:8px;border-bottom:1px solid var(--line)}
+.pday{min-height:92px;padding:6px;border-right:1px solid var(--line);border-bottom:1px solid var(--line);display:flex;flex-direction:column;gap:4px;min-width:0}
+.pday:nth-child(7n){border-right:0}.pday.past{background:#ffffff04}.pday.past .pdh{opacity:.5}
+.pday.today{box-shadow:inset 0 0 0 1px var(--accent)}.pday.today .pdh b{color:var(--accent)}
+.pdh{font-size:11px;color:var(--muted)}.pdh b{font-size:13px;color:var(--ink)}
+.pday.drop,.pqueue.drop{background:#d6b46a18}
+.pchip{display:flex;gap:6px;align-items:center;padding:4px;border-radius:8px;background:var(--surface2);border:1px solid var(--line);border-left:3px solid #2f80ed;cursor:grab;min-width:0;font-size:12px}
+.pchip img{width:26px;height:32px;object-fit:cover;border-radius:4px;flex:none}
+.pchip span{display:grid;min-width:0;line-height:1.2}.pchip small{color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-size:11px}
+.pchip.done{border-left-color:#27ae60;opacity:.6;cursor:pointer}.pchip.over{border-left-color:#eb5757}
+.pchip.sel{border-color:var(--accent);box-shadow:0 0 0 1px var(--accent)}.pchip.moving{opacity:.45;outline:2px dashed var(--accent)}
+.pchip .pw{color:#e0a43a;font-style:normal}
+.pqueue{border:1px dashed var(--line2);border-radius:12px;padding:10px;display:grid;gap:8px}
+.pql{display:flex;flex-wrap:wrap;gap:6px}.pql .pchip{width:180px}
+.pmove{background:#d6b46a18;border:1px solid var(--accent);border-radius:10px;padding:8px 12px;font-size:13px;display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+@media (max-width:760px){.pwk{display:none}.pgrid{grid-template-columns:1fr}.pday{min-height:0;border-right:0;flex-direction:row;flex-wrap:wrap;align-items:center}.pday .pdh{width:64px}.pday .pchip{flex:1 1 180px}.pday.past:not(:has(.pchip)){display:none}}

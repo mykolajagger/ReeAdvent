@@ -1,7 +1,7 @@
 // Мова сайту: вибір користувача (localStorage / ?lang=) > мова за країною (сервер) > мова браузера. Елементи з data-i18n перемикаються без перезавантаження.
 (() => {
   const EN = {
-    title: 'ReeAdvent: an advent calendar for two', desc: 'A private advent calendar for couples: every day a question for each other, a gift idea, a romantic adventure and a shared activity in your city. 24 surprise windows.',
+    title: 'Advent for two · ReeAdvent', desc: 'A private advent calendar for couples: every day a question for each other, a gift idea, a romantic adventure and a shared activity in your city. 24 surprise windows.',
     nav_login: 'Sign in', hero_eyebrow: 'An advent calendar for two', hero_h1: '24 days <em>just</em> for you',
     hero_p: 'Every morning a new window: a question for each other, a gift idea, a romantic adventure and a shared activity in your city. Matched to your tastes, but what is waiting stays a surprise.',
     cta_order: 'Order a calendar', cta_how: 'How it works',

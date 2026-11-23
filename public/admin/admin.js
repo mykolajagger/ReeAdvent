@@ -318,7 +318,7 @@ async function inbox() {
 /* ---------- Налаштування (відсотки для дашборда) ---------- */
 
 /* ---------- Instagram: редактор публікацій (перегляд, підпис, розклад, порядок) ---------- */
-let igSel = null, igSlide = 0, igTab = 'post';
+let igSel = null, igSlide = 0, igTab = 'post', igMove = null;
 const igMedia = f => f.startsWith('/') ? f : '/social/' + encodeURIComponent(f);
 const dtLocal = t => t ? new Date(t - new Date(t).getTimezoneOffset() * 6e4).toISOString().slice(0, 16) : '';
 const igTitle = p => p.title || String(p.caption || '').split('\n')[0].slice(0, 48);
@@ -344,20 +344,29 @@ function renderIgPlan(pb, ig) {
   const hasFb = !!pb.fbPage, plat = (on, d, name) => on ? (d ? `<span style="color:#27ae60" title="${esc(fdate(d.at))}">${name} ✅</span>` : `<span class="muted">${name} ⏳</span>`) : `<span class="muted" style="text-decoration:line-through">${name}</span>`;
   const status = x => `${plat(x.ig, x.done, 'IG')}${hasFb ? ' ' + plat(x.fb, x.fbDone, 'FB') : ''} · ${x.complete ? '<span style="color:#27ae60">готово</span>' : x.at ? `<span style="color:${x.at < now ? '#eb5757' : '#2f80ed'}">🕒 ${esc(fdate(x.at))}</span>` : '<span class="muted">без дати</span>'}`;
   const tabBtn = (k, label, n) => `<button type="button" class="btn ${igTab === k ? '' : 'ghost'} sm igtab" data-t="${k}">${label} (${n})</button>`;
+  // ---- календар публікацій: тижні з понеділка, перетягування міняє пости місцями разом із часом ----
+  const DAY = 864e5, sod = t => { const d = new Date(t); d.setHours(0, 0, 0, 0); return d.getTime(); }, mon = t => { const d = new Date(sod(t)); d.setDate(d.getDate() - (d.getDay() + 6) % 7); return d.getTime(); };
+  const hm = t => new Date(t).toLocaleTimeString('uk-UA', { hour: '2-digit', minute: '2-digit' });
+  const pend = list.filter(x => !x.complete), dated = list.filter(x => x.at), undated = pend.filter(x => !x.at);
+  const chrono = pend.filter(x => x.at).sort((a, b) => a.at - b.at), warn = new Map(chrono.map((x, i) => [x.id, igRepeats(chrono, i)]));
+  const from = mon(Math.min(now, ...dated.map(x => x.at))), to = mon(Math.max(now, ...dated.map(x => x.at))) + 14 * DAY, weeks = Math.min(16, Math.round((to - from) / (7 * DAY)));
+  const chip = x => { const over = !x.complete && !!x.at && x.at < now, w = warn.get(x.id) || []; return `<div class="pchip ${x.complete ? 'done' : over ? 'over' : ''} ${x.id === igSel ? 'sel' : ''} ${igMove === x.id ? 'moving' : ''}" data-pid="${esc(x.id)}" ${x.complete ? '' : 'draggable="true"'} title="${esc(igTitle(x) + ' · ' + igKind(x) + (w.length ? ' · ⚠ ' + w.join(', ') : ''))}"><img src="${igMedia(isVid(x) ? x.cover : x.files[0])}" alt=""><span><b>${x.at ? hm(x.at) : '—'}</b>${x.complete ? ' ✓' : ''}${w.length ? ' <i class="pw">⚠</i>' : ''}<small>${esc(igTitle(x))}</small></span></div>`; };
+  let cal = ''; const today = sod(now);
+  for (let wk = 0; wk < weeks; wk++) for (let k = 0; k < 7; k++) {
+    const d0 = from + (wk * 7 + k) * DAY, d1 = d0 + DAY, dd = new Date(d0), items = dated.filter(x => x.at >= d0 && x.at < d1).sort((a, b) => a.at - b.at);
+    cal += `<div class="pday ${d0 === today ? 'today' : ''} ${d0 < today ? 'past' : ''}" data-day="${d0}"><div class="pdh">${['пн', 'вт', 'ср', 'чт', 'пт', 'сб', 'нд'][k]} <b>${dd.getDate()}</b>${dd.getDate() === 1 || (wk === 0 && k === 0) ? ' ' + dd.toLocaleDateString('uk-UA', { month: 'short' }) : ''}</div>${items.map(chip).join('')}</div>`;
+  }
   host.innerHTML = `<h2>Публікації Instagram і Facebook</h2>
-  <div class="muted">Перегляньте публікацію, відредагуйте підпис і призначте дату й час (ваш місцевий час). З увімкненою автопублікацією вона виходить сама у призначений час (перевірка щогодини). Жовте «⚠» біля публікації означає повтор: та сама сцена чи формат поруч, змініть порядок кнопками ↑ ↓.</div>
-  <div class="row" style="gap:8px">${tabBtn('post', 'Пости й Reels', nPost)}${nStory ? tabBtn('story', 'Сторіс', nStory) : ''}</div>
-  <div style="display:flex;gap:18px;flex-wrap:wrap;align-items:flex-start">
-   <div style="flex:1 1 300px;min-width:260px;display:grid;grid-template-columns:minmax(0,1fr);gap:8px" id="iglist">${list.map((x, i) => `<div class="card" data-id="${esc(x.id)}" style="padding:8px;display:flex;gap:10px;align-items:center;cursor:pointer;${x.id === igSel ? 'border-color:var(--accent);box-shadow:0 0 0 1px var(--accent)' : ''}">
-      <img src="${igMedia(isVid(x) ? x.cover : x.files[0])}" alt="" style="width:${x.format === 'story' ? 36 : 48}px;height:60px;object-fit:cover;border-radius:6px;flex:none">
-      <div style="flex:1;min-width:0"><div style="font-weight:600;font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${i + 1}. ${esc(igTitle(x))}</div><div class="muted" style="font-size:12px">${igKind(x)}${x.edited ? ' · змінено' : ''} · ${status(x)}</div>${x.complete ? '' : igRepeats(list, i).map(w => `<div style="font-size:11px;color:#e0a43a">⚠ ${w}</div>`).join('')}</div>
-      ${x.complete ? '' : `<div style="display:grid;gap:2px"><button type="button" class="btn ghost sm igup" data-i="${i}" ${i === 0 ? 'disabled' : ''}>↑</button><button type="button" class="btn ghost sm igdn" data-i="${i}" ${i === list.length - 1 ? 'disabled' : ''}>↓</button></div>`}</div>`).join('')}
-    <div class="card" style="padding:10px;display:grid;gap:8px"><b style="font-size:13px">Розставити за розкладом${story ? ' (сторіс)' : ''}</b>
-     <div class="row" style="flex-wrap:wrap;gap:8px"><label class="f" style="margin:0">Перша публікація<input type="datetime-local" id="igsp0"></label><label class="f" style="margin:0">Інтервал<select id="igspn">${[[0.25, 'кожні 6 годин'], [0.5, 'кожні 12 годин'], [1, 'щодня'], [2, 'через день'], [3, 'кожні 3 дні'], [7, 'раз на тиждень']].map(([v, t]) => `<option value="${v}" ${v === 1 ? 'selected' : ''}>${t}</option>`).join('')}</select></label></div>
-     <button type="button" class="btn ghost sm" id="igspread">Призначити час усім неопублікованим за порядком</button></div>
-    <label class="muted" style="display:flex;gap:6px;align-items:center"><input type="checkbox" id="igauto" ${pb.auto ? 'checked' : ''}> Автопублікація за розкладом ${ig && ig.connected ? '' : '(спершу підключіть Instagram)'}</label>
-    ${pb.err ? `<div class="muted" style="color:#eb5757">Остання помилка (${esc(fdate(pb.err.at))}, ${esc(pb.err.id)}): ${esc(pb.err.error)}</div>` : ''}
-   </div>
+  <div class="muted">Календар публікацій (ваш місцевий час). <b>Перетягніть</b> пост на інший пост, щоб поміняти їх місцями разом із часом, або на порожній день, щоб перенести на цей день (час доби зберігається). На телефоні: оберіть пост і натисніть «Перемістити». Червоні ще не вийшли, хоча час минув; «⚠» означає повтор сцени чи формату поспіль.</div>
+  <div class="row" style="gap:8px;flex-wrap:wrap">${tabBtn('post', 'Пости й Reels', nPost)}${nStory ? tabBtn('story', 'Сторіс', nStory) : ''}
+   <label class="muted" style="display:flex;gap:6px;align-items:center;margin-left:auto"><input type="checkbox" id="igauto" ${pb.auto ? 'checked' : ''}> Автопублікація ${ig && ig.connected ? '' : '(спершу підключіть Instagram)'}</label></div>
+  ${igMove ? `<div class="pmove">Переміщення «${esc(igTitle(list.find(x => x.id === igMove) || {}))}»: торкніться поста, з яким поміняти, або дня, куди перенести. <button type="button" class="btn ghost sm" id="igmovex">Скасувати</button></div>` : ''}
+  ${pb.err ? `<div class="muted" style="color:#eb5757">Остання помилка (${esc(fdate(pb.err.at))}, ${esc(pb.err.id)}): ${esc(pb.err.error)}</div>` : ''}
+  <div class="pcal"><div class="pwk">${['Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб', 'Нд'].map(x => `<div>${x}</div>`).join('')}</div><div class="pgrid">${cal}</div></div>
+  <div class="pqueue" data-day="none"><b>Без дати (${undated.length})</b> <span class="muted" style="font-size:12px">перетягніть сюди, щоб зняти дату; автопілот черги розставить їх сам</span><div class="pql">${undated.map(chip).join('') || '<span class="muted" style="font-size:12px">усі пости заплановано</span>'}</div></div>
+  <details class="pspread"><summary class="muted">Розставити всі неопубліковані за розкладом…</summary><div class="row" style="flex-wrap:wrap;gap:8px;margin-top:8px"><label class="f" style="margin:0">Перша публікація<input type="datetime-local" id="igsp0"></label><label class="f" style="margin:0">Інтервал<select id="igspn">${[[0.25, 'кожні 6 годин'], [0.5, 'кожні 12 годин'], [1, 'щодня'], [2, 'через день'], [3, 'кожні 3 дні'], [7, 'раз на тиждень']].map(([v, t]) => `<option value="${v}" ${v === 1 ? 'selected' : ''}>${t}</option>`).join('')}</select></label><button type="button" class="btn ghost sm" id="igspread">Призначити час за порядком</button></div></details>
+  <div style="display:flex;gap:18px;flex-wrap:wrap;align-items:flex-start;margin-top:6px">
+    <div style="flex:1 1 100%;display:flex;gap:10px;align-items:center;flex-wrap:wrap"><div class="muted" style="font-size:12px;letter-spacing:.08em;text-transform:uppercase">Обрано: ${esc(igKind(p))} · ${status(p)}</div>${p.complete ? '' : `<button type="button" class="btn ghost sm" id="igmove">Перемістити…</button>`}</div>
    <div style="flex:1 1 330px;min-width:280px;display:grid;grid-template-columns:minmax(0,1fr);gap:10px">
     <div class="card" style="padding:0;overflow:hidden;max-width:${story ? 260 : 380}px;background:#0e0f14;color:#f3efe6">
      <div style="display:flex;gap:8px;align-items:center;padding:10px 12px"><div style="width:30px;height:30px;border-radius:50%;background:linear-gradient(135deg,#d6b46a,#8a6a2a)"></div><b style="font-size:13px">reeadvent</b><span style="margin-left:auto;opacity:.6">${story ? '24 год' : '···'}</span></div>
@@ -375,9 +384,30 @@ function renderIgPlan(pb, ig) {
   const post = async (path, body, okMsg) => { try { const x = await api('POST', '/api/admin/instagram/' + path, body); if (x.ok === false) { toast(x.error || 'Не вийшло'); return null; } if (okMsg) toast(okMsg); apply(x); return x; } catch (e) { toast(errText(e)); return null; } };
   if (!story) { const count = () => { const c = $('#igcap').value, tags = (c.match(/#[^\s#]+/g) || []).length; $('#igcnt').innerHTML = `${c.length}/2200 символів · ${tags}/30 хештегів` + (c.length > 2200 || tags > 30 ? ' <b style="color:#eb5757">перевищено</b>' : ''); $('#igprevcap').innerHTML = igCaptionHtml(c); }; count(); $('#igcap').oninput = count; }
   host.querySelectorAll('.igtab').forEach(b => b.onclick = () => { igTab = b.dataset.t; igSel = null; igSlide = 0; renderIgPlan(pb, ig); });
-  host.querySelectorAll('#iglist [data-id]').forEach(el => el.onclick = e => { if (e.target.closest('button')) return; igSel = el.dataset.id; igSlide = 0; renderIgPlan(pb, ig); });
-  const move = (i, d) => { const ids = list.map(x => x.id); [ids[i], ids[i + d]] = [ids[i + d], ids[i]]; let k = 0; post('plan', { order: P.map(x => (x.format || 'post') === igTab ? ids[k++] : x.id) }); };
-  host.querySelectorAll('.igup').forEach(b => b.onclick = () => move(+b.dataset.i, -1)); host.querySelectorAll('.igdn').forEach(b => b.onclick = () => move(+b.dataset.i, 1));
+  // календар: вибір, перетягування, переміщення на телефоні
+  const pick = id => { igSel = id; igSlide = 0; renderIgPlan(pb, ig); };
+  const dropOn = async (id, el) => {
+    igMove = null; const src = list.find(x => x.id === id); if (!src || src.complete || !el) return renderIgPlan(pb, ig);
+    const tgt = el.closest('.pqueue') ? null : el.closest('.pchip');   // у «Без дати» пост просто втрачає дату
+    if (tgt && tgt.dataset.pid !== id) { const t = list.find(x => x.id === tgt.dataset.pid); if (t && t.complete) return toast('Опублікований пост переносити не можна'); return post('plan', { swap: [id, tgt.dataset.pid] }, 'Поміняли місцями'); }
+    const cell = el.closest('[data-day]'); if (!cell) return renderIgPlan(pb, ig);
+    if (cell.dataset.day === 'none') return post('plan', { id, at: null }, 'Дату знято');
+    const d = new Date(+cell.dataset.day), base = src.at ? new Date(src.at) : null; d.setHours(base ? base.getHours() : (story ? 10 : 19), base ? base.getMinutes() : 0, 0, 0);
+    if (d.getTime() < now - 6e4) return toast('Цей час уже минув: оберіть сьогодні пізніше або майбутній день');
+    return post('plan', { id, at: d.getTime() }, 'Перенесено на ' + d.toLocaleString('uk-UA', { day: 'numeric', month: 'long', hour: '2-digit', minute: '2-digit' }));
+  };
+  host.querySelectorAll('.pchip').forEach(el => {
+    el.onclick = e => { e.stopPropagation(); if (igMove && igMove !== el.dataset.pid) return dropOn(igMove, el); pick(el.dataset.pid); };
+    el.ondragstart = e => { e.dataTransfer.setData('text/plain', el.dataset.pid); e.dataTransfer.effectAllowed = 'move'; el.classList.add('moving'); };
+    el.ondragend = () => el.classList.remove('moving');
+  });
+  host.querySelectorAll('.pday, .pqueue').forEach(el => {
+    el.ondragover = e => { e.preventDefault(); el.classList.add('drop'); }; el.ondragleave = () => el.classList.remove('drop');
+    el.ondrop = e => { e.preventDefault(); el.classList.remove('drop'); const id = e.dataTransfer.getData('text/plain'); if (id) dropOn(id, e.target); };
+    el.onclick = e => { if (igMove && !e.target.closest('.pchip')) dropOn(igMove, el); };
+  });
+  if ($('#igmove')) $('#igmove').onclick = () => { igMove = p.id; renderIgPlan(pb, ig); host.querySelector('.pcal').scrollIntoView({ behavior: 'smooth', block: 'start' }); };
+  if ($('#igmovex')) $('#igmovex').onclick = () => { igMove = null; renderIgPlan(pb, ig); };
   if ($('#igprev')) { $('#igprev').onclick = () => { igSlide = (igSlide + p.files.length - 1) % p.files.length; renderIgPlan(pb, ig); }; $('#ignext').onclick = () => { igSlide = (igSlide + 1) % p.files.length; renderIgPlan(pb, ig); }; }
   const at = () => { const v = $('#igat').value; return v ? new Date(v).getTime() : null; };
   const tg = () => ({ ig: $('#igt-ig').checked, ...($('#igt-fb') ? { fb: $('#igt-fb').checked } : {}) });

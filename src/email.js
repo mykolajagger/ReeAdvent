@@ -60,7 +60,8 @@ const T = {
     unsub: 'Не хочете отримувати нагадування?', unsubLink: 'Відписатися', brand: 'З повагою, підтримка ReeAdvent',
     refund: { subject: 'Повернення коштів за ReeAdvent', title: 'Повернення оформлено',
       p: (amount, days) => [`Ми оформили повернення ${esc(amount)} за ваше замовлення ReeAdvent. Кошти надійдуть на вашу картку протягом ${days} банківських днів (залежно від банку).`, `Доступ до календаря закрито. Якщо це сталося помилково або є питання, просто відповідайте на цей лист.`] },
-    reply: 'З повагою, підтримка ReeAdvent', subjFallback: 'Відповідь підтримки', link7: 'Посилання діє 7 днів.'
+    reply: 'З повагою, підтримка ReeAdvent', subjFallback: 'Відповідь підтримки', link7: 'Посилання діє 7 днів.',
+    home: '<b>Порада:</b> додайте календар на головний екран телефону, щоб відкривати його одним дотиком. iPhone: відкрийте посилання в Safari → «Поділитися» → «На початковий екран». Android: у Chrome меню ⋮ → «Додати на головний екран» (або «Установити додаток»).'
   },
   en: {
     hello: n => `Hi ${n}!`,
@@ -78,7 +79,8 @@ const T = {
     unsub: 'Do not want reminders?', unsubLink: 'Unsubscribe', brand: 'Best regards, ReeAdvent support',
     refund: { subject: 'Your ReeAdvent refund', title: 'Refund issued',
       p: (amount, days) => [`We have issued a refund of ${esc(amount)} for your ReeAdvent order. The money should reach your card within ${days} banking days (depending on your bank).`, `Access to the calendar has been closed. If this was a mistake or you have questions, just reply to this email.`] },
-    reply: 'Best regards, ReeAdvent support', subjFallback: 'Support reply', link7: 'The link is valid for 7 days.'
+    reply: 'Best regards, ReeAdvent support', subjFallback: 'Support reply', link7: 'The link is valid for 7 days.',
+    home: '<b>Tip:</b> add the calendar to your phone’s home screen so it opens with one tap. iPhone: open the link in Safari → «Share» → «Add to Home Screen». Android: in Chrome tap ⋮ → «Add to Home screen» (or «Install app»).'
   }
 };
 
@@ -95,12 +97,12 @@ function build(lang, { subject, title, paras, cta, url, foot, footText }) {
 /** Лист покупцю (slot 0): ваше замовлення готове, партнеру вже надіслано запрошення. */
 export function welcomeEmail(env, name, partnerName, startDate, link, lang = 'uk', code = null) {
   lang = L(lang); const t = T[lang].buyer;
-  return build(lang, { subject: t.subject, title: t.title(name), paras: [...t.p(partnerName, fmtDate(startDate, lang)), T[lang].link7, ...(code ? [codeLine(lang, code, 'long')] : [])], cta: t.cta, url: link });
+  return build(lang, { subject: t.subject, title: t.title(name), paras: [...t.p(partnerName, fmtDate(startDate, lang)), T[lang].link7, ...(code ? [codeLine(lang, code, 'long')] : []), T[lang].home], cta: t.cta, url: link });
 }
 /** Лист партнеру (slot 1): «[ім'я] створює для вас ваш спільний ReeAdvent». */
 export function partnerInviteEmail(env, name, buyerName, startDate, link, lang = 'uk', code = null) {
   lang = L(lang); const t = T[lang].partner;
-  return build(lang, { subject: t.subject(buyerName), title: t.title(name), paras: [...t.p(buyerName, fmtDate(startDate, lang)), T[lang].link7, ...(code ? [codeLine(lang, code, 'long')] : [])], cta: t.cta, url: link });
+  return build(lang, { subject: t.subject(buyerName), title: t.title(name), paras: [...t.p(buyerName, fmtDate(startDate, lang)), T[lang].link7, ...(code ? [codeLine(lang, code, 'long')] : []), T[lang].home], cta: t.cta, url: link });
 }
 export function loginEmail(env, name, link, lang = 'uk', code = null) {
   lang = L(lang); const t = T[lang].login;
@@ -112,7 +114,7 @@ export function reminderEmail(env, kind, { name, day, startDate, link, unsubUrl,
   const foot = `${T[lang].unsub} <a href="${esc(unsubUrl)}" style="color:#9a9cab">${T[lang].unsubLink}</a>`, footText = `${T[lang].unsub} ${T[lang].unsubLink}: ${unsubUrl}`;
   if (kind === 'window') return build(lang, { subject: t.subject(day), title: t.title(name, day), paras: t.p(), cta: t.cta, url: link, foot, footText });
   if (kind === 'survey') return build(lang, { subject: t.subject, title: t.title(name), paras: t.p(beforeStart, fmtDate(startDate, lang)), cta: t.cta, url: link, foot, footText });
-  return build(lang, { subject: t.subject, title: t.title(name), paras: t.p(), cta: t.cta, url: link, foot, footText });
+  return build(lang, { subject: t.subject, title: t.title(name), paras: [...t.p(), T[lang].home], cta: t.cta, url: link, foot, footText });   // eve: напередодні старту
 }
 /** Нагадування про незавершену оплату: stage 1 (через ~2 год) і stage 2 (через добу). Не більше двох листів на замовлення. */
 export function recoveryEmail(env, { name, link, lang = 'uk', stage = 1 }) {

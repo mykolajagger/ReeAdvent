@@ -1,16 +1,17 @@
 <!doctype html>
 <html lang="uk"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="robots" content="noindex">
-<title>ReeAdvent</title>
+<title>Адвент для двох · ReeAdvent</title><link rel="manifest" href="/manifest.webmanifest"><link rel="icon" type="image/png" sizes="32x32" href="/assets/favicon-32.png"><link rel="apple-touch-icon" href="/assets/apple-touch-icon.png"><meta name="apple-mobile-web-app-capable" content="yes"><meta name="mobile-web-app-capable" content="yes"><meta name="apple-mobile-web-app-title" content="ReeAdvent"><meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,400;0,500;1,400&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="/assets/base.css?v=5"></head>
 <body><canvas id="fx"></canvas><main><div class="center" id="c"><div class="spinner"></div><p class="muted" id="chk"></p></div></main>
 <p class="muted" style="text-align:center;margin:0 0 24px"><a href="https://www.instagram.com/reeadvent/" target="_blank" rel="noopener noreferrer" style="color:var(--gold2)">Instagram @reeadvent</a></p>
 <script src="/assets/fx.js?v=2"></script>
 <script src="/assets/track.js?v=2" defer></script>
+<script src="/assets/install.js?v=2"></script>
 <script>
 (() => {
   let lang = 'uk'; try { const s = localStorage.getItem('lang'); lang = s === 'en' || s === 'uk' ? s : (/^uk/i.test(navigator.language || '') ? 'uk' : 'en'); } catch {}
-  document.documentElement.lang = lang;
+  document.documentElement.lang = lang; if (lang === 'en') document.title = 'Advent for two · ReeAdvent';
   const T = {
     uk: { chk: 'Перевіряємо оплату…', paid: 'Оплату отримано', thanks: 'Дякуємо!', body: 'Обом із вас на пошту надіслано лист із посиланням і кодом для входу. Якщо його немає, перевірте «Спам». Дату першого вікна ви знайдете в листі.', go: 'Перейти до календаря', resend: 'Не отримали лист? Надіслати ще раз', sent: 'Надіслали ще раз. Перевірте «Вхідні» та «Спам» (до хвилини).', many: 'Забагато спроб. Спробуйте за годину або напишіть на support@reeadvent.fun.', fail: 'Не вдалося надіслати. Напишіть нам на support@reeadvent.fun.', off: 'Немає з’єднання.', wait: 'Чекаємо на підтвердження', waitb: 'Банк ще не підтвердив оплату. Якщо кошти списано, лист із доступом прийде протягом кількох хвилин.' },
     en: { chk: 'Checking your payment…', paid: 'Payment received', thanks: 'Thank you!', body: 'An email with a sign-in link and code has been sent to both of you. If it is missing, check Spam. You will find the date of the first window in the email.', go: 'Go to the calendar', resend: 'Did not get the email? Send it again', sent: 'Sent again. Check your inbox and Spam (within a minute).', many: 'Too many attempts. Try again in an hour or write to support@reeadvent.fun.', fail: 'Could not send. Please write to support@reeadvent.fun.', off: 'No connection.', wait: 'Waiting for confirmation', waitb: 'The bank has not confirmed the payment yet. If the money was charged, the access email will arrive within a few minutes.' }
@@ -22,6 +23,7 @@
     for (let i = 0; i < 40; i++) {
       try { const j = await (await fetch(`/api/orders/${encodeURIComponent(id)}/status`)).json();
         if (j.status === 'paid') {
+          if (window.raInstall) window.raInstall(3000);
           c.innerHTML = `<div class="eyebrow">${T.paid}</div><h2>${T.thanks}</h2><p class="muted" style="max-width:420px">${T.body}</p><a class="btn" href="/app/" style="text-decoration:none">${T.go}</a><div style="display:grid;gap:8px;justify-items:center"><button class="btn ghost sm" id="rs">${T.resend}</button><div class="muted" id="rm" style="font-size:13px;min-height:1.2em"></div></div>`;
           const rs = document.getElementById('rs'); rs.onclick = async () => { rs.disabled = true; const m = document.getElementById('rm');
             try { const r = await fetch(`/api/orders/${encodeURIComponent(id)}/resend`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' }); const x = await r.json(); m.textContent = x.ok ? T.sent : x.error === 'too_many' ? T.many : T.fail; if (x.ok) setTimeout(() => { rs.disabled = false; }, 30000); else rs.disabled = false; } catch { m.textContent = T.off; rs.disabled = false; } };

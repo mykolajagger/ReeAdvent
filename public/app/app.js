@@ -8,8 +8,8 @@ const reduceMotion = matchMedia('(prefers-reduced-motion: reduce)').matches;
 /* ---------- Мова ---------- */
 let LANG = (() => { try { const s = localStorage.getItem('lang'); if (s === 'uk' || s === 'en') return s; } catch {} return /^uk/i.test(navigator.language || '') ? 'uk' : 'en'; })();
 const L = (uk, en) => (LANG === 'en' ? en : uk);
-const setLang = l => { LANG = l; try { localStorage.setItem('lang', l); } catch {} document.documentElement.lang = l; };
-document.documentElement.lang = LANG;
+const setLang = l => { LANG = l; try { localStorage.setItem('lang', l); } catch {} document.documentElement.lang = l; document.title = l === 'en' ? 'Advent for two · ReeAdvent' : 'Адвент для двох · ReeAdvent'; };
+document.documentElement.lang = LANG; if (LANG === 'en') document.title = 'Advent for two · ReeAdvent';
 const LOCALE = () => (LANG === 'en' ? 'en-GB' : 'uk-UA');
 
 let st = null, tab = 'cal';
@@ -422,6 +422,7 @@ function handleErr(e) {
 function route() {
   clearTimeout(pollT); clearInterval(timerI);
   if (st.lang && st.lang !== LANG) setLang(st.lang); // мова календаря
+  if (window.raInstall && !route.inst) { route.inst = 1; window.raInstall(4000); } // пропозиція «на головний екран»
   if (!st.myDone) { if (!ans.name) ans.name = st.me.suggestedName || ''; const bc = budgetCfg(); if (budgetVal === null) { budgetVal = bc.def; ans.budget = bc.toUah(bc.def); } return showSurvey(); }
   if (!st.ready) return showWaiting();
   if (tab === 'hist') return showHistory();

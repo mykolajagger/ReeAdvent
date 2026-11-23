@@ -46,6 +46,20 @@ export async function editPost(env, id, { caption, at, ig, fb } = {}, man) {
   if (at !== undefined) { if (at === null) delete o.at; else { at = Number(at); if (!Number.isFinite(at) || at < Date.now() - 864e5 || at > Date.now() + 400 * 864e5) return { ok: false, error: 'Некоректна дата' }; o.at = Math.round(at / 6e4) * 6e4; } }
   await savePlan(env, plan); return { ok: true };
 }
+/** Поміняти два пости місцями: обмінюються часом публікації (у кого не було часу, той його втрачає) і місцем у черзі. Опубліковані не чіпаємо. */
+export async function swapPosts(env, a, b, man) {
+  if (!a || !b || a === b) return { ok: false, error: 'Оберіть два різні пости' };
+  if (!man.find(p => p.id === a) || !man.find(p => p.id === b)) return { ok: false, error: 'Немає такого поста' };
+  const st = await pubState(env), fbp = await getFbPage(env), plan = await getPlan(env), eff = effective(man, plan);
+  const A = eff.find(p => p.id === a), B = eff.find(p => p.id === b);
+  if (isComplete(st, A, !!fbp) || isComplete(st, B, !!fbp)) return { ok: false, error: 'Опублікований пост переносити не можна' };
+  const oa = plan.posts[a] = plan.posts[a] || {}, ob = plan.posts[b] = plan.posts[b] || {}, ta = oa.at, tb = ob.at;
+  if (tb == null) delete oa.at; else oa.at = tb;
+  if (ta == null) delete ob.at; else ob.at = ta;
+  const order = plan.order.length === man.length ? plan.order.slice() : eff.map(p => p.id), ia = order.indexOf(a), ib = order.indexOf(b);
+  if (ia >= 0 && ib >= 0) { order[ia] = b; order[ib] = a; plan.order = order; }
+  await savePlan(env, plan); return { ok: true };
+}
 export async function setOrder(env, order, man) {
   const ids = man.map(p => p.id); if (!Array.isArray(order) || order.length !== ids.length || !ids.every(i => order.includes(i))) return { ok: false, error: 'Некоректний порядок' };
   const plan = await getPlan(env); plan.order = order; await savePlan(env, plan); return { ok: true };
