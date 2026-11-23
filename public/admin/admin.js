@@ -82,6 +82,23 @@ async function catalogCityView(main, cc, id) {
 }
 
 /* ---------- Каркас ---------- */
+// Генератор посилань з мітками: [назва, utm_source, utm_medium, кампанія за замовчуванням, де вставити]
+const UTM_PRESETS = [
+  ['Instagram: посилання в шапці профілю', 'instagram', 'bio', 'profile', 'Instagram → Редагувати профіль → Посилання → Додати зовнішнє посилання. Одне посилання на весь час.'],
+  ['Instagram: стікер «Посилання» в сторіс', 'instagram', 'story', 'stories', 'Сторіс → стікер «Посилання». У «Креатив» напишіть, яка це сторіс (наприклад, okno1), щоб порівнювати сторіс між собою.'],
+  ['Instagram: директ і відповіді в коментарях', 'instagram', 'dm', 'dm', 'Надсилайте це посилання, коли просять «дайте посилання».'],
+  ['Facebook: кнопка й поле «Вебсайт» сторінки', 'facebook', 'page', 'profile', 'Сторінка → Редагувати кнопку дії → «Докладніше» → Вебсайт; і Інформація → Вебсайт.'],
+  ['Facebook: пост на сторінці', 'facebook', 'post', 'posts', 'Вставте в текст поста. У «Креатив» назва поста.'],
+  ['Telegram: канал, група, чат', 'telegram', 'social', 'telegram', 'У «Креатив» назва каналу чи групи.'],
+  ['Блогер', 'influencer', 'social', 'bloggers', 'У «Креатив» ім’я блогера латиницею (наприклад, anna). Разом із його промокодом.'],
+  ['Реклама Meta (Ads Manager)', 'meta', 'paid', 'ua_cold', 'Ads Manager → оголошення → «URL вебсайту». Кампанія: ua_cold, eu_ua або retarget; креатив: reel1, carousel1…'],
+  ['Реклама Google (пошук)', 'google', 'paid', 'search_ua', 'Google Ads → оголошення → «Кінцева URL-адреса».'],
+  ['TikTok', 'tiktok', 'social', 'tiktok', 'Посилання в профілі або в описі.'],
+  ['Pinterest', 'pinterest', 'social', 'pins', 'Поле «Посилання» в піні.'],
+  ['Інше', 'other', 'referral', 'other', 'У «Кампанія» напишіть, де саме.']
+];
+const TR = { а: 'a', б: 'b', в: 'v', г: 'h', ґ: 'g', д: 'd', е: 'e', є: 'ie', ж: 'zh', з: 'z', и: 'y', і: 'i', ї: 'i', й: 'i', к: 'k', л: 'l', м: 'm', н: 'n', о: 'o', п: 'p', р: 'r', с: 's', т: 't', у: 'u', ф: 'f', х: 'kh', ц: 'ts', ч: 'ch', ш: 'sh', щ: 'shch', ь: '', ю: 'iu', я: 'ia', ы: 'y', э: 'e', ё: 'e', ъ: '', "'": '', '’': '' };
+const slug = v => String(v || '').toLowerCase().trim().replace(/./g, ch => TR[ch] !== undefined ? TR[ch] : ch).replace(/[^a-z0-9_.-]+/g, '_').replace(/^_+|_+$/g, '').slice(0, 40);
 const NAV = [['dashboard', 'Дашборд'], ['launch', 'Запуск'], ['orders', 'Замовлення'], ['customers', 'Клієнти'], ['promos', 'Промокоди'], ['social', 'Соцмережі й реклама'], ['inbox', 'Підтримка'], ['comms', 'Комунікації'], ['catalog', 'Каталог закладів'], ['settings', 'Налаштування'], ['audit', 'Журнал дій']];
 async function shell() {
   root.innerHTML = `<div class="shell"><aside class="side"><div class="logo"><img class="logo-img" src="/assets/logo.png" alt="ReeAdvent" width="120" height="44"></div>
@@ -439,7 +456,9 @@ async function renderAds(days) {
    <label class="f" style="margin:0">Бюджет, $<input id="tkb" type="number" min="0" value="${c.budget}" style="width:100px"></label></div>
   <div class="row"><button class="btn" id="tks" type="button">Зберегти відстеження</button><span class="muted">Порожнє поле вимикає інструмент. Банер згоди з'являється лише коли задано хоча б один ID.</span></div>
   <h3 style="margin:14px 0 4px;font-size:15px">Посилання з мітками (UTM)</h3>
-  <div class="row" style="flex-wrap:wrap;gap:10px"><label class="f" style="margin:0">Джерело<select id="utms">${d.channels.map(x => `<option>${x}</option>`).join('')}</select></label><label class="f" style="margin:0">Кампанія<input id="utmc" value="start_ua" placeholder="start_ua"></label><label class="f" style="margin:0">Креатив / блогер<input id="utmk" placeholder="reel1"></label></div>
+  <div class="muted" style="margin:0 0 6px">Оберіть, де буде посилання: джерело й тип підставляться самі. Кампанія й креатив пишуться латиницею (кирилиця перетвориться сама).</div>
+  <div class="row" style="flex-wrap:wrap;gap:10px"><label class="f" style="margin:0">Де буде посилання<select id="utmp">${UTM_PRESETS.map((x, i) => `<option value="${i}">${esc(x[0])}</option>`).join('')}</select></label><label class="f" style="margin:0">Кампанія<input id="utmc" placeholder="profile"></label><label class="f" style="margin:0">Креатив / сторіс / блогер<input id="utmk" placeholder="необов’язково"></label></div>
+  <div class="muted" id="utmh" style="font-size:13px"></div>
   <div class="row"><input id="utmo" readonly style="flex:1;min-width:260px"><button class="btn ghost" id="utmcp" type="button">Скопіювати</button></div>
   <h3 style="margin:14px 0 4px;font-size:15px">Витрати</h3>
   <div class="row" style="flex-wrap:wrap;gap:10px;align-items:flex-end"><label class="f" style="margin:0">Дата<input id="spd" type="date" value="${today}"></label><label class="f" style="margin:0">Канал<select id="spch">${d.channels.map(x => `<option>${x}</option>`).join('')}</select></label><label class="f" style="margin:0">Кампанія<input id="spc" placeholder="start_ua"></label><label class="f" style="margin:0">Сума, $<input id="spa" type="number" step="0.01" min="0" style="width:100px"></label><button class="btn" id="spadd" type="button">Додати</button></div>
@@ -450,8 +469,9 @@ async function renderAds(days) {
   <tr style="border-top:2px solid var(--line2);font-weight:600"><td>Разом</td><td>${t.started}</td><td>${t.paid}</td><td>${uah(t.revenue_kop)}</td><td>${usd(t.spend_cents)}</td><td>${t.cpa_usd != null ? '$' + t.cpa_usd : '—'}</td><td>${t.roas != null ? t.roas + '×' : '—'}</td></tr></tbody></table></div>
   <div class="muted">ROAS = виручка / витрати за курсом ${rp.rate} ₴ за $1. Оформлення = створені замовлення, оплата = оплачені без повернення.</div>
   ${rp.campaigns.length ? `<details><summary class="muted" style="cursor:pointer">Кампанії та креативи (${rp.campaigns.length})</summary><div class="muted">${rp.campaigns.map(x => `${esc(x.source)} / ${esc(x.campaign || '—')} / ${esc(x.content || '—')}: оформлень ${x.started}, оплат ${x.paid}, ${uah(x.revenue_kop)}`).join('<br>')}</div></details>` : ''}`;
-  const base = location.origin + '/', utm = () => { const q = new URLSearchParams({ utm_source: $('#utms').value, utm_medium: $('#utms').value === 'influencer' ? 'social' : 'paid', utm_campaign: $('#utmc').value.trim().toLowerCase() }); if ($('#utmk').value.trim()) q.set('utm_content', $('#utmk').value.trim().toLowerCase()); $('#utmo').value = base + '?' + q; };
-  ['utms', 'utmc', 'utmk'].forEach(i => $('#' + i).oninput = utm); utm();
+  const base = 'https://reeadvent.fun/', utm = () => { const pr = UTM_PRESETS[+$('#utmp').value] || UTM_PRESETS[0], q = new URLSearchParams({ utm_source: pr[1], utm_medium: pr[2] }); const c = slug($('#utmc').value) || pr[3]; if (c) q.set('utm_campaign', c); const k = slug($('#utmk').value); if (k) q.set('utm_content', k); $('#utmo').value = base + '?' + q; $('#utmh').textContent = pr[4]; };
+  $('#utmp').onchange = () => { const pr = UTM_PRESETS[+$('#utmp').value]; $('#utmc').value = ''; $('#utmc').placeholder = pr[3] || 'назва'; $('#utmk').value = ''; utm(); };
+  ['utmc', 'utmk'].forEach(i => $('#' + i).oninput = utm); utm();
   $('#utmcp').onclick = async () => { try { await navigator.clipboard.writeText($('#utmo').value); toast('Скопійовано'); } catch { $('#utmo').select(); toast('Виділено, скопіюйте вручну'); } };
   $('#tks').onclick = async () => { try { await api('POST', '/api/admin/ads/config', { meta: $('#tkm').value, ga4: $('#tkg').value, gads: $('#tka').value, gads_label: $('#tkl').value, budget: $('#tkb').value }); toast('Збережено'); renderAds(days); } catch (e) { toast(errText(e)); } };
   $('#spadd').onclick = async () => { try { await api('POST', '/api/admin/ads/spend', { day: $('#spd').value, channel: $('#spch').value, campaign: $('#spc').value, amount: $('#spa').value }); toast('Додано'); renderAds(days); } catch (e) { toast(errText(e)); } };
