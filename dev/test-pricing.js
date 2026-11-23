@@ -48,10 +48,10 @@ assert.equal(moneyText(2900, 'EUR'), '29 €'); assert.equal(moneyText(2950, 'EU
 
 // ---- конфіг: валюта за країною, ціна в євро ще не задана → з гривні за курсом, округлена вгору ----
 let cfg = (await call('x', 'GET', '/api/config?country=UA')).j; assert.equal(cfg.price, 1499); assert.equal(cfg.currency.code, 'UAH');
-cfg = (await call('x', 'GET', '/api/config?country=DE')).j; assert.equal(cfg.currency.code, 'EUR'); assert.equal(cfg.price, Math.ceil(1499 / 48)); assert.equal(cfg.uahPerEur, 48); assert.equal(cfg.eurInvoice, true);
+cfg = (await call('x', 'GET', '/api/config?country=DE')).j; assert.equal(cfg.currency.code, 'EUR'); assert.equal(cfg.price, Math.ceil(1499 / 48)); assert.equal(cfg.uahPerEur, 48);
 cfg = (await call('x', 'GET', '/api/config?country=US')).j; assert.equal(cfg.currency.code, 'EUR', 'єдина ціна в євро для всіх країн, крім України');
 // адмінка: ціни в гривнях і в євро
-let st = (await A('GET', '/api/admin/settings')).j; assert.equal(st.prices.eurSet, false); assert.equal(st.prices.eur, 32); assert.equal(st.payEurOff, null);
+let st = (await A('GET', '/api/admin/settings')).j; assert.equal(st.prices.eurSet, false); assert.equal(st.prices.eur, 32);
 assert.equal((await A('POST', '/api/admin/settings', { price_eur: 0 })).j.error, 'bad_price_eur'); assert.equal((await A('POST', '/api/admin/settings', { price_eur: 20000 })).j.error, 'bad_price_eur');
 st = (await A('POST', '/api/admin/settings', { price_uah: '1499', price_eur: '29' })).j; assert.equal(st.settings.price_eur, 29); assert.equal(st.prices.eurSet, true);
 assert.equal((await call('x', 'GET', '/api/config?country=PL')).j.price, 29); assert.equal((await call('x', 'GET', '/api/config?country=UA')).j.price, 1499);
@@ -70,7 +70,7 @@ const de = { country: 'DE', city: 'Berlin', region: 'Berlin' };
 let ipn = 0; const order = async o => (await call('x', 'POST', '/api/orders', { ...good, ...o }, { 'cf-connecting-ip': '10.0.0.' + ++ipn })).j;
 const oUA = await order({}); assert.equal(oUA.currency, 'UAH'); assert.equal(oUA.amountKop, 149900);
 const oDE = await order({ ...de, emailA: 'de1@t.com', emailB: 'de2@t.com' }); assert.equal(oDE.currency, 'EUR'); assert.equal(oDE.amountKop, 2900);
-let r = ord(oDE.orderId); assert.deepEqual([r.currency, r.amount_kop, r.list_kop, r.uah_rate, r.inv_ccy, r.inv_amount], ['EUR', 2900, 2900, 48, 978, 2900]);
+let r = ord(oDE.orderId); assert.deepEqual([r.currency, r.amount_kop, r.list_kop, r.uah_rate, r.inv_ccy, r.inv_amount], ['EUR', 2900, 2900, 48, 980, 139200]);
 r = ord(oUA.orderId); assert.deepEqual([r.currency, r.uah_rate, r.inv_ccy, r.inv_amount], ['UAH', 1, 980, 149900]);
 const oDEp = await order({ ...de, emailA: 'de3@t.com', emailB: 'de4@t.com', promo: 'TEN' }); assert.equal(oDEp.amountKop, 2610); assert.equal(ord(oDEp.orderId).discount_kop, 290);
 const oFree = await order({ ...de, emailA: 'de5@t.com', emailB: 'de6@t.com', promo: 'FREE' }); assert(oFree.free); assert.equal(ord(oFree.orderId).currency, 'EUR'); assert(ord(oFree.orderId).paid_at, 'безкоштовне одразу оплачене');
@@ -88,46 +88,39 @@ globalThis.fetch = async (u, o = {}) => {
 };
 env.PAYMENT_MODE = 'monobank';
 const m1 = await order({ ...de, emailA: 'm1@t.com', emailB: 'm2@t.com' }); assert(m1.ok, JSON.stringify(m1));
-assert.equal(calls.length, 1); assert.deepEqual([calls[0].ccy, calls[0].amount, calls[0].merchantPaymInfo.basketOrder[0].sum], [978, 2900, 2900], 'рахунок у євро');
-assert.equal(m1.payUrl, 'https://pay.mbnk.biz/inv1');
+assert.equal(calls.length, 1); assert.deepEqual([calls[0].ccy, calls[0].amount, calls[0].merchantPaymInfo.basketOrder[0].sum], [980, 139200, 139200], 'ціна 29 €, рахунок у гривнях: 29 × 48 = 1392 ₴');
+assert.equal(m1.payUrl, 'https://pay.mbnk.biz/inv1'); assert.equal(m1.currency, 'EUR'); assert.equal(m1.amountKop, 2900);
+r = ord(m1.orderId); assert.deepEqual([r.currency, r.amount_kop, r.inv_ccy, r.inv_amount, r.uah_rate], ['EUR', 2900, 980, 139200, 48]);
 const u1 = await order({ emailA: 'u1@t.com', emailB: 'u2@t.com' }); assert.deepEqual([calls.at(-1).ccy, calls.at(-1).amount], [980, 149900], 'Україна: у гривнях');
-// оплата підтверджується лише з правильною валютою й сумою
-statuses.inv1.status = 'success'; statuses.inv1.ccy = 980;
-await call('x', 'POST', '/api/payments/monobank/webhook', { invoiceId: 'inv1' }); assert.equal(ord(m1.orderId).paid_at, null, 'не та валюта: не оплачено');
-statuses.inv1.ccy = 978; await call('x', 'POST', '/api/payments/monobank/webhook', { invoiceId: 'inv1' }); assert(ord(m1.orderId).paid_at, 'оплачено в євро');
-// банк не приймає євро: рахунок у гривнях за курсом і надалі одразу в гривнях
-mono.eur = 400; calls = [];
-const m2 = await order({ ...de, emailA: 'm3@t.com', emailB: 'm4@t.com' }); assert(m2.ok, JSON.stringify(m2));
-assert.deepEqual(calls.map(c => c.ccy), [978, 980]); assert.equal(calls[1].amount, 139200, '29 € × 48 = 1392 ₴');
-r = ord(m2.orderId); assert.deepEqual([r.currency, r.amount_kop, r.inv_ccy, r.inv_amount, r.uah_rate], ['EUR', 2900, 980, 139200, 48]);
-const off = JSON.parse(raw.prepare("SELECT value FROM settings WHERE key = 'pay_eur_off'").get().value); assert(off.at > 0 && off.error.includes('ccy'));
-cfg = (await call('x', 'GET', '/api/config?country=DE')).j; assert.equal(cfg.eurInvoice, false, 'сайт пояснить, що оплата піде в гривнях');
-assert((await A('GET', '/api/admin/settings')).j.payEurOff.error.includes('ccy'), 'адмінка бачить попередження');
-calls = []; const m3 = await order({ ...de, emailA: 'm5@t.com', emailB: 'm6@t.com' }); assert(m3.ok); assert.deepEqual(calls.map(c => c.ccy), [980], 'одразу в гривнях, без зайвої спроби в євро');
-const invM2 = r.invoice_id; statuses[invM2].status = 'success';
-await call('x', 'POST', '/api/payments/monobank/webhook', { invoiceId: invM2 }); assert(ord(m2.orderId).paid_at, 'гривневий рахунок за євро-ціною оплачено');
-// спробувати в євро знову
-await A('POST', '/api/admin/settings', { eur_retry: true }); assert.equal((await call('x', 'GET', '/api/config?country=DE')).j.eurInvoice, true);
-mono.eur = 200; calls = []; await order({ ...de, emailA: 'm7@t.com', emailB: 'm8@t.com' }); assert.deepEqual(calls.map(c => c.ccy), [978]);
-// збій банку (5xx) чи відмова обох валют: валюту не вимикаємо
-mono.eur = 503; calls = []; assert.equal((await order({ ...de, emailA: 'm9@t.com', emailB: 'm10@t.com' })).error, 'payment_provider_error'); assert.equal(raw.prepare("SELECT 1 FROM settings WHERE key = 'pay_eur_off'").get(), undefined);
-mono.eur = 400; mono.uah = 400; assert.equal((await order({ ...de, emailA: 'm11@t.com', emailB: 'm12@t.com' })).error, 'payment_provider_error'); assert.equal(raw.prepare("SELECT 1 FROM settings WHERE key = 'pay_eur_off'").get(), undefined, 'гривні теж не пройшли: справа не у валюті');
+assert(!calls.some(c => c.ccy !== 980), 'рахунків в інших валютах немає');
+// оплата підтверджується лише з правильною сумою й валютою
+statuses.inv1.status = 'success'; statuses.inv1.amount = 2900; statuses.inv1.ccy = 978;
+await call('x', 'POST', '/api/payments/monobank/webhook', { invoiceId: 'inv1' }); assert.equal(ord(m1.orderId).paid_at, null, 'не та сума й валюта: не оплачено');
+statuses.inv1.amount = 139200; statuses.inv1.ccy = 980; await call('x', 'POST', '/api/payments/monobank/webhook', { invoiceId: 'inv1' }); assert(ord(m1.orderId).paid_at, 'оплачено в гривнях');
+// замовлення з промокодом: знижка в євро, рахунок у гривнях від ціни зі знижкою
+calls = []; const m2 = await order({ ...de, emailA: 'm3@t.com', emailB: 'm4@t.com', promo: 'TEN' }); assert.equal(m2.amountKop, 2610); assert.equal(calls[0].amount, 125300, '26,10 € × 48 = 1252,80 → 1253 ₴');
+r = ord(m2.orderId); assert.equal(r.inv_amount, 125300); assert.equal(Math.round(r.uah_rate * 1e6) / 1e6, Math.round(125300 / 2610 * 1e6) / 1e6, 'курс для звітів = фактично виставлене');
+statuses[r.invoice_id].status = 'success'; await call('x', 'POST', '/api/payments/monobank/webhook', { invoiceId: r.invoice_id }); assert(ord(m2.orderId).paid_at);
+// збій банку: зрозуміла помилка
+mono.uah = 503; assert.equal((await order({ ...de, emailA: 'm9@t.com', emailB: 'm10@t.com' })).error, 'payment_provider_error');
 mono = { eur: 200, uah: 200 };
+cfg = (await call('x', 'GET', '/api/config?country=DE')).j; assert.equal(cfg.eurInvoice, undefined); assert.equal(cfg.uahPerEur, 48, 'курс для примітки під формою');
 
 // ---- повернення: сума у валюті замовлення, Monobank отримує суму у валюті рахунку ----
 let x = (await A('POST', `/api/admin/orders/${m1.orderId}/refund`, { amountKop: 1000, method: 'auto', notify: true })).j; assert(x.ok && x.method === 'api', JSON.stringify(x));
-assert.deepEqual([cancels.at(-1).invoiceId, cancels.at(-1).amount], ['inv1', 1000]); assert.deepEqual([ord(m1.orderId).refund_kop, ord(m1.orderId).refund_status], [1000, 'processing']);
+assert.deepEqual([cancels.at(-1).invoiceId, cancels.at(-1).amount], ['inv1', 48000], '10 € → 480 ₴ за рахунком'); assert.deepEqual([ord(m1.orderId).refund_kop, ord(m1.orderId).refund_status], [1000, 'processing']);
 assert.equal(outbox().at(-1).to_email, 'm1@t.com'); assert(/10 €/.test(outbox().at(-1).body), 'лист про повернення в євро');
 x = (await A('POST', `/api/admin/orders/${m2.orderId}/refund`, { amountKop: 1000, method: 'auto', notify: false })).j; assert(x.ok);
-assert.equal(cancels.at(-1).amount, 48000, '10 € за гривневим рахунком: 480 ₴');
+assert.equal(cancels.at(-1).amount, Math.round(125300 * 1000 / 2610), 'пропорційно від виставленого в гривнях');
 assert.equal((await A('POST', `/api/admin/orders/${oDE.orderId}/refund`, { amountKop: 3000 })).j.error, 'bad_amount', 'не більше за оплачене в євро');
 env.PAYMENT_MODE = 'stub'; globalThis.fetch = realFetch;
 
 // ---- звіти: євро в гривневому еквіваленті ----
 const dash = (await A('GET', '/api/admin/dashboard?days=30')).j.kpi;
-// оплачено: UA 1499 ₴, DE 29 € (×48), безкоштовне 0, m1 29 € (повернено 10 €), m2 29 € (гривневий рахунок, повернено 10 €)
-assert.equal(dash.paid, 5); assert.equal(dash.free, 1); assert.equal(dash.revenue_kop, 149900 + 139200 * 3); assert.equal(dash.refunds_kop, 48000 * 2); assert.equal(dash.net_revenue_kop, 149900 + 139200 * 3 - 96000);
-assert.deepEqual(dash.eur, { paid: 4, cents: 2900 * 3 - 2000, uah_kop: 139200 * 3 - 96000 }, 'частка оплат у євро');
+// оплачено: UA 1499 ₴, DE 29 € (рахунок 1392 ₴), безкоштовне 0, m1 29 € (1392 ₴, повернено 10 € = 480 ₴), m2 26,10 € (1253 ₴, повернено 10 € ≈ 480,08 ₴)
+const ref2 = Math.round(1000 * 125300 / 2610);
+assert.equal(dash.paid, 5); assert.equal(dash.free, 1); assert.equal(dash.revenue_kop, 149900 + 139200 * 2 + 125300); assert.equal(dash.refunds_kop, 48000 + ref2); assert.equal(dash.net_revenue_kop, 149900 + 139200 * 2 + 125300 - 48000 - ref2);
+assert.deepEqual(dash.eur, { paid: 4, cents: 2900 * 2 + 2610 - 2000, uah_kop: 139200 * 2 + 125300 - 48000 - ref2 }, 'частка оплат у євро');
 const cust = (await A('GET', '/api/admin/customers')).j.customers; assert.equal(cust.find(c => c.email === 'de1@t.com').paid_kop, 139200); assert.equal(cust.find(c => c.email === 'a1@t.com').paid_kop, 149900);
 const pr = (await A('GET', '/api/admin/promos')).j; const ten = (pr.promos || pr.rows || pr.list || []).find(p => p.code === 'TEN'); assert(ten, JSON.stringify(Object.keys(pr)));
 const ol = (await A('GET', '/api/admin/orders?status=all')).j.orders; assert.equal(ol.find(o => o.id === oDE.orderId).currency, 'EUR');
@@ -157,7 +150,7 @@ assert.equal((await A('GET', '/api/admin/dashboard?days=30')).j.kpi.paid, before
 
 // ---- видалення: лише з архіву, разом з усім, що належить замовленню ----
 assert.equal((await A('POST', `/api/admin/orders/${oDEp.orderId}/delete`, {})).j.error, 'not_archived');
-await call('x', 'GET', `/api/dev/pay/${oDEp.orderId}`); assert.equal(raw.prepare("SELECT used_count FROM promo_codes WHERE code = 'TEN'").get().used_count, 1);
+await call('x', 'GET', `/api/dev/pay/${oDEp.orderId}`); assert.equal(raw.prepare("SELECT used_count FROM promo_codes WHERE code = 'TEN'").get().used_count, 2, 'TEN: m2 і це замовлення');
 const cal = raw.prepare('SELECT id FROM calendars WHERE order_id = ?').get(oDEp.orderId), mids = raw.prepare('SELECT id FROM members WHERE calendar_id = ?').all(cal.id).map(m => m.id);
 raw.prepare('INSERT INTO answers (member_id, day, text, created_at) VALUES (?, 1, ?, ?)').run(mids[0], 'тест', Date.now());
 assert(raw.prepare('SELECT COUNT(*) AS n FROM email_log WHERE order_id = ?').get(oDEp.orderId).n >= 2, 'листи замовлення є в журналі');
@@ -167,7 +160,7 @@ assert.equal(ord(oDEp.orderId), undefined); assert.equal(raw.prepare('SELECT COU
 assert.equal(raw.prepare(`SELECT COUNT(*) AS n FROM members WHERE id IN (${mids.map(() => '?').join(',')})`).get(...mids).n, 0);
 assert.equal(raw.prepare(`SELECT COUNT(*) AS n FROM answers WHERE member_id IN (${mids.map(() => '?').join(',')})`).get(...mids).n, 0);
 assert.equal(raw.prepare('SELECT COUNT(*) AS n FROM email_log WHERE order_id = ?').get(oDEp.orderId).n, 0, 'листи з журналу теж');
-assert.equal(raw.prepare("SELECT used_count FROM promo_codes WHERE code = 'TEN'").get().used_count, 0, 'ліміт промокоду повернувся');
+assert.equal(raw.prepare("SELECT used_count FROM promo_codes WHERE code = 'TEN'").get().used_count, 1, 'ліміт промокоду повернувся');
 assert(raw.prepare("SELECT 1 FROM audit_log WHERE action = 'order_delete' AND target = ?").get(oDEp.orderId), 'видалення записано в журнал дій');
 assert.equal((await A('GET', `/api/admin/orders/${oDEp.orderId}`)).status, 404);
 // стан нагадувань про оплату чиститься разом із замовленням

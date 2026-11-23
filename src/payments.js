@@ -1,22 +1,9 @@
 // Оплата. PAYMENT_MODE=stub — локальна заглушка; PAYMENT_MODE=monobank — Monobank acquiring.
 // Документація Monobank: https://monobank.ua/api-docs/acquiring
-// Валюта рахунку: для України гривня (ccy 980), для інших країн євро (ccy 978). Якщо Monobank не приймає рахунок у євро (валюту не ввімкнено для мерчанта),
-// виставляється рахунок у гривнях за курсом, а система запам'ятовує це й надалі одразу виставляє гривні; адмінка показує попередження й дає спробувати знову.
+// Рахунок завжди в гривнях (ccy 980). Для інших країн ціна задана в євро: сума рахунку = ціна в євро × курс євро (Monobank) на момент оформлення, округлено до гривні.
 import { HttpError } from './util.js';
 const MONO = 'https://api.monobank.ua';
 const providerError = () => new HttpError(502, 'payment_provider_error');
-const EUR_OFF = 'pay_eur_off';
-
-export async function eurInvoiceOff(env) {
-  const r = await env.DB.prepare('SELECT value FROM settings WHERE key = ?').bind(EUR_OFF).first();
-  if (!r || !r.value) return null;
-  try { return JSON.parse(r.value); } catch { return { at: 0, error: String(r.value) }; }
-}
-export async function setEurInvoiceOff(env, v) {
-  if (!v) { await env.DB.prepare('DELETE FROM settings WHERE key = ?').bind(EUR_OFF).run(); return; }
-  await env.DB.prepare('INSERT INTO settings (key, value, updated_at) VALUES (?, ?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value, updated_at = excluded.updated_at').bind(EUR_OFF, JSON.stringify(v), Date.now()).run();
-}
-
 async function monoCreate(env, order, amount, ccy) {
   try {
     const res = await fetch(`${MONO}/api/merchant/invoice/create`, {
@@ -36,25 +23,19 @@ async function monoCreate(env, order, amount, ccy) {
   } catch (e) { return { ok: false, status: 0, error: 'network' }; }
 }
 
-/** Рахунок на оплату замовлення. Повертає { invoiceId, pageUrl, ccy, amount }: валюту й суму, які справді виставлено (їх перевіряємо при оплаті й поверненні).
- * uahPerEur: курс для рахунку в гривнях за замовлення в євро (коли банк не приймає євро). */
+/** Рахунок на оплату замовлення (завжди в гривнях). Повертає { invoiceId, pageUrl, ccy, amount }: валюту й суму, які справді виставлено.
+ * uahPerEur: курс для замовлення з ціною в євро. */
+export function invoiceAmountUah(order, uahPerEur) {
+  if (order.currency !== 'EUR') return order.amount_kop;
+  if (!(uahPerEur > 0)) throw providerError();
+  return Math.max(100, Math.round(order.amount_kop / 100 * uahPerEur) * 100);
+}
 export async function createInvoice(env, order, uahPerEur = 0) {
-  const eur = order.currency === 'EUR';
-  const uahAmount = () => { if (!eur) return order.amount_kop; if (!(uahPerEur > 0)) throw providerError(); return Math.max(100, Math.round(order.amount_kop / 100 * uahPerEur) * 100); };
-  const off = eur && await eurInvoiceOff(env);
-  if (env.PAYMENT_MODE !== 'monobank') return { invoiceId: 'stub_' + order.id, pageUrl: `${env.BASE_URL}/api/dev/pay/${order.id}`, ccy: eur && !off ? 978 : 980, amount: eur && !off ? order.amount_kop : uahAmount() };
-  if (eur && !off) {
-    const r = await monoCreate(env, order, order.amount_kop, 978);
-    if (r.ok) return { invoiceId: r.invoiceId, pageUrl: r.pageUrl, ccy: 978, amount: order.amount_kop };
-    if (!(r.status >= 400 && r.status < 500)) throw providerError();      // збій банку чи мережі: валюта тут ні до чого
-    const u = await monoCreate(env, order, uahAmount(), 980);
-    if (!u.ok) throw providerError();
-    await setEurInvoiceOff(env, { at: Date.now(), error: r.error });                          // гривневий рахунок пройшов, а в євро ні: банк не приймає саме євро
-    return { invoiceId: u.invoiceId, pageUrl: u.pageUrl, ccy: 980, amount: uahAmount() };
-  }
-  const u = await monoCreate(env, order, uahAmount(), 980);
+  const amount = invoiceAmountUah(order, uahPerEur);
+  if (env.PAYMENT_MODE !== 'monobank') return { invoiceId: 'stub_' + order.id, pageUrl: `${env.BASE_URL}/api/dev/pay/${order.id}`, ccy: 980, amount };
+  const u = await monoCreate(env, order, amount, 980);
   if (!u.ok) throw providerError();
-  return { invoiceId: u.invoiceId, pageUrl: u.pageUrl, ccy: 980, amount: uahAmount() };
+  return { invoiceId: u.invoiceId, pageUrl: u.pageUrl, ccy: 980, amount };
 }
 
 /** Валюта й сума виставленого рахунку замовлення (старі замовлення: гривня й сума замовлення). */

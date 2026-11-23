@@ -2,8 +2,8 @@ import { GIFTS, INTIMATE, ACTIVITIES, QUESTIONS, REGIONS, generateSchedule, sani
 import { recommend } from './places.js';
 import { instagramFeed, getEmbeds, IG_HANDLE } from './instagram.js';
 import { ensureCity, runVenuesLogged as runVenues, venuePicks, rateVenue, reportVenue, catOfQuery, catOfGift } from './venues.js';
-import { createInvoice, verifyPaid, invoiceStatus, invoiceOf, eurInvoiceOff } from './payments.js';
-import { listFor, getPrices, CCY_NUM } from './pricing.js';
+import { createInvoice, verifyPaid, invoiceStatus, invoiceOf } from './payments.js';
+import { listFor, getPrices } from './pricing.js';
 import { ensureSchema } from './schema.js';
 import { verifyTurnstile } from './turnstile.js';
 import { handleAdmin } from './admin.js';
@@ -123,9 +123,9 @@ async function createOrder(request, env) {
   const lp = await listFor(env, o.country), price = priceWith(lp.list, promo, lp.fixedScale);
   const order = { id: uid(), amount_kop: price.final, currency: lp.currency, ...o }, utm = cleanUtm(b.utm);
   const free = price.final === 0;
-  const inv = free ? { invoiceId: 'free_' + order.id, pageUrl: `${env.BASE_URL}/thanks.html?order=${order.id}`, ccy: CCY_NUM[lp.currency], amount: 0 } : await createInvoice(env, order, lp.uahRate);
-  // курс гривні для звітів: для рахунку в гривнях за євро-ціною він точний (скільки гривень справді виставлено)
-  const uahRate = lp.currency === 'EUR' ? (inv.ccy === 980 && price.final > 0 ? inv.amount / price.final : lp.uahRate) : 1;
+  const inv = free ? { invoiceId: 'free_' + order.id, pageUrl: `${env.BASE_URL}/thanks.html?order=${order.id}`, ccy: 980, amount: 0 } : await createInvoice(env, order, lp.uahRate);
+  // курс гривні для звітів: скільки гривень справді виставлено за ціну в євро
+  const uahRate = lp.currency === 'EUR' ? (price.final > 0 ? inv.amount / price.final : lp.uahRate) : 1;
   const baseArgs = [order.id, Date.now(), 'pending', price.final, price.list, price.discount, promo ? promo.code : null, promo ? promo.id : null, o.name_a, o.email_a, o.name_b, o.email_b, o.city, o.region, o.start_date, o.payer_email, inv.invoiceId, Date.now(), o.lang, o.country, o.tz];
   try { await run(env, `INSERT INTO orders (id, created_at, status, amount_kop, list_kop, discount_kop, promo_code, promo_id, name_a, email_a, name_b, email_b, city, region, start_date, payer_email, invoice_id, consent_at, lang, country, tz, utm_source, utm_medium, utm_campaign, utm_content, utm_term, currency, uah_rate, inv_ccy, inv_amount)
     VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`, ...baseArgs, utm.utm_source || null, utm.utm_medium || null, utm.utm_campaign || null, utm.utm_content || null, utm.utm_term || null, lp.currency, uahRate, inv.ccy, inv.amount); }
@@ -196,7 +196,7 @@ async function resumeOrder(request, env, id) {
   if (o.status === 'paid') return go(`${env.BASE_URL}/thanks.html?order=${encodeURIComponent(id)}`);
   if (o.status !== 'pending' || Date.now() - o.created_at > 7 * 864e5 || !(o.amount_kop > 0)) return go(home + '?resume=expired');
   let inv; try { inv = await createInvoice(env, o, (await getPrices(env)).uahPerEur); } catch { return go(home + '?resume=error'); }
-  const uahRate = o.currency === 'EUR' ? (inv.ccy === 980 ? inv.amount / o.amount_kop : (await getPrices(env)).uahPerEur) : 1;
+  const uahRate = o.currency === 'EUR' ? inv.amount / o.amount_kop : 1;
   try { await run(env, "UPDATE orders SET invoice_id = ?, inv_ccy = ?, inv_amount = ?, uah_rate = ? WHERE id = ? AND status = 'pending'", inv.invoiceId, inv.ccy, inv.amount, uahRate, id); }
   catch { await run(env, "UPDATE orders SET invoice_id = ? WHERE id = ? AND status = 'pending'", inv.invoiceId, id); }
   return go(inv.pageUrl);
@@ -507,8 +507,8 @@ async function configResponse(request, env) {
   const url = new URL(request.url), det = detectLocale(request);
   const asked = (url.searchParams.get('country') || '').toUpperCase(), cc = /^[A-Z]{2}$/.test(asked) ? asked : (det.country || 'UA');
   const st = await getSettings(env), fx = await getFx(env), p = await getPrices(env), eur = cc !== 'UA';
-  // ціна у валюті країни: гривня для України, євро для решти; eurInvoice=false означає, що Monobank не приймає євро й оплата піде в гривнях за курсом
-  return json({ price: eur ? p.eur : p.uah, currency: { code: eur ? 'EUR' : 'UAH', rate: 1 }, prices: { uah: p.uah, eur: p.eur }, uahPerEur: p.uahPerEur, eurInvoice: !(await eurInvoiceOff(env)),
+  // ціна у валюті країни: гривня для України, євро для решти (рахунок однаково в гривнях за курсом uahPerEur)
+  return json({ price: eur ? p.eur : p.uah, currency: { code: eur ? 'EUR' : 'UAH', rate: 1 }, prices: { uah: p.uah, eur: p.eur }, uahPerEur: p.uahPerEur,
     usdRate: st.usd_rate, detected: det, country: cc, fxUpdated: fx ? fx.updated : null,
     regions: REGIONS, turnstileSiteKey: env.TURNSTILE_SITE_KEY || null, googleClientId: env.GOOGLE_CLIENT_ID || null });
 }

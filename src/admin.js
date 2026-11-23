@@ -18,7 +18,7 @@ import { trackConfig, saveTrackConfig, addSpend, deleteSpend, listSpend, adsRepo
 import { publishNext as igPublishNext, publishStatus as igPublishStatus, setAuto as igSetAuto, editPost as igEditPost, saveFbPage as igSaveFbPage, setOrder as igSetOrder, spread as igSpread, loadManifest as igManifest , pubState } from './igpublish.js';
 import { saveToken as igSaveToken, disconnect as igDisconnect, igStatus, saveEmbeds as igSaveEmbeds, igTest } from './instagram.js';
 import { venueStats, venueProblems, retryCities, queueCity, overpassProbe, setVenuesPaused, catalogCountries, catalogCities, catalogCity, setVenueHidden, mapUrl } from './venues.js';
-import { cancelInvoice, toInvoiceUnits, eurInvoiceOff, setEurInvoiceOff } from './payments.js';
+import { cancelInvoice, toInvoiceUnits } from './payments.js';
 import { getPrices, toUah, moneyText } from './pricing.js';
 import { recoveryState } from './recovery.js';
 
@@ -78,7 +78,7 @@ export async function handleAdmin(request, env, path, m) {
   let r;
 
   if (m === 'GET' && path === '/api/admin/me') return json({ ok: true, email: admin, price: await getPriceUah(env) });
-  if (m === 'GET' && path === '/api/admin/settings') { const fx = await getFx(env); return json({ ok: true, settings: await getSettings(env), places: { enabled: !!env.GOOGLE_PLACES_KEY, used: await placesUsage(env) }, venues: { ...(await venueStats(env)), problems: await venueProblems(env) }, fx: fx ? { updated: fx.updated, usd: fx.rates.USD ? Math.round(1 / fx.rates.USD * 100) / 100 : null, eur: fx.rates.EUR ? Math.round(1 / fx.rates.EUR * 100) / 100 : null, count: Object.keys(fx.rates).length, mono: fx.sources ? fx.sources.mono : null } : null, prices: await getPrices(env), payEurOff: await eurInvoiceOff(env), paymentMode: env.PAYMENT_MODE || 'stub' }); }
+  if (m === 'GET' && path === '/api/admin/settings') { const fx = await getFx(env); return json({ ok: true, settings: await getSettings(env), places: { enabled: !!env.GOOGLE_PLACES_KEY, used: await placesUsage(env) }, venues: { ...(await venueStats(env)), problems: await venueProblems(env) }, fx: fx ? { updated: fx.updated, usd: fx.rates.USD ? Math.round(1 / fx.rates.USD * 100) / 100 : null, eur: fx.rates.EUR ? Math.round(1 / fx.rates.EUR * 100) / 100 : null, count: Object.keys(fx.rates).length, mono: fx.sources ? fx.sources.mono : null } : null, prices: await getPrices(env) }); }
   if (m === 'POST' && path === '/api/admin/venues/retry') { const b = await readJson(request); const n = await retryCities(env, b.id ? Number(b.id) : null); await audit(env, admin, 'venues_retry', b.id || 'all', { n }); return json({ ok: true, n }); }
   if (m === 'POST' && path === '/api/admin/venues/pause') { const b = await readJson(request); await setVenuesPaused(env, !!b.paused); await audit(env, admin, 'venues_pause', null, { paused: !!b.paused }); return json({ ok: true, paused: !!b.paused }); }
   if (m === 'GET' && path === '/api/admin/venues/countries') return json({ ok: true, countries: await catalogCountries(env) });
@@ -122,7 +122,7 @@ export async function handleAdmin(request, env, path, m) {
   if (m === 'POST' && path === '/api/admin/venues/test') return json({ ok: true, probe: await overpassProbe() });
   if (m === 'POST' && path === '/api/admin/venues/add') { const b = await readJson(request); if (!(await queueCity(env, b.country, b.name))) throw new HttpError(400, 'bad_city'); await audit(env, admin, 'venues_add', null, { country: b.country, name: b.name }); return json({ ok: true }); }
   if (m === 'POST' && path === '/api/admin/fx/refresh') { const r = await refreshFx(env, { force: true }); await audit(env, admin, 'fx_refresh', null, r); if (!r.ok) throw Object.assign(new HttpError(502, 'fx_failed'), { detail: r.error }); return json({ ok: true, ...r }); }
-  if (m === 'POST' && path === '/api/admin/settings') { const b = await readJson(request); if (b.eur_retry) { await setEurInvoiceOff(env, null); await audit(env, admin, 'pay_eur_retry', null, {}); } const saved = await saveSettings(env, b); if (Object.keys(saved).length) await audit(env, admin, 'settings', null, saved); return json({ ok: true, settings: await getSettings(env), prices: await getPrices(env), payEurOff: await eurInvoiceOff(env) }); }
+  if (m === 'POST' && path === '/api/admin/settings') { const b = await readJson(request); const saved = await saveSettings(env, b); if (Object.keys(saved).length) await audit(env, admin, 'settings', null, saved); return json({ ok: true, settings: await getSettings(env), prices: await getPrices(env) }); }
   if (m === 'GET' && path === '/api/admin/dashboard') return json({ ok: true, ...(await dashboard(env, url.searchParams.get('days') || '30')) });
   if (m === 'GET' && path === '/api/admin/orders') return json({ ok: true, ...(await listOrders(env, url)) });
   if (m === 'GET' && (r = path.match(/^\/api\/admin\/orders\/([\w-]+)$/))) return json({ ok: true, ...(await orderDetail(env, r[1])) });

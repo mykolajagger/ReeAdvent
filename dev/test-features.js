@@ -253,7 +253,7 @@ const anon = raw.prepare('SELECT * FROM orders WHERE id = ?').get(o1); assert(an
   await refreshFx(env, { force: true, fetchImpl: ok }); // повертаємо базові значення для наступних перевірок
   // конфіг: країна → валюта (?country=) і визначена за IP
   let cfg = (await call('x', 'GET', '/api/config?country=DE')).j; assert.equal(cfg.currency.code, 'EUR'); assert.equal(cfg.country, 'DE'); assert.equal(cfg.uahPerEur, Math.round(1 / 0.0226 * 10000) / 10000);
-  assert.equal(cfg.price, Math.ceil(cfg.prices.uah / cfg.uahPerEur), 'ціну в євро ще не задано: рахується з гривневої й округлюється вгору'); assert.equal(cfg.prices.eur, cfg.price); assert.equal(cfg.eurInvoice, true);
+  assert.equal(cfg.price, Math.ceil(cfg.prices.uah / cfg.uahPerEur), 'ціну в євро ще не задано: рахується з гривневої й округлюється вгору'); assert.equal(cfg.prices.eur, cfg.price);
   cfg = (await call('x', 'GET', '/api/config?country=UA')).j; assert.deepEqual(cfg.currency, { code: 'UAH', rate: 1 }); assert.equal(cfg.price, cfg.prices.uah);
   cfg = (await call('x', 'GET', '/api/config?country=zz!')).j; assert.equal(cfg.country, 'UA', 'invalid country ignored');
   cfg = await (await handle(new Request('http://x/api/config', { headers: { 'CF-IPCountry': 'JP' } }), env)).json(); assert.equal(cfg.currency.code, 'EUR', 'для всіх країн, крім України, єдина ціна в євро'); assert.equal(cfg.country, 'JP');

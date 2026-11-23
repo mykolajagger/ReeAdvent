@@ -84,20 +84,20 @@ function refreshLabels() {
 }
 
 /* ---------- Ціна: для України в гривнях, для інших країн єдина ціна в євро (задається в адмінці) ---------- */
-let basePrice = null, cur = { code: 'UAH', rate: 1 }, promoOk = null, curReq = 0, eurInv = true, uahPerEur = null;
+let basePrice = null, cur = { code: 'UAH', rate: 1 }, promoOk = null, curReq = 0, uahPerEur = null;
 const fmtKop = kop => (kop % 100 ? (kop / 100).toFixed(2) : String(kop / 100)).replace('.', LG() === 'en' ? '.' : ',');
 const uahTxt = kop => new Intl.NumberFormat(LG() === 'en' ? 'en' : 'uk', { minimumFractionDigits: kop % 100 ? 2 : 0, maximumFractionDigits: 2 }).format(kop / 100) + ' ₴';   // «1 499 ₴»
 function money(kop) {
   if (cur.code === 'UAH') return uahTxt(kop);
   try { return new Intl.NumberFormat(LG() === 'en' ? 'en' : 'uk', { style: 'currency', currency: cur.code, currencyDisplay: 'narrowSymbol', minimumFractionDigits: kop % 100 ? 2 : 0, maximumFractionDigits: 2 }).format(kop / 100); } catch { return `${fmtKop(kop)} ${cur.code}`; }
 }
-// дрібний текст унизу форми: для оплати з-за кордону пояснюємо валюту (а якщо банк не приймає євро, показуємо суму в гривнях)
-const FX_UK = { eur: 'Для замовлень з-за кордону ціна вказана в євро. Якщо валюта вашої картки інша, банк конвертує суму за власним курсом.', uah: 'Оплата пройде в гривнях: {uah} за курсом Monobank. Якщо валюта вашої картки інша, банк конвертує суму за власним курсом.' };
+// дуже дрібний текст унизу форми: ціна для інших країн у євро, а рахунок Monobank у гривнях за курсом євро
+const FX_UK = 'Ціну вказано в євро. Оплата в гривнях за курсом Monobank: {uah}. Якщо валюта вашої картки інша, банк конвертує суму за власним курсом.';
 function fxNote(finalKop) {
   const el = $('#fxcur'); if (!el) return;
-  if (cur.code === 'UAH') { el.textContent = ''; return; }
-  if (!eurInv && uahPerEur && finalKop > 0) { const uah = uahTxt(Math.max(100, Math.round(finalKop / 100 * uahPerEur) * 100)); el.textContent = LG() === 'en' ? t('fx_uah', { uah }) : FX_UK.uah.replace('{uah}', uah); }
-  else el.textContent = LG() === 'en' ? t('fx_eur') : FX_UK.eur;
+  if (cur.code === 'UAH' || !(finalKop > 0) || !uahPerEur) { el.textContent = ''; return; }
+  const uah = uahTxt(Math.max(100, Math.round(finalKop / 100 * uahPerEur) * 100));
+  el.textContent = LG() === 'en' ? t('fx_uah', { uah }) : FX_UK.replace('{uah}', uah);
 }
 function showPrice(finalKop) {
   if (basePrice === null) return;
@@ -107,7 +107,7 @@ function showPrice(finalKop) {
   fxNote(finalKop);
   $('#ob').textContent = finalKop === 0 ? tl('f_free') : tl('f_pay');
 }
-const useConfig = c => { cur = c.currency || cur; basePrice = c.price; eurInv = c.eurInvoice !== false; uahPerEur = Number(c.uahPerEur) || null; };
+const useConfig = c => { cur = c.currency || cur; basePrice = c.price; uahPerEur = Number(c.uahPerEur) || null; };
 const curFinal = () => promoOk ? promoOk.finalKop : Math.round(basePrice * 100);
 async function loadCurrency(code) {
   const my = ++curReq;
