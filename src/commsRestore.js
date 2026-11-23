@@ -6,12 +6,12 @@ import { welcomeEmail, partnerInviteEmail, reminderEmail, recoveryEmail, refundE
 import { redact, phaseFor, ensureLog, RESTORED_KEY } from './comms.js';
 import { recoveryState } from './recovery.js';
 import { LOGIN_TTL_MS } from './api.js';
+import { moneyText } from './pricing.js';
 
 const qa = async (env, sql, ...a) => (await env.DB.prepare(sql).bind(...a).all()).results;
 const WINDOW = 10 * 60e3;
 const norm = s => String(s || '').trim().toLowerCase();
 const parse = s => { try { return JSON.parse(s) || {}; } catch { return {}; } };
-const money = kop => `${(kop / 100).toLocaleString('uk-UA', { minimumFractionDigits: kop % 100 ? 2 : 0 })} ₴`;
 
 /** Усі листи, які можна відновити (з урахуванням уже наявних поки не відсіяно). Шаблони ті самі, що й у реальних листах, а посилання й коди підставні (у журнал і так потрапляє лише «…»). */
 async function collect(env) {
@@ -25,7 +25,7 @@ async function collect(env) {
   const addrAt = (oid, slot, t, current) => { const next = (changes.get(oid) || []).find(c => c.slot === slot && c.at > t); return next ? next.from : current; };
 
   // 1. Оплачені замовлення: підтвердження покупцю, запрошення партнеру, лист про повернення коштів
-  const orders = await qa(env, `SELECT o.id AS oid, o.paid_at, o.refunded_at, o.refund_kop, o.name_a, o.name_b, o.email_a, o.email_b, o.payer_email, o.lang AS olang,
+  const orders = await qa(env, `SELECT o.id AS oid, o.paid_at, o.refunded_at, o.refund_kop, o.name_a, o.name_b, o.email_a, o.email_b, o.payer_email, o.lang AS olang, o.currency,
       c.start_date, c.lang AS clang, ma.id AS ma_id, ma.email AS ma_email, ma.suggested_name AS ma_name, mb.id AS mb_id, mb.email AS mb_email, mb.suggested_name AS mb_name
     FROM orders o JOIN calendars c ON c.order_id = o.id LEFT JOIN members ma ON ma.calendar_id = c.id AND ma.slot = 0 LEFT JOIN members mb ON mb.calendar_id = c.id AND mb.slot = 1
     WHERE o.paid_at IS NOT NULL ORDER BY o.paid_at`);
@@ -35,7 +35,7 @@ async function collect(env) {
     const lang = o.olang || 'uk', common = { orderId: o.oid, startDate: o.start_date };
     add('welcome', 'welcome:' + o.oid, o.paid_at, addrAt(o.oid, 0, o.paid_at, o.ma_email || o.email_a), welcomeEmail(env, o.name_a, o.name_b, o.start_date, LINK, lang, CODE), { ...common, memberId: o.ma_id });
     add('partner_invite', 'partner:' + o.oid, o.paid_at, addrAt(o.oid, 1, o.paid_at, o.mb_email || o.email_b), partnerInviteEmail(env, o.name_b, o.name_a, o.start_date, LINK, lang, CODE), { ...common, memberId: o.mb_id });
-    if (o.refunded_at && o.refund_kop > 0) add('refund', 'refund:' + o.oid, o.refunded_at, o.payer_email || o.email_a, refundEmail(env, money(o.refund_kop), lang), common);
+    if (o.refunded_at && o.refund_kop > 0) add('refund', 'refund:' + o.oid, o.refunded_at, o.payer_email || o.email_a, refundEmail(env, moneyText(o.refund_kop, o.currency || 'UAH'), lang), common);
   });
 
   // 2. Нагадування (таблиця reminders_sent зберігає точний час кожного)

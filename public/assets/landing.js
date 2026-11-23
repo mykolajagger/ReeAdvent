@@ -2,6 +2,8 @@
 'use strict';
 const $ = s => document.querySelector(s);
 const LG = () => window.LANG.get(), t = (k, v) => window.LANG.t(k, v);
+// українські тексти для підписів, які змінюються з коду (у словнику lang.js лише англійська, а t() в українській версії повертає ключ)
+const UK_TXT = { f_pay: 'Перейти до оплати', f_free: 'Отримати безкоштовно', f_region: 'Регіон або штат' }, tl = k => (LG() === 'en' ? t(k) : UK_TXT[k] || t(k));
 
 /* ---------- Демо-вікна ---------- */
 let revealed = {};
@@ -71,40 +73,45 @@ const yCombo = combo(yIn, $('#city-list'), cityItems, { minChars: 1, onPick: it 
 async function selectCountry(code) {
   countryCode = code; regionItem = null; geo = null; rCombo.reset(); yCombo.reset();
   const my = ++geoReq;
-  $('#rlabel').textContent = code === 'UA' ? (LG() === 'en' ? 'Region' : 'Область') : t('f_region');
+  $('#rlabel').textContent = code === 'UA' ? (LG() === 'en' ? 'Region' : 'Область') : tl('f_region');
   try { const r = await fetch(`/geo/${code}.json`); if (r.ok && my === geoReq) geo = await r.json(); } catch {}
   loadCurrency(code);
 }
 function refreshLabels() {
   const keepCountry = countryCode; if (keepCountry) cCombo.set({ code: keepCountry, label: dn().of(keepCountry) || keepCountry });
   if (regionItem && geo) { const r = geo.r.find(x => x[0] === regionItem.code); if (r) { regionItem.label = regionLabel(r); rCombo.set(regionItem); } }
-  $('#rlabel').textContent = countryCode === 'UA' ? (LG() === 'en' ? 'Region' : 'Область') : t('f_region');
+  $('#rlabel').textContent = countryCode === 'UA' ? (LG() === 'en' ? 'Region' : 'Область') : tl('f_region');
 }
 
-/* ---------- Ціна у валюті країни ---------- */
-let basePrice = null, cur = { code: 'UAH', rate: 1 }, promoOk = null, curReq = 0;
+/* ---------- Ціна: для України в гривнях, для інших країн єдина ціна в євро (задається в адмінці) ---------- */
+let basePrice = null, cur = { code: 'UAH', rate: 1 }, promoOk = null, curReq = 0, eurInv = true, uahPerEur = null;
 const fmtKop = kop => (kop % 100 ? (kop / 100).toFixed(2) : String(kop / 100)).replace('.', LG() === 'en' ? '.' : ',');
-const uahTxt = kop => `${fmtKop(kop)} ₴`;
-function niceRound(v) { return v < 10 ? Math.round(v) : v < 100 ? Math.round(v) : v < 1000 ? Math.round(v / 5) * 5 : v < 10000 ? Math.round(v / 10) * 10 : Math.round(v / 100) * 100; }
+const uahTxt = kop => new Intl.NumberFormat(LG() === 'en' ? 'en' : 'uk', { minimumFractionDigits: kop % 100 ? 2 : 0, maximumFractionDigits: 2 }).format(kop / 100) + ' ₴';   // «1 499 ₴»
 function money(kop) {
   if (cur.code === 'UAH') return uahTxt(kop);
-  if (kop === 0) return new Intl.NumberFormat(LG() === 'en' ? 'en' : 'uk', { style: 'currency', currency: cur.code, maximumFractionDigits: 0 }).format(0);
-  const v = Math.max(1, niceRound(kop / 100 * cur.rate));
-  try { return '≈ ' + new Intl.NumberFormat(LG() === 'en' ? 'en' : 'uk', { style: 'currency', currency: cur.code, maximumFractionDigits: 0 }).format(v); } catch { return `≈ ${v} ${cur.code}`; }
+  try { return new Intl.NumberFormat(LG() === 'en' ? 'en' : 'uk', { style: 'currency', currency: cur.code, currencyDisplay: 'narrowSymbol', minimumFractionDigits: kop % 100 ? 2 : 0, maximumFractionDigits: 2 }).format(kop / 100); } catch { return `${fmtKop(kop)} ${cur.code}`; }
 }
-const NOTE_UK = 'Спишеться {uah}. Суму у вашій валюті конвертує банк за власним курсом.';
+// дрібний текст унизу форми: для оплати з-за кордону пояснюємо валюту (а якщо банк не приймає євро, показуємо суму в гривнях)
+const FX_UK = { eur: 'Для замовлень з-за кордону ціна вказана в євро. Якщо валюта вашої картки інша, банк конвертує суму за власним курсом.', uah: 'Оплата пройде в гривнях: {uah} за курсом Monobank. Якщо валюта вашої картки інша, банк конвертує суму за власним курсом.' };
+function fxNote(finalKop) {
+  const el = $('#fxcur'); if (!el) return;
+  if (cur.code === 'UAH') { el.textContent = ''; return; }
+  if (!eurInv && uahPerEur && finalKop > 0) { const uah = uahTxt(Math.max(100, Math.round(finalKop / 100 * uahPerEur) * 100)); el.textContent = LG() === 'en' ? t('fx_uah', { uah }) : FX_UK.uah.replace('{uah}', uah); }
+  else el.textContent = LG() === 'en' ? t('fx_eur') : FX_UK.eur;
+}
 function showPrice(finalKop) {
   if (basePrice === null) return;
   const base = Math.round(basePrice * 100);
   $('#old').textContent = finalKop < base ? money(base) : '';
   $('#price').textContent = money(finalKop);
-  $('#pnote').textContent = cur.code !== 'UAH' && finalKop > 0 ? (LG() === 'en' ? t('price_note', { uah: uahTxt(finalKop) }) : NOTE_UK.replace('{uah}', uahTxt(finalKop))) : '';
-  $('#ob').textContent = finalKop === 0 ? t('f_free') : t('f_pay');
+  fxNote(finalKop);
+  $('#ob').textContent = finalKop === 0 ? tl('f_free') : tl('f_pay');
 }
+const useConfig = c => { cur = c.currency || cur; basePrice = c.price; eurInv = c.eurInvoice !== false; uahPerEur = Number(c.uahPerEur) || null; };
 const curFinal = () => promoOk ? promoOk.finalKop : Math.round(basePrice * 100);
 async function loadCurrency(code) {
   const my = ++curReq;
-  try { const c = await (await fetch('/api/config?country=' + encodeURIComponent(code))).json(); if (my !== curReq) return; cur = c.currency || cur; basePrice = c.price; if (promoOk) { applyPromo(); return; } showPrice(curFinal()); } catch {}
+  try { const c = await (await fetch('/api/config?country=' + encodeURIComponent(code))).json(); if (my !== curReq) return; useConfig(c); if (promoOk) { applyPromo(); return; } showPrice(curFinal()); } catch {}
 }
 window.addEventListener('langchange', () => { renderDemo(); refreshLabels(); if (basePrice !== null) showPrice(curFinal()); initTurnstileLang(); });
 
@@ -113,7 +120,7 @@ async function applyPromo() {
   if (!code) { $('#pmsg').textContent = ''; showPrice(curFinal()); return; }
   $('#pbtn').disabled = true;
   try {
-    const j = await (await fetch('/api/promo/check', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ code }) })).json();
+    const j = await (await fetch('/api/promo/check', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ code, country: countryCode || 'UA' }) })).json();   // знижка у валюті обраної країни
     const bad = m => { $('#pmsg').textContent = m; $('#pmsg').style.color = 'var(--err)'; showPrice(curFinal()); };
     const UKP = { not_found: 'Такого промокоду немає.', inactive: 'Цей промокод більше не діє.', not_started: 'Цей промокод ще не діє.', expired: 'Термін дії промокоду минув.', exhausted: 'Промокод уже використано максимальну кількість разів.' };
     if (j.error === 'too_many') bad(LG() === 'en' ? t('p_many') : 'Забагато спроб. Спробуйте за кілька хвилин.');
@@ -139,7 +146,7 @@ const DEFAULT_START = '2026-12-01'; // дата старту за замовчу
 $('#startDate').min = iso(t0); $('#startDate').max = iso(t1); $('#startDate').value = iso(t0) <= DEFAULT_START && DEFAULT_START <= iso(t1) ? DEFAULT_START : iso(t0);
 renderDemo();
 fetch('/api/config').then(r => r.json()).then(async c => {
-  basePrice = c.price; cur = c.currency || cur;
+  useConfig(c);
   window.LANG.suggest(c.detected && c.detected.lang);
   const cc = c.country && window.COUNTRIES.includes(c.country) ? c.country : 'UA';
   cCombo.set({ code: cc, label: dn().of(cc) || cc }); await selectCountry(cc);
@@ -166,7 +173,7 @@ $('#of').addEventListener('submit', async e => {
   try {
     const r = await fetch('/api/orders', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) }); const j = await r.json();
     if (!j.ok) throw new Error(j.error);
-    try { localStorage.setItem('lang', LG()); } catch {} if (window.raTrack) { window.raTrack('checkout', j.amountKop ? { value: j.amountKop / 100, currency: 'UAH' } : {}); await new Promise(r => setTimeout(r, 300)); } location.href = j.payUrl;
+    try { localStorage.setItem('lang', LG()); } catch {} if (window.raTrack) { window.raTrack('checkout', j.amountKop ? { value: j.amountKop / 100, currency: j.currency || 'UAH' } : {}); await new Promise(r => setTimeout(r, 300)); } location.href = j.payUrl;
   } catch (er) { $('#oerr').textContent = errMsg(er.message); btn.disabled = false; if (tsWidget !== null && window.turnstile) { tsToken = ''; window.turnstile.reset(tsWidget); } }
 });
 })();

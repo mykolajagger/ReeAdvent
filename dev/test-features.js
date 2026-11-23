@@ -252,10 +252,11 @@ const anon = raw.prepare('SELECT * FROM orders WHERE id = ?').get(o1); assert(an
   r = await refreshFx(env, { force: true, fetchImpl: async url => String(url).includes('monobank') ? new Response('down', { status: 500 }) : new Response(JSON.stringify({ result: 'success', rates: { USD: 0.026 } }), { status: 200 }) }); assert(r.ok && r.mono === 0, 'works without Monobank'); assert.equal((await getFx(env)).rates.USD, 0.026);
   await refreshFx(env, { force: true, fetchImpl: ok }); // повертаємо базові значення для наступних перевірок
   // конфіг: країна → валюта (?country=) і визначена за IP
-  let cfg = (await call('x', 'GET', '/api/config?country=DE')).j; assert.equal(cfg.currency.code, 'EUR'); assert.equal(cfg.currency.rate, 0.0226); assert.equal(cfg.country, 'DE');
-  cfg = (await call('x', 'GET', '/api/config?country=UA')).j; assert.deepEqual(cfg.currency, { code: 'UAH', rate: 1 });
+  let cfg = (await call('x', 'GET', '/api/config?country=DE')).j; assert.equal(cfg.currency.code, 'EUR'); assert.equal(cfg.country, 'DE'); assert.equal(cfg.uahPerEur, Math.round(1 / 0.0226 * 10000) / 10000);
+  assert.equal(cfg.price, Math.ceil(cfg.prices.uah / cfg.uahPerEur), 'ціну в євро ще не задано: рахується з гривневої й округлюється вгору'); assert.equal(cfg.prices.eur, cfg.price); assert.equal(cfg.eurInvoice, true);
+  cfg = (await call('x', 'GET', '/api/config?country=UA')).j; assert.deepEqual(cfg.currency, { code: 'UAH', rate: 1 }); assert.equal(cfg.price, cfg.prices.uah);
   cfg = (await call('x', 'GET', '/api/config?country=zz!')).j; assert.equal(cfg.country, 'UA', 'invalid country ignored');
-  cfg = await (await handle(new Request('http://x/api/config', { headers: { 'CF-IPCountry': 'JP' } }), env)).json(); assert.equal(cfg.currency.code, 'JPY'); assert.equal(cfg.country, 'JP');
+  cfg = await (await handle(new Request('http://x/api/config', { headers: { 'CF-IPCountry': 'JP' } }), env)).json(); assert.equal(cfg.currency.code, 'EUR', 'для всіх країн, крім України, єдина ціна в євро'); assert.equal(cfg.country, 'JP');
   // стан календаря: валюта країни календаря
   const stDeR = await call('de1', 'GET', '/api/state'); assert.equal(stDeR.status, 200, JSON.stringify(stDeR.j)); assert.equal(stDeR.j.currency.code, 'EUR');
   assert.equal((await call('x', 'POST', '/api/orders', { ...good, emailA: 'ru1@t.com', emailB: 'ru2@t.com', country: 'RU', region: 'x' })).j.error, 'country_blocked');

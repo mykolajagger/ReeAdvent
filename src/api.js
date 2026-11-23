@@ -2,16 +2,17 @@ import { GIFTS, INTIMATE, ACTIVITIES, QUESTIONS, REGIONS, generateSchedule, sani
 import { recommend } from './places.js';
 import { instagramFeed, getEmbeds, IG_HANDLE } from './instagram.js';
 import { ensureCity, runVenuesLogged as runVenues, venuePicks, rateVenue, reportVenue, catOfQuery, catOfGift } from './venues.js';
-import { createInvoice, verifyPaid, invoiceStatus } from './payments.js';
+import { createInvoice, verifyPaid, invoiceStatus, invoiceOf, eurInvoiceOff } from './payments.js';
+import { listFor, getPrices, CCY_NUM } from './pricing.js';
+import { ensureSchema } from './schema.js';
 import { verifyTurnstile } from './turnstile.js';
 import { handleAdmin } from './admin.js';
 import { findPromo, priceWith, rateLimit, normCode } from './promo.js';
-import { getPriceUah, getSettings } from './settings.js';
+import { getSettings } from './settings.js';
 import { cleanUtm, publicTrackConfig } from './ads.js';
 import { resumeValid } from './recovery.js';
 import { serveMedia } from './media.js';
 import { getFx, priceCurrency } from './currency.js';
-const listKop = async env => Math.round((await getPriceUah(env)) * 100);
 import { sendEmail, welcomeEmail, partnerInviteEmail, loginEmail } from './email.js';
 import { runDaily, checkUnsub } from './reminders.js';
 import { json, HttpError, localDayNumber, unlockTimes, randomToken, uid, sha256, parseCookies, sessionCookie, EMAIL_RE, normEmail, cleanText, nowOf, tomorrowStr, fromDateStr, toDateStr, todayIndex, windowDates, validTz, DAYS, UNLOCK_HOUR } from './util.js';
@@ -27,6 +28,7 @@ export const WELCOME_TTL_MS = WELCOME_TTL, LOGIN_TTL_MS = LOGIN_TTL;
 
 export async function handle(request, env) {
   try {
+    await ensureSchema(env);   // відсутні колонки (архів, валюта, UTM) додаються самі, один раз на базу
     const url = new URL(request.url);
     const path = url.pathname.replace(/\/+$/, '');
     const m = request.method;
@@ -117,19 +119,23 @@ async function createOrder(request, env) {
     if (r.error) throw new HttpError(400, 'promo_' + r.error);
     promo = r.promo;
   }
-  const price = priceWith(await listKop(env), promo);
-  const order = { id: uid(), amount_kop: price.final, ...o }, utm = cleanUtm(b.utm);
+  // ціна: для України в гривнях, для інших країн єдина ціна в євро (суми в мінімальних одиницях валюти)
+  const lp = await listFor(env, o.country), price = priceWith(lp.list, promo, lp.fixedScale);
+  const order = { id: uid(), amount_kop: price.final, currency: lp.currency, ...o }, utm = cleanUtm(b.utm);
   const free = price.final === 0;
-  const inv = free ? { invoiceId: 'free_' + order.id, pageUrl: `${env.BASE_URL}/thanks.html?order=${order.id}` } : await createInvoice(env, order);
+  const inv = free ? { invoiceId: 'free_' + order.id, pageUrl: `${env.BASE_URL}/thanks.html?order=${order.id}`, ccy: CCY_NUM[lp.currency], amount: 0 } : await createInvoice(env, order, lp.uahRate);
+  // курс гривні для звітів: для рахунку в гривнях за євро-ціною він точний (скільки гривень справді виставлено)
+  const uahRate = lp.currency === 'EUR' ? (inv.ccy === 980 && price.final > 0 ? inv.amount / price.final : lp.uahRate) : 1;
   const baseArgs = [order.id, Date.now(), 'pending', price.final, price.list, price.discount, promo ? promo.code : null, promo ? promo.id : null, o.name_a, o.email_a, o.name_b, o.email_b, o.city, o.region, o.start_date, o.payer_email, inv.invoiceId, Date.now(), o.lang, o.country, o.tz];
-  try { await run(env, `INSERT INTO orders (id, created_at, status, amount_kop, list_kop, discount_kop, promo_code, promo_id, name_a, email_a, name_b, email_b, city, region, start_date, payer_email, invoice_id, consent_at, lang, country, tz, utm_source, utm_medium, utm_campaign, utm_content, utm_term)
-    VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`, ...baseArgs, utm.utm_source || null, utm.utm_medium || null, utm.utm_campaign || null, utm.utm_content || null, utm.utm_term || null); }
-  catch (e) { if (!/utm_/.test(String(e && e.message))) throw e;   // міграція 0010 ще не застосована: зберігаємо замовлення без міток
+  try { await run(env, `INSERT INTO orders (id, created_at, status, amount_kop, list_kop, discount_kop, promo_code, promo_id, name_a, email_a, name_b, email_b, city, region, start_date, payer_email, invoice_id, consent_at, lang, country, tz, utm_source, utm_medium, utm_campaign, utm_content, utm_term, currency, uah_rate, inv_ccy, inv_amount)
+    VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`, ...baseArgs, utm.utm_source || null, utm.utm_medium || null, utm.utm_campaign || null, utm.utm_content || null, utm.utm_term || null, lp.currency, uahRate, inv.ccy, inv.amount); }
+  catch (e) { if (!/no column|no such column|has no column/i.test(String(e && e.message))) throw e;   // схему ще не оновлено (рідкісний збій автооновлення): зберігаємо без нових полів
+    if (lp.currency !== 'UAH') throw e;
     await run(env, `INSERT INTO orders (id, created_at, status, amount_kop, list_kop, discount_kop, promo_code, promo_id, name_a, email_a, name_b, email_b, city, region, start_date, payer_email, invoice_id, consent_at, lang, country, tz)
     VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`, ...baseArgs); }
   await ensureCity(env, o.country, o.city); // місто ставиться в пріоритетну чергу наповнення бази закладів (якщо його ще немає)
   if (free) await markPaid(env, order.id); // 100% знижка: календар створюється одразу, без оплати
-  return json({ ok: true, orderId: order.id, payUrl: inv.pageUrl, free, amountKop: price.final });
+  return json({ ok: true, orderId: order.id, payUrl: inv.pageUrl, free, amountKop: price.final, currency: lp.currency });
 }
 
 async function promoCheck(request, env) {
@@ -137,16 +143,16 @@ async function promoCheck(request, env) {
   if (!(await rateLimit(env, 'promo:' + ip, 20, 600))) throw new HttpError(429, 'too_many');
   const b = await readJson(request);
   const r = await findPromo(env, b.code);
-  const listP = await listKop(env), list = priceWith(listP, null);
-  if (r.error) return json({ ok: true, valid: false, reason: r.error, listKop: list.list });
-  const price = priceWith(listP, r.promo);
-  return json({ ok: true, valid: true, code: r.promo.code, listKop: price.list, discountKop: price.discount, finalKop: price.final, type: r.promo.type, value: r.promo.value });
+  const country = /^[A-Za-z]{2}$/.test(String(b.country || '')) ? String(b.country).toUpperCase() : 'UA', lp = await listFor(env, country);   // знижка у валюті країни
+  if (r.error) return json({ ok: true, valid: false, reason: r.error, listKop: lp.list, currency: lp.currency });
+  const price = priceWith(lp.list, r.promo, lp.fixedScale);
+  return json({ ok: true, valid: true, code: r.promo.code, listKop: price.list, discountKop: price.discount, finalKop: price.final, currency: lp.currency, type: r.promo.type, value: r.promo.value });
 }
 
 async function orderStatus(env, id) {
-  const o = await q1(env, 'SELECT status, amount_kop FROM orders WHERE id = ?', id);
+  const o = await q1(env, 'SELECT * FROM orders WHERE id = ?', id);
   if (!o) throw new HttpError(404, 'not_found');
-  return json({ ok: true, status: o.status, ...(o.status === 'paid' ? { value: Math.round(o.amount_kop) / 100, currency: 'UAH' } : {}) });
+  return json({ ok: true, status: o.status, ...(o.status === 'paid' ? { value: Math.round(o.amount_kop) / 100, currency: o.currency || 'UAH' } : {}) });
 }
 
 /** Діагностика налаштувань. Працює лише коли ввімкнено DEBUG=1; секрети не показує. */
@@ -189,8 +195,10 @@ async function resumeOrder(request, env, id) {
   if (!o) return go(home);
   if (o.status === 'paid') return go(`${env.BASE_URL}/thanks.html?order=${encodeURIComponent(id)}`);
   if (o.status !== 'pending' || Date.now() - o.created_at > 7 * 864e5 || !(o.amount_kop > 0)) return go(home + '?resume=expired');
-  let inv; try { inv = await createInvoice(env, o); } catch { return go(home + '?resume=error'); }
-  await run(env, "UPDATE orders SET invoice_id = ? WHERE id = ? AND status = 'pending'", inv.invoiceId, id);
+  let inv; try { inv = await createInvoice(env, o, (await getPrices(env)).uahPerEur); } catch { return go(home + '?resume=error'); }
+  const uahRate = o.currency === 'EUR' ? (inv.ccy === 980 ? inv.amount / o.amount_kop : (await getPrices(env)).uahPerEur) : 1;
+  try { await run(env, "UPDATE orders SET invoice_id = ?, inv_ccy = ?, inv_amount = ?, uah_rate = ? WHERE id = ? AND status = 'pending'", inv.invoiceId, inv.ccy, inv.amount, uahRate, id); }
+  catch { await run(env, "UPDATE orders SET invoice_id = ? WHERE id = ? AND status = 'pending'", inv.invoiceId, id); }
   return go(inv.pageUrl);
 }
 
@@ -200,7 +208,11 @@ async function monoWebhook(request, env) {
   let o = await q1(env, 'SELECT * FROM orders WHERE invoice_id = ?', invoiceId);
   if (!o && env.PAYMENT_MODE === 'monobank' && invoiceId) {   // замовлення могли відновити новим інвойсом: старий інвойс шукаємо за reference (id замовлення) зі статусу Monobank
     const j = await invoiceStatus(env, invoiceId), o2 = j && j.reference ? await q1(env, 'SELECT * FROM orders WHERE id = ?', String(j.reference)) : null;
-    if (o2 && j.status === 'success' && Number(j.amount) === o2.amount_kop) { await run(env, 'UPDATE orders SET invoice_id = ? WHERE id = ?', invoiceId, o2.id); o = { ...o2, invoice_id: invoiceId }; }
+    const ccy = j ? Number(j.ccy) || 980 : 0, okAmount = j && (ccy === 978 ? o2 && o2.currency === 'EUR' && Number(j.amount) === o2.amount_kop : o2 && (Number(j.amount) === invoiceOf(o2).amount || (o2.currency !== 'EUR' && Number(j.amount) === o2.amount_kop)));
+    if (o2 && j.status === 'success' && okAmount) {   // оплачено старим рахунком: запам'ятовуємо саме його валюту й суму
+      try { await run(env, 'UPDATE orders SET invoice_id = ?, inv_ccy = ?, inv_amount = ? WHERE id = ?', invoiceId, ccy, Number(j.amount), o2.id); } catch { await run(env, 'UPDATE orders SET invoice_id = ? WHERE id = ?', invoiceId, o2.id); }
+      o = { ...o2, invoice_id: invoiceId, inv_ccy: ccy, inv_amount: Number(j.amount) };
+    }
   }
   if (!o) return json({ ok: true }); // невідомий інвойс — ігноруємо, але відповідаємо 200
   if (o.status === 'paid') {
@@ -215,7 +227,8 @@ async function monoWebhook(request, env) {
     }
     return json({ ok: true });
   }
-  if (await verifyPaid(env, invoiceId, o.amount_kop)) await markPaid(env, o.id);
+  const inv = invoiceOf(o);
+  if (await verifyPaid(env, invoiceId, inv.amount, inv.ccy)) await markPaid(env, o.id);
   return json({ ok: true });
 }
 
@@ -493,8 +506,10 @@ export function detectLocale(request) {
 async function configResponse(request, env) {
   const url = new URL(request.url), det = detectLocale(request);
   const asked = (url.searchParams.get('country') || '').toUpperCase(), cc = /^[A-Z]{2}$/.test(asked) ? asked : (det.country || 'UA');
-  const st = await getSettings(env), fx = await getFx(env);
-  return json({ price: st.price_uah, usdRate: st.usd_rate, detected: det, country: cc, currency: priceCurrency(fx, cc, st.usd_rate), fxUpdated: fx ? fx.updated : null,
+  const st = await getSettings(env), fx = await getFx(env), p = await getPrices(env), eur = cc !== 'UA';
+  // ціна у валюті країни: гривня для України, євро для решти; eurInvoice=false означає, що Monobank не приймає євро й оплата піде в гривнях за курсом
+  return json({ price: eur ? p.eur : p.uah, currency: { code: eur ? 'EUR' : 'UAH', rate: 1 }, prices: { uah: p.uah, eur: p.eur }, uahPerEur: p.uahPerEur, eurInvoice: !(await eurInvoiceOff(env)),
+    usdRate: st.usd_rate, detected: det, country: cc, fxUpdated: fx ? fx.updated : null,
     regions: REGIONS, turnstileSiteKey: env.TURNSTILE_SITE_KEY || null, googleClientId: env.GOOGLE_CLIENT_ID || null });
 }
 

@@ -58,9 +58,9 @@ export async function snapshot(env, { now = Date.now(), fetchImpl = fetch, site 
   const st = await getSettings(env), tc = await trackConfig(env), rate = Number(st.usd_rate) || 40, price = Number(st.price_uah) || 0, flags = await agentFlags(env);
   const r7 = await adsReport(env, now - 7 * DAY, now + DAY), r14 = await adsReport(env, now - 14 * DAY, now - 7 * DAY), t = r7.totals, p = r14.totals;
   const avgOrderUah = t.paid ? t.revenue_kop / 100 / t.paid : price, targetCpaUsd = round(0.38 * avgOrderUah / rate);
-  const geoRows = (await env.DB.prepare("SELECT country, lang, COUNT(*) AS n FROM orders WHERE status = 'paid' AND created_at > ? GROUP BY country, lang ORDER BY n DESC LIMIT 8").bind(now - 14 * DAY).all()).results;
-  const stale = (await env.DB.prepare("SELECT COUNT(*) AS n FROM orders WHERE status = 'pending' AND amount_kop > 0 AND created_at < ? AND created_at > ?").bind(now - 2 * 36e5, now - 48 * 36e5).first()).n;
-  const promos = (await env.DB.prepare("SELECT promo_code AS code, COUNT(*) AS n FROM orders WHERE status = 'paid' AND promo_code IS NOT NULL AND created_at > ? GROUP BY promo_code ORDER BY n DESC LIMIT 6").bind(now - 14 * DAY).all()).results;
+  const geoRows = (await env.DB.prepare("SELECT country, lang, COUNT(*) AS n FROM orders WHERE status = 'paid' AND archived_at IS NULL AND created_at > ? GROUP BY country, lang ORDER BY n DESC LIMIT 8").bind(now - 14 * DAY).all()).results;
+  const stale = (await env.DB.prepare("SELECT COUNT(*) AS n FROM orders WHERE status = 'pending' AND archived_at IS NULL AND amount_kop > 0 AND created_at < ? AND created_at > ?").bind(now - 2 * 36e5, now - 48 * 36e5).first()).n;
+  const promos = (await env.DB.prepare("SELECT promo_code AS code, COUNT(*) AS n FROM orders WHERE status = 'paid' AND archived_at IS NULL AND promo_code IS NOT NULL AND created_at > ? GROUP BY promo_code ORDER BY n DESC LIMIT 6").bind(now - 14 * DAY).all()).results;
   let recovery = { sent: 0, recovered: 0 }; try { recovery = await recoveredCount(env); } catch {}
   // черга публікацій
   const pst = await pubState(env), plan = await getPlan(env), hasFb = !!(await getFbPage(env)); let mf = man;

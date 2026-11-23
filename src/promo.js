@@ -4,11 +4,12 @@ export const CODE_RE = /^[A-Z0-9_-]{3,32}$/;
 
 
 
-/** Рахує ціну зі знижкою (list — прайс у копійках). Мінімальна ненульова сума — 1 грн (обмеження еквайрингу). */
-export function priceWith(list, promo) {
+/** Рахує ціну зі знижкою (list — прайс у мінімальних одиницях валюти). Фіксована знижка задана в копійках гривні: scale перераховує її у валюту ціни (для євро — євро за 1 гривню).
+ * Мінімальна ненульова сума — 1 одиниця валюти (обмеження еквайрингу). */
+export function priceWith(list, promo, scale = 1) {
   let discount = 0;
   if (promo) {
-    discount = promo.type === 'percent' ? Math.round(list * Math.min(100, promo.value) / 100) : Math.min(list, promo.value);
+    discount = promo.type === 'percent' ? Math.round(list * Math.min(100, promo.value) / 100) : Math.min(list, Math.round(promo.value * scale));
     discount = Math.max(0, Math.min(list, discount));
     if (list - discount > 0 && list - discount < 100) discount = list - 100;
   }

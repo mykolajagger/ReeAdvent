@@ -18,7 +18,9 @@ import { trackConfig, saveTrackConfig, addSpend, deleteSpend, listSpend, adsRepo
 import { publishNext as igPublishNext, publishStatus as igPublishStatus, setAuto as igSetAuto, editPost as igEditPost, saveFbPage as igSaveFbPage, setOrder as igSetOrder, spread as igSpread, loadManifest as igManifest , pubState } from './igpublish.js';
 import { saveToken as igSaveToken, disconnect as igDisconnect, igStatus, saveEmbeds as igSaveEmbeds, igTest } from './instagram.js';
 import { venueStats, venueProblems, retryCities, queueCity, overpassProbe, setVenuesPaused, catalogCountries, catalogCities, catalogCity, setVenueHidden, mapUrl } from './venues.js';
-import { cancelInvoice } from './payments.js';
+import { cancelInvoice, toInvoiceUnits, eurInvoiceOff, setEurInvoiceOff } from './payments.js';
+import { getPrices, toUah, moneyText } from './pricing.js';
+import { recoveryState } from './recovery.js';
 
 const ADMIN_LOGIN_TTL = 30 * 60e3, ADMIN_SESSION_TTL = 14 * 24 * 3600e3;
 const q1 = (env, sql, ...a) => env.DB.prepare(sql).bind(...a).first();
@@ -76,7 +78,7 @@ export async function handleAdmin(request, env, path, m) {
   let r;
 
   if (m === 'GET' && path === '/api/admin/me') return json({ ok: true, email: admin, price: await getPriceUah(env) });
-  if (m === 'GET' && path === '/api/admin/settings') { const fx = await getFx(env); return json({ ok: true, settings: await getSettings(env), places: { enabled: !!env.GOOGLE_PLACES_KEY, used: await placesUsage(env) }, venues: { ...(await venueStats(env)), problems: await venueProblems(env) }, fx: fx ? { updated: fx.updated, usd: fx.rates.USD ? Math.round(1 / fx.rates.USD * 100) / 100 : null, eur: fx.rates.EUR ? Math.round(1 / fx.rates.EUR * 100) / 100 : null, count: Object.keys(fx.rates).length, mono: fx.sources ? fx.sources.mono : null } : null }); }
+  if (m === 'GET' && path === '/api/admin/settings') { const fx = await getFx(env); return json({ ok: true, settings: await getSettings(env), places: { enabled: !!env.GOOGLE_PLACES_KEY, used: await placesUsage(env) }, venues: { ...(await venueStats(env)), problems: await venueProblems(env) }, fx: fx ? { updated: fx.updated, usd: fx.rates.USD ? Math.round(1 / fx.rates.USD * 100) / 100 : null, eur: fx.rates.EUR ? Math.round(1 / fx.rates.EUR * 100) / 100 : null, count: Object.keys(fx.rates).length, mono: fx.sources ? fx.sources.mono : null } : null, prices: await getPrices(env), payEurOff: await eurInvoiceOff(env), paymentMode: env.PAYMENT_MODE || 'stub' }); }
   if (m === 'POST' && path === '/api/admin/venues/retry') { const b = await readJson(request); const n = await retryCities(env, b.id ? Number(b.id) : null); await audit(env, admin, 'venues_retry', b.id || 'all', { n }); return json({ ok: true, n }); }
   if (m === 'POST' && path === '/api/admin/venues/pause') { const b = await readJson(request); await setVenuesPaused(env, !!b.paused); await audit(env, admin, 'venues_pause', null, { paused: !!b.paused }); return json({ ok: true, paused: !!b.paused }); }
   if (m === 'GET' && path === '/api/admin/venues/countries') return json({ ok: true, countries: await catalogCountries(env) });
@@ -120,11 +122,12 @@ export async function handleAdmin(request, env, path, m) {
   if (m === 'POST' && path === '/api/admin/venues/test') return json({ ok: true, probe: await overpassProbe() });
   if (m === 'POST' && path === '/api/admin/venues/add') { const b = await readJson(request); if (!(await queueCity(env, b.country, b.name))) throw new HttpError(400, 'bad_city'); await audit(env, admin, 'venues_add', null, { country: b.country, name: b.name }); return json({ ok: true }); }
   if (m === 'POST' && path === '/api/admin/fx/refresh') { const r = await refreshFx(env, { force: true }); await audit(env, admin, 'fx_refresh', null, r); if (!r.ok) throw Object.assign(new HttpError(502, 'fx_failed'), { detail: r.error }); return json({ ok: true, ...r }); }
-  if (m === 'POST' && path === '/api/admin/settings') { const saved = await saveSettings(env, await readJson(request)); await audit(env, admin, 'settings', null, saved); return json({ ok: true, settings: await getSettings(env) }); }
+  if (m === 'POST' && path === '/api/admin/settings') { const b = await readJson(request); if (b.eur_retry) { await setEurInvoiceOff(env, null); await audit(env, admin, 'pay_eur_retry', null, {}); } const saved = await saveSettings(env, b); if (Object.keys(saved).length) await audit(env, admin, 'settings', null, saved); return json({ ok: true, settings: await getSettings(env), prices: await getPrices(env), payEurOff: await eurInvoiceOff(env) }); }
   if (m === 'GET' && path === '/api/admin/dashboard') return json({ ok: true, ...(await dashboard(env, url.searchParams.get('days') || '30')) });
   if (m === 'GET' && path === '/api/admin/orders') return json({ ok: true, ...(await listOrders(env, url)) });
   if (m === 'GET' && (r = path.match(/^\/api\/admin\/orders\/([\w-]+)$/))) return json({ ok: true, ...(await orderDetail(env, r[1])) });
-  if (m === 'POST' && (r = path.match(/^\/api\/admin\/orders\/([\w-]+)\/(update|resend|refund|note)$/))) return json(await orderAction(request, env, admin, r[1], r[2]));
+  if (m === 'POST' && path === '/api/admin/orders/bulk') return json(await ordersBulk(env, admin, await readJson(request)));
+  if (m === 'POST' && (r = path.match(/^\/api\/admin\/orders\/([\w-]+)\/(update|resend|refund|note|archive|delete)$/))) return json(await orderAction(request, env, admin, r[1], r[2]));
   if (m === 'GET' && path === '/api/admin/customers') return json({ ok: true, customers: await customers(env, url.searchParams.get('q') || '') });
   if (m === 'GET' && path === '/api/admin/customers.csv') {
     const rows = await customers(env, '');
@@ -155,7 +158,7 @@ function statusOf(o) { if (o.refunded_at) return 'refunded'; if (o.paid_at) retu
 async function listOrders(env, url) {
   const status = url.searchParams.get('status') || 'all', q = (url.searchParams.get('q') || '').trim().slice(0, 80);
   const page = Math.max(1, Number(url.searchParams.get('page')) || 1), limit = 50;
-  const where = [], args = [];
+  const where = [status === 'archived' ? 'archived_at IS NOT NULL' : 'archived_at IS NULL'], args = [];   // архівні (тестові й непотрібні) показуються лише у фільтрі «Архів»
   if (status === 'paid') where.push('paid_at IS NOT NULL AND refunded_at IS NULL');
   else if (status === 'refunded') where.push('refunded_at IS NOT NULL');
   else if (status === 'pending') where.push('paid_at IS NULL AND created_at > ?'), args.push(Date.now() - 3600e3);
@@ -164,7 +167,7 @@ async function listOrders(env, url) {
   if (q) { const like = '%' + esc(q) + '%'; where.push("(email_a LIKE ? ESCAPE '\\' OR email_b LIKE ? ESCAPE '\\' OR name_a LIKE ? ESCAPE '\\' OR name_b LIKE ? ESCAPE '\\' OR city LIKE ? ESCAPE '\\' OR id = ?)"); args.push(like, like, like, like, like, q); }
   const W = where.length ? 'WHERE ' + where.join(' AND ') : '';
   const total = (await q1(env, `SELECT COUNT(*) AS n FROM orders ${W}`, ...args)).n;
-  const rows = await qa(env, `SELECT id, created_at, paid_at, refunded_at, amount_kop, list_kop, discount_kop, promo_code, name_a, email_a, name_b, email_b, city, region, start_date FROM orders ${W} ORDER BY created_at DESC LIMIT ? OFFSET ?`, ...args, limit, (page - 1) * limit);
+  const rows = await qa(env, `SELECT id, created_at, paid_at, refunded_at, amount_kop, list_kop, discount_kop, promo_code, name_a, email_a, name_b, email_b, city, region, start_date, currency, archived_at FROM orders ${W} ORDER BY created_at DESC LIMIT ? OFFSET ?`, ...args, limit, (page - 1) * limit);
   return { total, page, pages: Math.max(1, Math.ceil(total / limit)), orders: rows.map(o => ({ ...o, status: statusOf(o) })) };
 }
 
@@ -186,6 +189,43 @@ async function orderDetail(env, id) {
   return { order: { ...o, status: statusOf(o) }, calendar: cal ? { ...cal, ready: !!cal.ready, today: todayIndex(cal.start_date, nowOf(env)) } : null, members, log, threads };
 }
 
+/** Остаточне видалення замовлення (лише з архіву): календар, учасники, їхні відповіді й прогрес, входи, листи в журналі. Для реальних оплат краще лишити в архіві. */
+async function deleteOrder(env, admin, o) {
+  if (!o.archived_at) throw new HttpError(409, 'not_archived');
+  const cal = await q1(env, 'SELECT id FROM calendars WHERE order_id = ?', o.id);
+  const mem = cal ? await qa(env, 'SELECT id FROM members WHERE calendar_id = ?', cal.id) : [];
+  const stmts = [];
+  for (const m of mem) for (const t of ['answers', 'progress', 'sessions', 'login_tokens', 'login_codes', 'reminders_sent', 'venue_ratings', 'venue_reports']) stmts.push(env.DB.prepare(`DELETE FROM ${t} WHERE member_id = ?`).bind(m.id));
+  if (cal) stmts.push(env.DB.prepare('DELETE FROM members WHERE calendar_id = ?').bind(cal.id), env.DB.prepare('DELETE FROM calendars WHERE id = ?').bind(cal.id));
+  if (o.paid_at && o.promo_id) stmts.push(env.DB.prepare('UPDATE promo_codes SET used_count = MAX(0, used_count - 1) WHERE id = ?').bind(o.promo_id));   // ліміт промокоду знову доступний
+  stmts.push(env.DB.prepare('DELETE FROM orders WHERE id = ?').bind(o.id));
+  await env.DB.batch(stmts);
+  try { await run(env, 'DELETE FROM email_log WHERE order_id = ?', o.id); } catch {}
+  try { const st = await recoveryState(env); if (st[o.id]) { delete st[o.id]; await run(env, 'INSERT INTO settings (key, value, updated_at) VALUES (?, ?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value, updated_at = excluded.updated_at', 'recovery_state', JSON.stringify(st), Date.now()); } } catch {}
+  await audit(env, admin, 'order_delete', o.id, { status: statusOf(o), amountKop: o.amount_kop, currency: o.currency || 'UAH', created: o.created_at });
+}
+
+/** Масові дії зі списку замовлень: archive | unarchive | delete (видаляються лише архівні; до 20 за раз, решту надсилає адмінка наступними запитами). */
+async function ordersBulk(env, admin, b) {
+  const act = String(b.action || ''), max = act === 'delete' ? 20 : 200;
+  if (!['archive', 'unarchive', 'delete'].includes(act)) throw new HttpError(400, 'bad_action');
+  const ids = Array.isArray(b.ids) ? [...new Set(b.ids.map(String))].filter(x => /^[\w-]{3,64}$/.test(x)) : [];
+  if (!ids.length || ids.length > max) throw new HttpError(400, 'bad_ids');
+  let n = 0, skipped = 0;
+  if (act === 'delete') {
+    for (const id of ids) { const o = await q1(env, 'SELECT * FROM orders WHERE id = ?', id); if (!o || !o.archived_at) { skipped++; continue; } await deleteOrder(env, admin, o); n++; }
+  } else {
+    for (let i = 0; i < ids.length; i += 90) {
+      const part = ids.slice(i, i + 90), ph = part.map(() => '?').join(',');
+      const res = act === 'archive' ? await run(env, `UPDATE orders SET archived_at = ? WHERE archived_at IS NULL AND id IN (${ph})`, Date.now(), ...part) : await run(env, `UPDATE orders SET archived_at = NULL WHERE archived_at IS NOT NULL AND id IN (${ph})`, ...part);
+      n += Number(res.meta && res.meta.changes) || 0;
+    }
+    skipped = ids.length - n;
+  }
+  await audit(env, admin, 'orders_' + act, null, { n, skipped, ids: ids.slice(0, 50) });
+  return { ok: true, n, skipped };
+}
+
 async function orderAction(request, env, admin, id, action) {
   const b = await readJson(request);
   const o = await q1(env, 'SELECT * FROM orders WHERE id = ?', id);
@@ -193,6 +233,13 @@ async function orderAction(request, env, admin, id, action) {
   const cal = await q1(env, 'SELECT * FROM calendars WHERE order_id = ?', id);
   const members = cal ? await qa(env, 'SELECT * FROM members WHERE calendar_id = ? ORDER BY slot', cal.id) : [];
 
+  if (action === 'archive') {   // в архів і назад: замовлення зникає зі списків і звітів, але нічого не видаляється
+    const on = b.archived !== false;
+    await run(env, 'UPDATE orders SET archived_at = ? WHERE id = ?', on ? (o.archived_at || Date.now()) : null, id);
+    await audit(env, admin, on ? 'order_archive' : 'order_unarchive', id, {});
+    return { ok: true, archived: on };
+  }
+  if (action === 'delete') { await deleteOrder(env, admin, o); return { ok: true, deleted: true }; }
   if (action === 'note') {
     await run(env, 'UPDATE orders SET note = ? WHERE id = ?', cleanText(b.note, 1000) || null, id);
     await audit(env, admin, 'note', id);
@@ -220,16 +267,16 @@ async function orderAction(request, env, admin, id, action) {
     let refundStatus = 'manual', refundRef = null;
     if (auto) {
       refundRef = 'refund_' + o.id;
-      const r = await cancelInvoice(env, o.invoice_id, amount, refundRef);
+      const r = await cancelInvoice(env, o.invoice_id, toInvoiceUnits(o, amount), refundRef);   // сума у валюті виставленого рахунку
       if (!r.ok || r.status === 'failure') { const e = new HttpError(502, 'refund_failed'); e.detail = String(r.error || 'failure').slice(0, 200); throw e; }
       refundStatus = r.status || 'processing';
     }
     await run(env, 'UPDATE orders SET refunded_at = ?, refund_kop = ?, refund_status = ?, refund_ref = ? WHERE id = ?', Date.now(), amount, refundStatus, refundRef, id);
     if (b.revoke !== false) for (const mem of members) await run(env, 'DELETE FROM sessions WHERE member_id = ?', mem.id); // доступ закривається
     if (b.notify !== false && amount > 0) { // повідомлення покупцю (не критично, якщо не вдалось)
-      try { const mail = refundEmail(env, `${(amount / 100).toLocaleString('uk-UA', { minimumFractionDigits: amount % 100 ? 2 : 0 })} ₴`, o.lang || 'uk'); await sendEmail(env, o.payer_email || o.email_a, mail.subject, mail.html, mail.text, { meta: { kind: 'refund', orderId: id } }); } catch (e) { console.error('refund email failed', e); }
+      try { const mail = refundEmail(env, moneyText(amount, o.currency || 'UAH'), o.lang || 'uk'); await sendEmail(env, o.payer_email || o.email_a, mail.subject, mail.html, mail.text, { meta: { kind: 'refund', orderId: id } }); } catch (e) { console.error('refund email failed', e); }
     }
-    await audit(env, admin, 'refund', id, { amountKop: amount, method: auto ? 'monobank_api' : 'manual', status: refundStatus, revoke: b.revoke !== false, note: cleanText(b.note, 300) });
+    await audit(env, admin, 'refund', id, { amountKop: amount, currency: o.currency || 'UAH', method: auto ? 'monobank_api' : 'manual', status: refundStatus, revoke: b.revoke !== false, note: cleanText(b.note, 300) });
     return { ok: true, method: auto ? 'api' : 'manual', status: refundStatus };
   }
   // update: дата старту й контакти
@@ -282,17 +329,17 @@ async function orderAction(request, env, admin, id, action) {
 // ---------- Клієнти ----------
 async function customers(env, q) {
   const like = '%' + esc(q.trim().slice(0, 80)) + '%';
-  const rows = await qa(env, `SELECT email, GROUP_CONCAT(DISTINCT name) AS names, COUNT(*) AS orders, COALESCE(SUM(CASE WHEN paid_at IS NOT NULL AND refunded_at IS NULL THEN amount_kop ELSE 0 END),0) AS paid_kop, MAX(created_at) AS last_at, GROUP_CONCAT(DISTINCT city) AS cities
-    FROM (SELECT email_a AS email, name_a AS name, city, amount_kop, paid_at, refunded_at, created_at FROM orders UNION ALL SELECT email_b, name_b, city, 0, paid_at, refunded_at, created_at FROM orders)
+  const rows = await qa(env, `SELECT email, GROUP_CONCAT(DISTINCT name) AS names, COUNT(*) AS orders, CAST(ROUND(COALESCE(SUM(CASE WHEN paid_at IS NOT NULL AND refunded_at IS NULL THEN uah ELSE 0 END),0)) AS INTEGER) AS paid_kop, MAX(created_at) AS last_at, GROUP_CONCAT(DISTINCT city) AS cities
+    FROM (SELECT email_a AS email, name_a AS name, city, amount_kop * COALESCE(uah_rate, 1) AS uah, paid_at, refunded_at, created_at FROM orders WHERE archived_at IS NULL UNION ALL SELECT email_b, name_b, city, 0, paid_at, refunded_at, created_at FROM orders WHERE archived_at IS NULL)
     WHERE email LIKE ? ESCAPE '\\' OR name LIKE ? ESCAPE '\\' GROUP BY email ORDER BY last_at DESC LIMIT 1000`, like, like);
   return rows;
 }
 
 // ---------- Промокоди ----------
 async function listPromos(env) {
-  const rows = await qa(env, `SELECT p.*, (SELECT COUNT(*) FROM orders o WHERE o.promo_id = p.id AND o.paid_at IS NOT NULL) AS paid_orders,
-    (SELECT COALESCE(SUM(o.discount_kop),0) FROM orders o WHERE o.promo_id = p.id AND o.paid_at IS NOT NULL) AS discount_kop,
-    (SELECT COALESCE(SUM(o.amount_kop),0) FROM orders o WHERE o.promo_id = p.id AND o.paid_at IS NOT NULL AND o.refunded_at IS NULL) AS revenue_kop
+  const rows = await qa(env, `SELECT p.*, (SELECT COUNT(*) FROM orders o WHERE o.promo_id = p.id AND o.paid_at IS NOT NULL AND o.archived_at IS NULL) AS paid_orders,
+    (SELECT CAST(ROUND(COALESCE(SUM(o.discount_kop * COALESCE(o.uah_rate, 1)),0)) AS INTEGER) FROM orders o WHERE o.promo_id = p.id AND o.paid_at IS NOT NULL AND o.archived_at IS NULL) AS discount_kop,
+    (SELECT CAST(ROUND(COALESCE(SUM(o.amount_kop * COALESCE(o.uah_rate, 1)),0)) AS INTEGER) FROM orders o WHERE o.promo_id = p.id AND o.paid_at IS NOT NULL AND o.refunded_at IS NULL AND o.archived_at IS NULL) AS revenue_kop
     FROM promo_codes p ORDER BY created_at DESC`);
   return rows;
 }
@@ -334,11 +381,14 @@ export async function dashboard(env, daysParam) {
   const days = daysParam === 'all' ? null : [7, 30, 90, 365].includes(Number(daysParam)) ? Number(daysParam) : 30;
   const now = Date.now(), since = days ? now - days * 864e5 : 0; // мітки часу замовлень — реальні, тому й «зараз» реальне
   const st = await getSettings(env), taxPct = st.tax_percent + st.military_percent;
-  const created = await qa(env, 'SELECT id, status, paid_at, created_at FROM orders WHERE created_at >= ?', since);
-  const paid = await qa(env, 'SELECT * FROM orders WHERE paid_at >= ? ORDER BY paid_at', since);
+  // архівні (тестові) замовлення в звіти не потрапляють; суми в євро переводимо в гривні за курсом на момент замовлення
+  const created = await qa(env, 'SELECT id, status, paid_at, created_at FROM orders WHERE created_at >= ? AND archived_at IS NULL', since);
+  const paid = (await qa(env, 'SELECT * FROM orders WHERE paid_at >= ? AND archived_at IS NULL ORDER BY paid_at', since)).map(o => o.currency === 'EUR'
+    ? { ...o, eur_cents: o.amount_kop, eur_refund_cents: o.refund_kop || 0, amount_kop: toUah(o, o.amount_kop), list_kop: toUah(o, o.list_kop ?? o.amount_kop), discount_kop: toUah(o, o.discount_kop), refund_kop: o.refund_kop == null ? null : toUah(o, o.refund_kop) } : o);
   const sum = (arr, f) => arr.reduce((s, x) => s + (f(x) || 0), 0);
   const list = sum(paid, o => o.list_kop ?? o.amount_kop), discount = sum(paid, o => o.discount_kop), revenue = sum(paid, o => o.amount_kop);
   const refunds = sum(paid.filter(o => o.refunded_at), o => o.refund_kop);
+  const eurPaid = paid.filter(o => o.currency === 'EUR'), eur = { paid: eurPaid.length, cents: sum(eurPaid, o => o.eur_cents - (o.refunded_at ? o.eur_refund_cents : 0)), uah_kop: sum(eurPaid, o => o.amount_kop - (o.refunded_at ? o.refund_kop || 0 : 0)) };
   const netRevenue = revenue - refunds;
   // Комісія Monobank: 1,3% з українських карток, 2% з іноземних (країну замовлення беремо як ознаку). Повернення в день оплати комісію знімає;
   // повернення в інший день комісію НЕ повертає (покупець отримує повну суму, комісію несемо ми).
@@ -370,7 +420,7 @@ export async function dashboard(env, daysParam) {
 
   // воронка: оплачені календарі -> анкети -> відкривають вікна
   const cals = await qa(env, `SELECT c.id, (c.schedule_json IS NOT NULL) AS ready, (SELECT COUNT(DISTINCT p.day) FROM progress p JOIN members m ON m.id = p.member_id WHERE m.calendar_id = c.id AND p.opened = 1) AS opened_days
-    FROM calendars c JOIN orders o ON o.id = c.order_id WHERE o.paid_at >= ?`, since);
+    FROM calendars c JOIN orders o ON o.id = c.order_id WHERE o.paid_at >= ? AND o.archived_at IS NULL`, since);
   const funnel = [
     { key: 'created', label: 'Створили замовлення', n: created.length },
     { key: 'paid', label: 'Оплатили', n: createdPaid },
@@ -381,14 +431,14 @@ export async function dashboard(env, daysParam) {
   ];
   // найближчі старти (операційно)
   const lp = localParts(new Date(now)), todayK = toDateStr(Math.floor(Date.UTC(lp.y, lp.m - 1, lp.d) / 864e5));
-  const starts = await qa(env, "SELECT c.start_date AS date, COUNT(*) AS n FROM calendars c JOIN orders o ON o.id = c.order_id WHERE c.start_date >= ? AND o.refunded_at IS NULL GROUP BY c.start_date ORDER BY c.start_date LIMIT 14", todayK);
+  const starts = await qa(env, "SELECT c.start_date AS date, COUNT(*) AS n FROM calendars c JOIN orders o ON o.id = c.order_id WHERE c.start_date >= ? AND o.refunded_at IS NULL AND o.archived_at IS NULL GROUP BY c.start_date ORDER BY c.start_date LIMIT 14", todayK);
   const inbox = await q1(env, "SELECT COUNT(*) AS open, COALESCE(SUM(unread),0) AS unread FROM threads WHERE status = 'open'");
-  const customers = (await q1(env, 'SELECT COUNT(DISTINCT email) AS n FROM (SELECT email_a AS email FROM orders WHERE paid_at IS NOT NULL UNION SELECT email_b FROM orders WHERE paid_at IS NOT NULL)')).n;
+  const customers = (await q1(env, 'SELECT COUNT(DISTINCT email) AS n FROM (SELECT email_a AS email FROM orders WHERE paid_at IS NOT NULL AND archived_at IS NULL UNION SELECT email_b FROM orders WHERE paid_at IS NOT NULL AND archived_at IS NULL)')).n;
   return {
     period: days || 'all',
     kpi: { paid: paidCount, free: freeCount, created: created.length, conversion: created.length ? createdPaid / created.length : null, list_kop: list, discount_kop: discount, revenue_kop: revenue, refunds_kop: refunds, net_revenue_kop: netRevenue,
       avg_check_kop: paidCount - freeCount > 0 ? Math.round(sum(paid.filter(o => o.amount_kop > 0), o => o.amount_kop) / (paidCount - freeCount)) : 0,
-      fee_kop: fee, tax_kop: tax, profit_kop: netRevenue - fee - tax, fee_pct: st.fee_percent, fee_foreign_pct: st.fee_foreign_percent, tax_pct: taxPct, tax_single_pct: st.tax_percent, tax_military_pct: st.military_percent, pending, abandoned, customers, inbox_open: inbox.open, inbox_unread: inbox.unread },
+      fee_kop: fee, tax_kop: tax, profit_kop: netRevenue - fee - tax, fee_pct: st.fee_percent, fee_foreign_pct: st.fee_foreign_percent, tax_pct: taxPct, tax_single_pct: st.tax_percent, tax_military_pct: st.military_percent, pending, abandoned, customers, inbox_open: inbox.open, inbox_unread: inbox.unread, eur },
     series: fill, funnel, regions: byRegion, cities: byCity, promos: promoRows, upcoming_starts: starts
   };
 }

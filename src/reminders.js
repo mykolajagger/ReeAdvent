@@ -24,7 +24,7 @@ export async function runReminders(env) {
   const now = nowOf(env), nowMs = now.getTime();
   const rows = await q(env, `SELECT m.id AS mid, m.email, m.suggested_name, m.survey_json, c.start_date, c.schedule_json, c.lang, c.tz
     FROM members m JOIN calendars c ON c.id = m.calendar_id JOIN orders o ON o.id = c.order_id
-    WHERE o.refunded_at IS NULL AND m.remind_off = 0 AND c.start_date >= ?`, toDateStr(Math.floor(nowMs / 864e5) - DAYS - 3));
+    WHERE o.refunded_at IS NULL AND o.archived_at IS NULL AND m.remind_off = 0 AND c.start_date >= ?`, toDateStr(Math.floor(nowMs / 864e5) - DAYS - 3));
   let sent = 0; const out = { eve: 0, survey: 0, window: 0, skipped: 0 };
   for (const r of rows) {
     if (sent >= MAX_SENDS_PER_RUN) break;

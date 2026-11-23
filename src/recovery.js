@@ -17,7 +17,7 @@ export async function runRecovery(env, { now = Date.now(), max = 25 } = {}) {
   if ((await getSetting(env, 'agent_recovery')) !== '1') return { skipped: 'off' };
   const state = await recoveryState(env);
   for (const k of Object.keys(state)) if ((state[k].t || 0) < now - 4 * DAY) delete state[k];
-  const { results } = await env.DB.prepare("SELECT id, created_at, name_a, email_a, payer_email, lang FROM orders WHERE status = 'pending' AND amount_kop > 0 AND created_at BETWEEN ? AND ? ORDER BY created_at LIMIT 200").bind(now - 40 * H, now - 2 * H).all();
+  const { results } = await env.DB.prepare("SELECT id, created_at, name_a, email_a, payer_email, lang FROM orders WHERE status = 'pending' AND archived_at IS NULL AND amount_kop > 0 AND created_at BETWEEN ? AND ? ORDER BY created_at LIMIT 200").bind(now - 40 * H, now - 2 * H).all();
   let sent = 0, skipped = 0;
   for (const o of results) {
     if (sent >= max) break;
