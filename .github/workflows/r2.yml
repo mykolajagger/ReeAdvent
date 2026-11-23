@@ -1,0 +1,26 @@
+name: Сховище R2 для відео (створення бакета)
+
+# Один раз створює бакет reeadvent-media через wrangler (якщо його ще немає) і показує список бакетів.
+# Сайт підключає його в wrangler.toml як біндинг MEDIA: відео у відповідях на питання дня й готові Reels.
+# Токен CLOUDFLARE_API_TOKEN має мати право Account → Workers R2 Storage → Edit (крім D1 → Edit),
+# а в акаунті Cloudflare має бути ввімкнено R2 (R2 → Overview; безкоштовно до 10 ГБ на місяць).
+on:
+  workflow_dispatch:
+
+jobs:
+  create:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Створити бакет (якщо немає)
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: |
+          set -o pipefail
+          LIST=$(npx -y wrangler@4 r2 bucket list 2>&1) || { echo "$LIST"; exit 1; }
+          if echo "$LIST" | grep -q 'name:\s*reeadvent-media'; then echo "Бакет reeadvent-media уже є"; else npx -y wrangler@4 r2 bucket create reeadvent-media; fi
+          npx -y wrangler@4 r2 bucket list
