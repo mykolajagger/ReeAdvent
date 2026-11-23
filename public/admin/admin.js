@@ -83,6 +83,7 @@ async function catalogCityView(main, cc, id) {
 
 /* ---------- Каркас ---------- */
 // Генератор посилань з мітками: [назва, utm_source, utm_medium, кампанія за замовчуванням, де вставити]
+const placedMsg = x => x && x.placed ? 'Заплановано на ' + new Date(x.placed.at).toLocaleString('uk-UA', { weekday: 'short', day: 'numeric', month: 'long', hour: '2-digit', minute: '2-digit' }) + (x.placed.reasons && x.placed.reasons.length > 1 ? ': ' + x.placed.reasons.slice(1).join(', ') : '') + (x.placed.warn ? ' ⚠ ' + x.placed.warn : '') : 'Готово';
 const UTM_PRESETS = [
   ['Instagram: посилання в шапці профілю', 'instagram', 'bio', 'profile', 'Instagram → Редагувати профіль → Посилання → Додати зовнішнє посилання. Одне посилання на весь час.'],
   ['Instagram: стікер «Посилання» в сторіс', 'instagram', 'story', 'stories', 'Сторіс → стікер «Посилання». У «Креатив» напишіть, яка це сторіс (наприклад, okno1), щоб порівнювати сторіс між собою.'],
@@ -383,7 +384,7 @@ function renderIgPlan(pb, ig) {
   <div class="pqueue" data-day="none"><b>Без дати (${undated.length})</b> <span class="muted" style="font-size:12px">перетягніть сюди, щоб зняти дату; автопілот черги розставить їх сам</span><div class="pql">${undated.map(chip).join('') || '<span class="muted" style="font-size:12px">усі пости заплановано</span>'}</div></div>
   <details class="pspread"><summary class="muted">Розставити всі неопубліковані за розкладом…</summary><div class="row" style="flex-wrap:wrap;gap:8px;margin-top:8px"><label class="f" style="margin:0">Перша публікація<input type="datetime-local" id="igsp0"></label><label class="f" style="margin:0">Інтервал<select id="igspn">${[[0.25, 'кожні 6 годин'], [0.5, 'кожні 12 годин'], [1, 'щодня'], [2, 'через день'], [3, 'кожні 3 дні'], [7, 'раз на тиждень']].map(([v, t]) => `<option value="${v}" ${v === 1 ? 'selected' : ''}>${t}</option>`).join('')}</select></label><button type="button" class="btn ghost sm" id="igspread">Призначити час за порядком</button></div></details>
   <div style="display:flex;gap:18px;flex-wrap:wrap;align-items:flex-start;margin-top:6px">
-    <div style="flex:1 1 100%;display:flex;gap:10px;align-items:center;flex-wrap:wrap"><div class="muted" style="font-size:12px;letter-spacing:.08em;text-transform:uppercase">Обрано: ${esc(igKind(p))} · ${status(p)}</div>${p.complete ? '' : `<button type="button" class="btn ghost sm" id="igmove">Перемістити…</button>`}</div>
+    <div style="flex:1 1 100%;display:flex;gap:10px;align-items:center;flex-wrap:wrap"><div class="muted" style="font-size:12px;letter-spacing:.08em;text-transform:uppercase">Обрано: ${esc(igKind(p))} · ${status(p)}</div>${p.complete ? '' : `<button type="button" class="btn ghost sm" id="igmove">Перемістити…</button><button type="button" class="btn ghost sm" id="igbest" title="Агент знайде день: без повторів формату й сцени поспіль, з урахуванням теми (Миколай, Різдво, старт…)">✦ Найкраще місце</button><button type="button" class="btn ghost sm" id="igfree">Найближчий вільний день</button>`}</div>
    <div style="flex:1 1 330px;min-width:280px;display:grid;grid-template-columns:minmax(0,1fr);gap:10px">
     <div class="card" style="padding:0;overflow:hidden;max-width:${story ? 260 : 380}px;background:#0e0f14;color:#f3efe6">
      <div style="display:flex;gap:8px;align-items:center;padding:10px 12px"><div style="width:30px;height:30px;border-radius:50%;background:linear-gradient(135deg,#d6b46a,#8a6a2a)"></div><b style="font-size:13px">reeadvent</b><span style="margin-left:auto;opacity:.6">${story ? '24 год' : '···'}</span></div>
@@ -423,6 +424,8 @@ function renderIgPlan(pb, ig) {
     el.ondrop = e => { e.preventDefault(); el.classList.remove('drop'); const id = e.dataTransfer.getData('text/plain'); if (id) dropOn(id, e.target); };
     el.onclick = e => { if (igMove && !e.target.closest('.pchip')) dropOn(igMove, el); };
   });
+  if ($('#igbest')) $('#igbest').onclick = async () => { const x = await post('plan', { id: p.id, place: 'best' }); if (x) toast(placedMsg(x)); };
+  if ($('#igfree')) $('#igfree').onclick = async () => { const x = await post('plan', { id: p.id, place: 'free' }); if (x) toast(placedMsg(x)); };
   if ($('#igmove')) $('#igmove').onclick = () => { igMove = p.id; renderIgPlan(pb, ig); host.querySelector('.pcal').scrollIntoView({ behavior: 'smooth', block: 'start' }); };
   if ($('#igmovex')) $('#igmovex').onclick = () => { igMove = null; renderIgPlan(pb, ig); };
   if ($('#igprev')) { $('#igprev').onclick = () => { igSlide = (igSlide + p.files.length - 1) % p.files.length; renderIgPlan(pb, ig); }; $('#ignext').onclick = () => { igSlide = (igSlide + 1) % p.files.length; renderIgPlan(pb, ig); }; }

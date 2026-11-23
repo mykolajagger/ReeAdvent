@@ -2,7 +2,10 @@
 (() => {
 'use strict';
 const { $, esc, api, toast, errText, social } = window.ADM;
-const PR = { tab: 'new', data: null, ed: {}, cur: {}, files: {}, tok: {}, timer: {} };
+const PR = { tab: 'new', data: null, ed: {}, cur: {}, files: {}, tok: {}, timer: {}, place: {} };
+const PLACE_UA = { best: 'Найкорисніше місце (агент підбере)', free: 'Найближчий вільний день', manual: 'Свій час', none: 'Без дати (поставлю сам)' };
+const whenUa = t => new Date(t).toLocaleString('uk-UA', { weekday: 'short', day: 'numeric', month: 'long', hour: '2-digit', minute: '2-digit' });
+const placedText = x => x && x.at ? `${whenUa(x.at)}${x.reasons && x.reasons.length > 1 ? ': ' + x.reasons.slice(1).join(', ') : ''}${x.warn ? ' ⚠ ' + x.warn : ''}` : '';
 const SCENE_UA = { tree: 'Ялинка', pasta: 'Вечеря', pillow: 'Подушки', book: 'Книга', stars: 'Зорі', game: 'Настільна гра', wrap: 'Подарунки', spa: 'Спа', market: 'Ярмарок', movie: 'Кіно' };
 const TPL_UA = { quote: 'Цитата', tip: 'Чекліст', question: 'Питання', announce: 'Заголовок на фото', cta: 'Заклик' };
 const FMT_UA = { post: 'Пост', carousel: 'Карусель', story: 'Сторіс', reel: 'Reel (концепт)' };
@@ -46,9 +49,9 @@ function prNewCard(p, d) {
     <div style="flex:1 1 380px;min-width:260px;display:grid;grid-template-columns:minmax(0,1fr);gap:8px">
      ${story ? '<div class="muted">Сторіс без підпису: текст уже на картинці.</div>' : `<label class="f">Підпис<textarea data-f="caption" rows="${reel ? 7 : 8}">${esc(ed.caption)}</textarea></label><div class="muted" data-cc="${esc(p.id)}"></div>`}
      <details><summary class="muted" style="cursor:pointer">${reel ? 'Сцени відео' : 'Слайди: шаблон, сцена й тексти'}</summary>${prSlideEditor(p, ed)}</details>
-     <div class="row" style="gap:12px;flex-wrap:wrap;align-items:flex-end"><label class="f" style="margin:0">Час публікації<input type="datetime-local" data-f="whenAt" value="${prDt(ed.whenAt)}"></label><label class="muted" style="display:flex;gap:6px;align-items:center"><input type="checkbox" data-f="ig" ${ed.targets.ig ? 'checked' : ''}> Instagram</label><label class="muted" style="display:flex;gap:6px;align-items:center"><input type="checkbox" data-f="fb" ${ed.targets.fb ? 'checked' : ''}> Facebook</label></div>
+     <div class="row" style="gap:12px;flex-wrap:wrap;align-items:flex-end"><label class="f" style="margin:0">Куди в календар<select data-f="place">${Object.entries(PLACE_UA).map(([k, t]) => `<option value="${k}" ${prPlace(p.id) === k ? 'selected' : ''}>${t}</option>`).join('')}</select></label><label class="f" style="margin:0" data-whenbox ${prPlace(p.id) === 'manual' ? '' : 'hidden'}>Час публікації<input type="datetime-local" data-f="whenAt" value="${prDt(ed.whenAt)}"></label><label class="muted" style="display:flex;gap:6px;align-items:center"><input type="checkbox" data-f="ig" ${ed.targets.ig ? 'checked' : ''}> Instagram</label><label class="muted" style="display:flex;gap:6px;align-items:center"><input type="checkbox" data-f="fb" ${ed.targets.fb ? 'checked' : ''}> Facebook</label></div><div class="muted" data-placed="${esc(p.id)}" style="font-size:13px;min-height:1.2em"></div>
      ${reel ? `<div class="muted">Reel: погодьте концепт, а відео виготовляється окремо. ${d.mediaMode === 'r2' ? 'Готовий MP4 можна завантажити після погодження.' : 'Щоб завантажувати готові відео сюди, підключіть сховище R2 (інструкція в docs/agent.md).'}</div>` : ''}
-     <div class="row" style="gap:8px;flex-wrap:wrap"><button class="btn" data-act="approve" type="button">${ed.whenAt ? 'Погодити й запланувати' : 'Погодити'}</button><button class="btn ghost" data-act="save" type="button" ${dirty ? '' : 'disabled'}>Зберегти зміни${dirty ? ' •' : ''}</button><button class="btn ghost" data-act="reject" type="button">Відхилити</button></div>
+     <div class="row" style="gap:8px;flex-wrap:wrap"><button class="btn" data-act="approve" type="button">${prPlace(p.id) === 'none' ? 'Погодити' : 'Погодити й запланувати'}</button><button class="btn ghost" data-act="save" type="button" ${dirty ? '' : 'disabled'}>Зберегти зміни${dirty ? ' •' : ''}</button><button class="btn ghost" data-act="reject" type="button">Відхилити</button></div>
     </div></div>
    <div style="border-top:1px dashed var(--line2);padding-top:10px;display:grid;grid-template-columns:minmax(0,1fr);gap:8px"><label class="f">Доопрацювання з Claude: напишіть, що змінити<textarea data-f="prompt" rows="2" ${d.hasKey ? '' : 'disabled'} placeholder="${d.hasKey ? 'Напр.: зроби тон грайливішим, скороти підпис до двох речень, заміни сцену на ярмарок, візьми стиль із доданого фото' : 'Потрібен секрет ANTHROPIC_API_KEY у Cloudflare (див. картку «Агент росту»)'}"></textarea></label>
     ${d.hasKey ? refBox(p.id, true) : ''}
@@ -81,9 +84,17 @@ async function renderProps(data) {
   <div style="display:grid;grid-template-columns:minmax(0,1fr);gap:8px;border:1px solid var(--line);border-radius:12px;padding:10px 12px"><div class="row" style="gap:8px;flex-wrap:wrap;align-items:flex-end"><label class="f" style="margin:0;flex:1;min-width:240px">Нова пропозиція: тема або побажання (необов’язково)<input data-f="gfocus" placeholder="напр.: подарунки для нього, кіновечір, відповідь на «чи не дорого?»"></label><button class="btn" data-act="gen" type="button">Запропонувати ще</button></div>${d.hasKey ? refBox('_gen', true) : '<div class="muted">Без ключа Claude агент бере пропозиції з готового банку.</div>'}</div>
   <div class="row" style="gap:8px;flex-wrap:wrap">${tab('new', 'На розгляді', c.new)}${tab('approved', 'Погоджені', c.approved)}${tab('rejected', 'Відхилені', c.rejected)}</div>
   <div id="prlist">${list.length ? list.map(p => PR.tab === 'new' ? prNewCard(p, d) : PR.tab === 'approved' ? prApprovedCard(p) : prRejectedCard(p)).join('') : `<div class="muted">${PR.tab === 'new' ? 'Нових пропозицій немає. Натисніть «Запропонувати ще».' : 'Тут поки порожньо.'}</div>`}</div>`;
-  if (PR.tab === 'new') list.forEach(p => { prPreview(p.id); prCaptionInfo(p.id); });
+  if (PR.tab === 'new') list.forEach(p => { prPreview(p.id); prCaptionInfo(p.id); prPlacePreview(p.id); });
 }
 
+const prPlace = id => PR.place[id] || 'best';
+async function prPlacePreview(id) {
+  const el = document.querySelector(`[data-placed="${id}"]`); if (!el) return; const mode = prPlace(id);
+  if (mode === 'none') { el.textContent = 'Публікація піде в «Без дати»: розставите в календарі або автопілот черги.'; return; }
+  if (mode === 'manual') { const ed = prEd(prFind(id)); el.textContent = ed.whenAt ? 'Вийде ' + whenUa(ed.whenAt) : 'Оберіть дату й час.'; return; }
+  el.textContent = 'Підбираю місце…';
+  try { const x = await api('POST', '/api/admin/proposals/place', { id, mode }); el.textContent = x.placed ? 'Стане на ' + placedText(x.placed) : 'Вільних днів на 5 тижнів наперед немає: піде в «Без дати».'; } catch { el.textContent = ''; }
+}
 const prBusy = (btn, text) => { const old = btn.textContent; btn.disabled = true; btn.textContent = text; return () => { btn.disabled = false; btn.textContent = old; }; };
 async function prCall(path, body, okMsg) { try { const x = await api('POST', '/api/admin/proposals/' + path, body); if (okMsg) toast(okMsg); return x; } catch (e) { toast(errText(e)); return null; } }
 const prPatch = ed => { const o = {}; for (const k of EDIT_KEYS) o[k] = ed[k]; return o; };
@@ -94,7 +105,9 @@ async function prApprove(id, btn) {
     if (prDirty(p)) { const x = await prCall('edit', { id, patch: prPatch(prEd(p)) }); if (!x) return; PR.data = x; delete PR.ed[id]; p = prFind(id); }
     const ed = prFields(p), media = [], limit = PR.data.mediaMode === 'r2' ? 0 : 680 * 1024;
     if (p.format !== 'reel') for (let i = 0; i < p.slides.length; i++) { btn.textContent = `Файли ${i + 1} із ${p.slides.length}…`; const canvas = await RN.render(p.slides[i], p.format === 'story' ? 'story' : 'post'), blob = await RN.toJpeg(canvas, limit); media.push((await prUpload(blob)).id); }
-    const x = await prCall('approve', { id, at: ed.whenAt, targets: ed.targets, media }, p.format === 'reel' ? 'Концепт погоджено' : 'Погоджено: додано до плану публікацій');
+    const place = prPlace(id); if (place === 'manual' && !ed.whenAt) { toast('Оберіть час публікації'); return; }
+    const x = await prCall('approve', { id, at: place === 'manual' ? ed.whenAt : null, place, targets: ed.targets, media });
+    if (x) toast(p.format === 'reel' ? (place === 'manual' || place === 'none' ? 'Концепт погоджено' : 'Концепт погоджено: відео стане на найкраще вільне місце, коли його завантажите') : x.placed ? 'Заплановано на ' + placedText(x.placed) : 'Погоджено: додано до плану публікацій');
     if (x) { delete PR.ed[id]; PR.tab = 'approved'; await social(); }
   } catch (e) { toast(e.message === 'image_too_big' ? 'Зображення завелике для вбудованого сховища: спростіть слайд' : errText(e)); } finally { done(); }
 }
@@ -103,22 +116,22 @@ async function prVideo(id, file) {
   try {
     const v = await prUpload(file); let cover = null;
     try { const url = URL.createObjectURL(file), el = document.createElement('video'); el.muted = true; el.src = url; await new Promise((r, j) => { el.onloadeddata = r; el.onerror = j; }); el.currentTime = Math.min(1, (el.duration || 2) / 2); await new Promise(r => { el.onseeked = r; }); const c = document.createElement('canvas'); c.width = el.videoWidth; c.height = el.videoHeight; c.getContext('2d').drawImage(el, 0, 0); cover = (await prUpload(await RN.toJpeg(c, 0))).id; URL.revokeObjectURL(url); } catch {}
-    const x = await prCall('approve', { id, media: [v.id], cover }, 'Відео додано до плану публікацій'); if (x) await social();
+    const x = await prCall('approve', { id, media: [v.id], cover }); if (x) { toast(x.placed ? 'Відео заплановано на ' + placedText(x.placed) : 'Відео додано до плану публікацій'); await social(); }
   } catch (e) { toast(errText(e)); if (lab) lab.textContent = ''; }
 }
 function prInput(el) {
   const card = el.closest('.pc'); if (!card) return; const id = card.dataset.id, p = prFind(id); if (!p) return; const ed = prEd(p), f = el.dataset.f; if (!f) return;
   const m = f.match(/^([sr])\.(\d+)\.(\w+)$/);
-  if (f === 'title') ed.title = el.value; else if (f === 'caption') { ed.caption = el.value; prCaptionInfo(id); } else if (f === 'whenAt') ed.whenAt = el.value ? new Date(el.value).getTime() : null; else if (f === 'ig' || f === 'fb') ed.targets[f] = el.checked; else if (f === 'music') ed.music = el.value;
+  if (f === 'title') ed.title = el.value; else if (f === 'caption') { ed.caption = el.value; prCaptionInfo(id); } else if (f === 'whenAt') { ed.whenAt = el.value ? new Date(el.value).getTime() : null; prPlacePreview(id); } else if (f === 'place') { PR.place[id] = el.value; const wb = card.querySelector('[data-whenbox]'); if (wb) wb.hidden = el.value !== 'manual'; prPlacePreview(id); } else if (f === 'ig' || f === 'fb') ed.targets[f] = el.checked; else if (f === 'music') ed.music = el.value;
   else if (m) { const [, k, i, name] = m, row = (k === 's' ? ed.slides : ed.storyboard)[+i]; if (!row) return; row[name] = name === 'items' ? el.value.split('\n').map(x => x.trim()).filter(Boolean).slice(0, 5) : name === 'sec' ? Math.max(1, Math.min(6, +el.value || 3)) : el.value; if (name === 'scene' && k === 'r') prPreview(id); }
   if (m || f === 'music') { clearTimeout(PR.timer[id]); PR.timer[id] = setTimeout(() => prPreview(id), 250); }
   const save = card.querySelector('[data-act=save]'); if (save) { const dirty = prDirty(p); save.disabled = !dirty; save.textContent = 'Зберегти зміни' + (dirty ? ' •' : ''); }
-  const ap = card.querySelector('[data-act=approve]'); if (ap && !ap.disabled) ap.textContent = ed.whenAt ? 'Погодити й запланувати' : 'Погодити';
+  const ap = card.querySelector('[data-act=approve]'); if (ap && !ap.disabled) ap.textContent = prPlace(id) === 'none' ? 'Погодити' : 'Погодити й запланувати';
 }
 document.addEventListener('input', e => { if (e.target.closest && e.target.closest('#propcard') && e.target.dataset.f && !/^(prompt|gfocus|ver)$/.test(e.target.dataset.f)) prInput(e.target); });
 document.addEventListener('change', async e => {
   const t = e.target; if (!t.closest || !t.closest('#propcard')) return;
-  if (t.dataset.f === 'ig' || t.dataset.f === 'fb' || t.dataset.f === 'whenAt' || /^[sr]\./.test(t.dataset.f || '')) prInput(t);
+  if (t.dataset.f === 'ig' || t.dataset.f === 'fb' || t.dataset.f === 'whenAt' || t.dataset.f === 'place' || /^[sr]\./.test(t.dataset.f || '')) prInput(t);
   if (t.dataset.file) { const key = t.dataset.file, files = [...t.files]; t.value = ''; for (const f of files) { if ((PR.files[key] || []).length >= 4) break; try { (PR.files[key] = PR.files[key] || []).push(await prRefFile(f)); } catch (er) { toast(er.message || 'Файл не підійшов'); } } const l = document.querySelector(`[data-list="${key}"]`); if (l) l.innerHTML = (PR.files[key] || []).map((x, i) => `${esc(x.name)} <a href="#" data-act="rmref" data-key="${key}" data-i="${i}">видалити</a>`).join(' · '); }
   if (t.dataset.vid && t.files[0]) prVideo(t.dataset.vid, t.files[0]);
 });

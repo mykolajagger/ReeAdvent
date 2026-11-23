@@ -3,7 +3,8 @@
 // Зображення малюються в адмінці (canvas) і завантажуються через src/media.js; відео для Reel потребує R2 або виготовляється окремо.
 import { randomToken, HttpError } from './util.js';
 import { callClaude, hasClaude } from './claude.js';
-import { getPlan, savePlan, loadManifest, dynamicEntries, SITE } from './igpublish.js';
+import { getPlan, savePlan, loadManifest, dynamicEntries, SITE, effective, pubState } from './igpublish.js';
+import { pickSlot } from './placement.js';
 import { hasMedia, deleteMedia, mediaMode, mediaMime, putMedia, sniff, MEDIA_ID } from './media.js';
 
 export const TEMPLATES = ['quote', 'tip', 'question', 'announce', 'cta'];
@@ -194,13 +195,27 @@ export async function rejectProposal(env, id, reason, { now = Date.now() } = {})
 }
 const ENTRY_TYPE = { post: 'IMAGE', carousel: 'CAROUSEL', story: 'STORY', reel: 'REELS' };
 /** Погодження: файли вже завантажені (media), створюється запис у загальному плані публікацій і, за потреби, призначається час. */
-export async function approveProposal(env, id, { at = null, targets = null, media = [], cover = null } = {}, { now = Date.now() } = {}) {
+const PLACES = ['best', 'free', 'manual', 'none'];
+const entryText = p => [p.title, p.caption, ...(p.slides || []).flatMap(x => [x.title, x.text, ...(x.items || [])]), ...(p.storyboard || []).map(x => x.text)].filter(Boolean).join(' \n ');
+/** Куди стане публікація: 'best' (найкорисніше місце) або 'free' (найближчий вільний день). Нічого не зберігає. */
+export async function placeFor(env, p, mode = 'best', { now = Date.now(), fetchImpl = fetch } = {}) {
+  let man; try { man = await loadManifest(fetchImpl, SITE, env); } catch { man = await dynamicEntries(env).catch(() => []); }
+  const eff = effective(man, await getPlan(env)), st = await pubState(env), doneAt = {};
+  for (const [k, x] of Object.entries(st.done || {})) if (x && x.at) doneAt[k] = x.at;
+  const launch = Date.parse(((await getSetting(env, 'launch_date')) || '2026-12-01') + 'T00:00:00+02:00');
+  const entry = { id: 'p-' + p.id, type: ENTRY_TYPE[p.format], scene: [(p.slides[0] && p.slides[0].scene), (p.storyboard[0] && p.storyboard[0].scene)].find(x => x && SCENES.includes(x)) || null, text: entryText(p) };
+  const prefHour = p.whenAt && !p.placeManual ? new Date(p.whenAt).getUTCHours() : null;
+  return pickSlot({ entry, eff, doneAt, now, launch, mode, prefHour });
+}
+export async function previewPlace(env, id, mode, opts = {}) { const p = find(await listProposals(env), id); if (!p) throw new HttpError(404, 'not_found'); return placeFor(env, p, PLACES.includes(mode) ? mode : 'best', opts); }
+
+export async function approveProposal(env, id, { at = null, targets = null, media = [], cover = null, place = null } = {}, { now = Date.now(), fetchImpl = fetch } = {}) {
   const list = await listProposals(env), p = find(list, id); if (!p) throw new HttpError(404, 'not_found');
   if (!(p.status === 'new' || (p.status === 'approved' && p.needsVideo))) throw new HttpError(400, 'proposal_locked');
   media = (Array.isArray(media) ? media : []).map(String);
   for (const m of media.concat(cover ? [String(cover)] : [])) if (!(await hasMedia(env, m))) throw new HttpError(400, 'media_missing');
   if (p.format === 'reel') {
-    if (!media.length) { p.status = 'approved'; p.needsVideo = true; p.approvedAt = now; await save(env, list); return { proposal: p, entry: null }; }
+    if (!media.length) { p.status = 'approved'; p.needsVideo = true; p.approvedAt = now; p.place = PLACES.includes(place) ? place : (Number(at) ? 'manual' : 'best'); if (p.place === 'manual' && Number(at)) p.placeAt = Number(at); await save(env, list); return { proposal: p, entry: null }; }
     if (media.length !== 1) throw new HttpError(400, 'media_count');
     if ((await mediaMime(env, media[0])) !== 'video/mp4') throw new HttpError(400, 'media_not_video');
   } else if (media.length !== p.slides.length) throw new HttpError(400, 'media_count');
@@ -208,10 +223,15 @@ export async function approveProposal(env, id, { at = null, targets = null, medi
   const entry = { id: entryId, type: ENTRY_TYPE[p.format], title: p.title, caption: p.format === 'story' ? '' : p.caption, files: media.map(m => '/api/media/' + m), cover: cover ? '/api/media/' + cover : null, scene: [(p.slides[0] && p.slides[0].scene), (p.storyboard[0] && p.storyboard[0].scene)].find(x => x && SCENES.includes(x)) || null, dynamic: true, proposal: p.id };
   const extra = (await dynamicEntries(env)).filter(e => e.id !== entryId); extra.push(entry); await setSetting(env, 'ig_extra', JSON.stringify(extra));
   const plan = await getPlan(env), o = plan.posts[entryId] = plan.posts[entryId] || {};
-  const when = Number(at); if (Number.isFinite(when) && when > now - 864e5 && when < now + 400 * DAY) o.at = Math.round(when / 6e4) * 6e4;
+  // Місце в календарі: свій час, без дати, найближчий вільний день або найкорисніше місце (за замовчуванням)
+  if (!PLACES.includes(place)) place = p.place || (Number(at) ? 'manual' : 'best');
+  if (place === 'manual' && !Number(at) && p.placeAt) at = p.placeAt;
+  let placed = null;
+  if (place === 'manual') { const when = Number(at); if (Number.isFinite(when) && when > now - 864e5 && when < now + 400 * DAY) o.at = Math.round(when / 6e4) * 6e4; }
+  else if (place === 'best' || place === 'free') { placed = await placeFor(env, p, place, { now, fetchImpl }).catch(() => null); if (placed) o.at = placed.at; }
   o.ig = tg.ig !== false; o.fb = tg.fb !== false; await savePlan(env, plan);
-  p.status = 'approved'; p.needsVideo = false; p.mediaIds = media.concat(cover ? [String(cover)] : []); p.entryId = entryId; p.approvedAt = now; p.targets = { ig: o.ig, fb: o.fb }; await save(env, list);
-  return { proposal: p, entry };
+  p.status = 'approved'; p.needsVideo = false; p.mediaIds = media.concat(cover ? [String(cover)] : []); p.entryId = entryId; p.approvedAt = now; p.targets = { ig: o.ig, fb: o.fb }; p.placed = o.at ? { at: o.at, reasons: placed ? placed.reasons : null, warn: placed ? placed.warn : null } : null; await save(env, list);
+  return { proposal: p, entry, placed: p.placed };
 }
 /** Видаляє з плану затверджену, але ще не опубліковану пропозицію (разом із файлами). */
 export async function withdrawProposal(env, id, isPublished) {
