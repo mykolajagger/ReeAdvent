@@ -9,6 +9,7 @@ import { uploadAnswerMedia, deleteAnswerMedia, listAnswerMedia, mediaByDay, serv
 import { rateItem, myRatings, ratingStats, seenFor } from './feedback.js';
 import { verifyTurnstile } from './turnstile.js';
 import { handleAdmin } from './admin.js';
+import { recordVisit } from './visits.js';
 import { findPromo, priceWith, rateLimit, normCode } from './promo.js';
 import { getSettings } from './settings.js';
 import { cleanUtm, publicTrackConfig } from './ads.js';
@@ -36,6 +37,7 @@ export async function handle(request, env) {
     const m = request.method;
     if (m === 'GET' && path === '/api/config') return await configResponse(request, env);
     if (m === 'GET' && path === '/api/instagram') return json({ ok: true, handle: IG_HANDLE, posts: await instagramFeed(env), embeds: await getEmbeds(env) }, 200, { 'cache-control': 'public, max-age=600' });
+    if (m === 'POST' && path === '/api/v') { let b = {}; try { b = JSON.parse(await request.text()); } catch {} return json(await recordVisit(env, request, b)); }
     if (m === 'GET' && path === '/api/track-config') return json({ ok: true, ...(await publicTrackConfig(env)) });
     if (m === 'POST' && path === '/api/orders') return await createOrder(request, env);
     if (m === 'POST' && path === '/api/promo/check') return await promoCheck(request, env);

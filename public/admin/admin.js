@@ -82,7 +82,7 @@ async function catalogCityView(main, cc, id) {
 }
 
 /* ---------- Каркас ---------- */
-const NAV = [['dashboard', 'Дашборд'], ['orders', 'Замовлення'], ['customers', 'Клієнти'], ['promos', 'Промокоди'], ['social', 'Соцмережі й реклама'], ['inbox', 'Підтримка'], ['comms', 'Комунікації'], ['catalog', 'Каталог закладів'], ['settings', 'Налаштування'], ['audit', 'Журнал дій']];
+const NAV = [['dashboard', 'Дашборд'], ['launch', 'Запуск'], ['orders', 'Замовлення'], ['customers', 'Клієнти'], ['promos', 'Промокоди'], ['social', 'Соцмережі й реклама'], ['inbox', 'Підтримка'], ['comms', 'Комунікації'], ['catalog', 'Каталог закладів'], ['settings', 'Налаштування'], ['audit', 'Журнал дій']];
 async function shell() {
   root.innerHTML = `<div class="shell"><aside class="side"><div class="logo"><img class="logo-img" src="/assets/logo.png" alt="ReeAdvent" width="120" height="44"></div>
     <nav class="nav">${NAV.map(([k, t]) => `<a data-v="${k}" class="${view === k ? 'on' : ''}" href="#/${k}">${t}${k === 'inbox' ? '<span class="badge" id="ib" hidden></span>' : ''}</a>`).join('')}</nav>

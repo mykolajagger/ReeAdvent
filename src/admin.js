@@ -23,6 +23,7 @@ import { getPrices, toUah, moneyText } from './pricing.js';
 import { recoveryState } from './recovery.js';
 import { purgeAnswerMedia } from './answerMedia.js';
 import { ratingsReport } from './feedback.js';
+import { readiness, setManual } from './readiness.js';
 
 const ADMIN_LOGIN_TTL = 30 * 60e3, ADMIN_SESSION_TTL = 14 * 24 * 3600e3;
 const q1 = (env, sql, ...a) => env.DB.prepare(sql).bind(...a).first();
@@ -104,6 +105,8 @@ export async function handleAdmin(request, env, path, m) {
   if (m === 'GET' && (r = path.match(/^\/api\/admin\/comms\/(\d{1,12})$/))) return json(await commsGet(env, +r[1]));
   if (m === 'GET' && (r = path.match(/^\/api\/admin\/comms\/order\/([\w-]{3,64})$/))) { const o = await q1(env, 'SELECT id, created_at, paid_at, refunded_at, name_a, name_b, email_a, email_b, payer_email, city, amount_kop FROM orders WHERE id = ?', r[1]); return json(await commsOrder(env, r[1], o && { ...o, status: statusOf(o) })); }
   if (m === 'GET' && path === '/api/admin/ratings') return json({ ok: true, ...(await ratingsReport(env)) });
+  if (m === 'GET' && path === '/api/admin/launch') return json(await readiness(env));
+  if (m === 'POST' && path === '/api/admin/launch') { const b = await readJson(request); const out = await setManual(env, String(b.id || ''), !!b.done); if (out.ok) await audit(env, admin, 'launch_step', null, { id: b.id, done: !!b.done }); return json(out); }
   if (m === 'GET' && path === '/api/admin/agent') { const hist = await getHist(env); return json({ ok: true, flags: await agentFlags(env), last: hist[0] || null, history: hist.slice(1, 8).map(h => ({ at: h.at, day: h.day, mode: h.mode, headline: h.headline })) }); }
   if (m === 'POST' && path === '/api/admin/agent/settings') { const out = await saveAgentFlags(env, await readJson(request)); if (!out.ok) throw new HttpError(400, out.error); await audit(env, admin, 'agent_settings', null, {}); return json({ ok: true, flags: await agentFlags(env) }); }
   if (m === 'POST' && path === '/api/admin/agent/run') { const out = await runAgent(env, { force: true }); await audit(env, admin, 'agent_run', null, { mode: out.mode }); const hist = await getHist(env); return json({ ok: true, ...out, flags: await agentFlags(env), last: hist[0] || null, history: hist.slice(1, 8).map(h => ({ at: h.at, day: h.day, mode: h.mode, headline: h.headline })) }); }

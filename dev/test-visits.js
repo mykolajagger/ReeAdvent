@@ -1,0 +1,28 @@
+// Анонімна воронка лендингу: запис подій, відсів ботів, санітизація, зведення з оплатами; готовність до запуску.
+import assert from 'node:assert/strict';
+import { makeDb } from './d1.js';
+import { ensureSchema } from '../src/schema.js';
+import { recordVisit, funnel } from '../src/visits.js';
+import { readiness, setManual } from '../src/readiness.js';
+const db = makeDb(new URL('..', import.meta.url).pathname), env = { DB: db, PAYMENT_MODE: 'stub', EMAIL_MODE: 'stub' };
+await ensureSchema(env);
+const req = ua => new Request('https://x/api/v', { method: 'POST', headers: { 'user-agent': ua || 'Mozilla/5.0' } });
+for (let i = 0; i < 4; i++) await recordVisit(env, req(), { e: 'view', p: '/', s: 'meta', c: 'ua_cold' });
+await recordVisit(env, req(), { e: 'form', p: '/', s: 'meta', c: 'ua_cold' });
+await recordVisit(env, req(), { e: 'checkout', p: '/', s: 'meta', c: 'ua_cold' });
+await recordVisit(env, req(), { e: 'view', p: '/', s: 'Insta Gram<script>', c: '' });
+assert.equal((await recordVisit(env, req('facebookexternalhit/1.1'), { e: 'view', p: '/' })).skipped, 'bot');
+assert.equal((await recordVisit(env, req(), { e: 'drop table', p: '/' })).ok, false);
+await recordVisit(env, req(), { e: 'view', p: '/thanks.html' });
+db._raw.exec(`INSERT INTO orders (id, created_at, status, amount_kop, paid_at, utm_source, utm_campaign, name_a, email_a, name_b, email_b, city, region, start_date, consent_at) VALUES ('o1', ${Date.now()}, 'paid', 39900, ${Date.now()}, 'meta', 'ua_cold', 'A', 'a@x', 'B', 'b@x', 'Kyiv', 'Kyiv', '2026-12-01', ${Date.now()})`);
+const f = await funnel(env, 7);
+const meta = f.rows.find(r => r.source === 'meta');
+assert.deepEqual([meta.view, meta.form, meta.checkout, meta.paid, meta.revenue], [4, 1, 1, 1, 399]);
+assert.ok(f.rows.some(r => r.source === 'insta_gram_script_'), 'джерело очищене');
+assert.equal(f.total.view, 5, 'сторінка «дякуємо» не входить у перегляди лендингу');
+const r = await readiness(env, { fetchImpl: async () => new Response('[]') });
+assert.equal(r.checks.find(c => c.id === 'pay').ok, false); assert.equal(r.checks.find(c => c.id === 'utm').ok, true);
+assert.equal(r.funnel.total.view, 5);
+assert.equal((await setManual(env, 'meta_card', true)).ok, true); assert.equal((await setManual(env, 'nope', true)).ok, false);
+assert.ok((await readiness(env, { fetchImpl: async () => new Response('[]') })).manual.find(m => m.id === 'meta_card').done);
+console.log('OK visits');

@@ -8,8 +8,15 @@
   const q = new URLSearchParams(location.search), u = {};
   for (const k of ['source', 'medium', 'campaign', 'content', 'term']) { const v = q.get('utm_' + k); if (v) u[k] = v.slice(0, 80); }
   if (!u.source && q.get('fbclid')) { u.source = 'meta'; u.medium = 'click'; } else if (!u.source && q.get('gclid')) { u.source = 'google'; u.medium = 'click'; }
+  // Без UTM, але прийшли з соцмережі чи пошуку: джерело з адреси, звідки перейшли (лише домен), щоб і воронка, і замовлення знали джерело
+  if (!u.source && document.referrer) { try { const h = new URL(document.referrer).hostname.replace(/^www\./, ''); if (h && h !== location.hostname) { const m = [['instagram', 'instagram'], ['facebook', 'facebook'], ['fb.', 'facebook'], ['threads', 'threads'], ['google', 'google'], ['bing', 'bing'], ['tiktok', 'tiktok'], ['t.me', 'telegram'], ['telegram', 'telegram'], ['youtube', 'youtube'], ['pinterest', 'pinterest']].find(([k]) => h.includes(k)); u.source = m ? m[1] : h.slice(0, 40); u.medium = 'referral'; } } catch {} }
   if (Object.keys(u).length) ss.set('ra_utm', JSON.stringify(u));
   window.raUtm = () => { try { return JSON.parse(ss.get('ra_utm') || 'null') || undefined; } catch { return undefined; } };
+  // --- Анонімна воронка (без cookies): перегляд сторінки, початок заповнення форми, перехід до оплати; по разу за сесію
+  const beacon = e => { try { const cur = window.raUtm() || {}, body = JSON.stringify({ e, p: location.pathname, s: cur.source, c: cur.campaign }); if (!(navigator.sendBeacon && navigator.sendBeacon('/api/v', new Blob([body], { type: 'text/plain' })))) fetch('/api/v', { method: 'POST', body, keepalive: true }).catch(() => {}); } catch {} };
+  const once = (k, e) => { if (ss.get(k)) return; ss.set(k, '1'); beacon(e); };
+  if (!/^\/thanks/.test(location.pathname)) once('ra_v' + location.pathname, 'view');
+  document.addEventListener('focusin', e => { if (e.target && e.target.closest && e.target.closest('form')) once('ra_f', 'form'); });
   // --- завантаження постачальників
   let cfg = null, loaded = false; const queue = [];
   const T = { uk: { t: 'Cookies і реклама', p: 'Ми використовуємо технічні cookies, а за вашої згоди ще й рекламні та аналітичні (Meta, Google), щоб вимірювати ефективність реклами.', a: 'Прийняти всі', n: 'Лише необхідні', m: 'Докладніше', open: 'Налаштування cookies' }, en: { t: 'Cookies and advertising', p: 'We use essential cookies and, with your consent, advertising and analytics cookies (Meta, Google) to measure how our ads perform.', a: 'Accept all', n: 'Essential only', m: 'Learn more', open: 'Cookie settings' } };
@@ -30,7 +37,7 @@
       window.gtag && cfg.gads && cfg.gadsLabel && gtag('event', 'conversion', { send_to: cfg.gads + '/' + cfg.gadsLabel, value: d.value, currency: cur, transaction_id: d.id });
     }
   }
-  window.raTrack = (ev, d) => { if (ls.get('ra_consent') !== 'all') return; if (loaded) send(ev, d); else queue.push([ev, d]); };
+  window.raTrack = (ev, d) => { if (ev === 'checkout') once('ra_c', 'checkout'); if (ls.get('ra_consent') !== 'all') return; if (loaded) send(ev, d); else queue.push([ev, d]); };
   // --- банер
   function banner() {
     const L = T[lang()]; document.getElementById('ra-ck')?.remove();
