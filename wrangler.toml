@@ -7,6 +7,11 @@ binding = "DB"
 database_name = "reeadvent-db"
 database_id = "8dd4d746-1746-4168-b724-1643f99925e6"
 
+# Сховище R2: відео у відповідях на питання дня й готові Reels (бакет створює .github/workflows/r2.yml)
+[[r2_buckets]]
+binding = "MEDIA"
+bucket_name = "reeadvent-media"
+
 [vars]
 PRICE_UAH = "899"   # початкова ціна; далі змінюється в адмінці (Налаштування)
 BASE_URL = "https://reeadvent.fun"
