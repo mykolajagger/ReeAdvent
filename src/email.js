@@ -47,7 +47,7 @@ const T = {
   uk: {
     hello: n => `Привіт, ${n}!`,
     buyer: { subject: 'Ваш адвент-календар ReeAdvent готовий', title: n => `Привіт, ${n}!`, cta: 'Заповнити анкету',
-      p: (partner, date) => [`Дякуємо за замовлення. Ваш ReeAdvent готовий: 24 дні сюрпризів лише для вас двох.`, `Ми вже надіслали ${esc(partner)} окремий лист із запрошенням. Перше вікно відкриється <b>${esc(date)}</b> о ${hh}.`, `Спочатку заповніть коротку анкету (близько 3 хвилин). Ваші відповіді бачите тільки ви.`] },
+      p: (partner, date) => [`Дякуємо за замовлення. Ваш ReeAdvent готовий: 24 дні сюрпризів лише для вас двох.`, `Запрошення вже в дорозі: <b>${esc(partner)}</b> отримає окремий лист. Перше вікно відкриється <b>${esc(date)}</b> о ${hh}.`, `Спочатку заповніть коротку анкету (близько 3 хвилин). Ваші відповіді бачите тільки ви.`] },
     partner: { subject: buyer => `${buyer} створює для вас ваш спільний ReeAdvent`, title: n => `Привіт, ${n}!`, cta: 'Заповнити анкету',
       p: (buyer, date) => [`<b>${esc(buyer)}</b> створює для вас ваш спільний ReeAdvent: 24 дні маленьких сюрпризів лише для вас двох.`, `Щоранку нове вікно: питання одне одному, подарунок, романтична пригода і спільна активність у вашому місті. Підібрано під ваші вподобання, а що саме чекає, ви не знаєте.`, `Перше вікно відкриється <b>${esc(date)}</b> о ${hh}. А поки що заповніть коротку анкету (близько 3 хвилин): вона допоможе підібрати все саме для вас. Ваші відповіді бачите тільки ви, навіть ${esc(buyer)} їх не побачить.`] },
     login: { subject: 'Вхід у ReeAdvent', title: 'Вхід у календар', cta: 'Увійти', p: () => ['Натисніть кнопку, щоб увійти. Посилання одноразове і діє 30 хвилин.'] },
@@ -65,7 +65,7 @@ const T = {
   en: {
     hello: n => `Hi ${n}!`,
     buyer: { subject: 'Your ReeAdvent advent calendar is ready', title: n => `Hi ${n}!`, cta: 'Fill in the questionnaire',
-      p: (partner, date) => [`Thank you for your order. Your ReeAdvent is ready: 24 days of little surprises just for the two of you.`, `We have already sent ${esc(partner)} a separate invitation. The first window opens on <b>${esc(date)}</b> at ${hh}.`, `First, please fill in a short questionnaire (about 3 minutes). Only you can see your answers.`] },
+      p: (partner, date) => [`Thank you for your order. Your ReeAdvent is ready: 24 days of little surprises just for the two of you.`, `The invitation is on its way: <b>${esc(partner)}</b> will get a separate email. The first window opens on <b>${esc(date)}</b> at ${hh}.`, `First, please fill in a short questionnaire (about 3 minutes). Only you can see your answers.`] },
     partner: { subject: buyer => `${buyer} is creating your shared ReeAdvent`, title: n => `Hi ${n}!`, cta: 'Fill in the questionnaire',
       p: (buyer, date) => [`<b>${esc(buyer)}</b> is creating your shared ReeAdvent: 24 days of little surprises just for the two of you.`, `Every morning a new window opens: a question for each other, a gift idea, a romantic adventure and a shared activity in your city. Everything is matched to your tastes, but what exactly is waiting for you stays a surprise.`, `The first window opens on <b>${esc(date)}</b> at ${hh}. Until then, please fill in a short questionnaire (about 3 minutes) so we can tailor everything to you. Only you can see your answers, not even ${esc(buyer)}.`] },
     login: { subject: 'Sign in to ReeAdvent', title: 'Sign in', cta: 'Sign in', p: () => ['Press the button to sign in. The link works once and expires in 30 minutes.'] },

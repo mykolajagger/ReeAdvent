@@ -347,8 +347,8 @@ async function openDay(day) {
   const head = `<header><h2>${L('Вікно', 'Window')} <span>№${day}</span></h2><button class="x" aria-label="${L('Закрити', 'Close')}">✕</button></header>`;
   const renderQuestion = () => {
     ov.firstElementChild.innerHTML = `${head}
-      <div class="reveal qcard"><div class="tag">${L('Питання дня · для', 'Question of the day · for')} ${esc(d.forName)}</div><h3>${esc(d.question.text)}</h3>
-        <p class="muted" style="font-size:14px">${L(`Напишіть відповідь для ${esc(d.forName)}: вона її прочитає. Після відповіді відкриються завдання на день. Змінити відповідь потім не можна.`, `Write an answer for ${esc(d.forName)}: they will read it. After you answer, the tasks of the day open. You cannot change the answer later.`)}</p>
+      <div class="reveal qcard"><div class="tag">${L('Питання дня · для:', 'Question of the day · for')} ${esc(d.forName)}</div><h3>${esc(d.question.text)}</h3>
+        <p class="muted" style="font-size:14px">${L(`Напишіть відповідь: ${esc(d.forName)} її прочитає. Після відповіді відкриються завдання на день. Змінити відповідь потім не можна.`, `Write your answer: ${esc(d.forName)} will read it. After you answer, the tasks of the day open. You cannot change the answer later.`)}</p>
         ${d.question.media ? `<div class="hint">${d.question.media === 'video' ? L('Сюди просто проситься відео: зніміть кілька секунд.', 'This one asks for a video: record a few seconds.') : L('Сюди просто проситься фото: додайте його до відповіді.', 'This one asks for a photo: add it to your answer.')}${d.question.media === 'video' && !d.video ? L(' (Відео поки недоступні, тож додайте фото.)', ' (Videos are not available yet, so add a photo.)') : ''}</div>` : ''}
         <textarea id="ans" maxlength="600" rows="5" placeholder="${L('Ваша відповідь…', 'Your answer…')}"></textarea>
         <div class="meta"><span id="cnt">0 / 600</span></div>
