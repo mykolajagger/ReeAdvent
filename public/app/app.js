@@ -448,7 +448,7 @@ async function openDay(day) {
   // відповідь партнера: кнопка й автоматична перевірка кожні 20 с, поки вікно відкрите й відповіді ще немає
   const checkPartner = async manual => {
     if (d.needAnswer || d.question.partner != null) return;
-    try { const x = await api('GET', '/api/day/' + day); if (x.question && x.question.partner != null) { d.question = x.question; render(); toast(L(`${d.forName} відповів(ла)!`, `${d.forName} has answered!`)); confetti(innerWidth / 2, 220, 40); } else if (manual) toast(L('Поки що немає відповіді', 'No answer yet')); } catch (er) { if (manual) toast(errText(er)); }
+    try { const x = await api('GET', '/api/day/' + day); if (x.question && x.question.partner != null) { d.question = x.question; render(); toast(L(`Відповідь від ${d.forName} уже тут!`, `${d.forName} has answered!`)); confetti(innerWidth / 2, 220, 40); } else if (manual) toast(L('Поки що немає відповіді', 'No answer yet')); } catch (er) { if (manual) toast(errText(er)); }
   };
   poll = setInterval(() => { if (!document.body.contains(ov)) return clearInterval(poll); if (!document.hidden) checkPartner(false); }, 20000);
   render();
