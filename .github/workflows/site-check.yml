@@ -1,0 +1,19 @@
+name: Перевірка сайту (лише читання)
+
+# Показує, яку версію головної та файлів віддає reeadvent.fun (заголовки кешу, версії CSS/JS). Нічого не змінює.
+on:
+  workflow_dispatch: {}
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Головна й файли
+        run: |
+          for u in https://reeadvent.fun/ "https://reeadvent.fun/?lang=uk" https://www.reeadvent.fun/ https://reeadvent.pages.dev/; do
+            echo "=== $u"; curl -sSL -D /tmp/h -o /tmp/b "$u" || true
+            grep -iE '^(HTTP|cache-control|cf-cache-status|age|location|cf-ray)' /tmp/h || true
+            echo "hero2: $(grep -c 'hero2' /tmp/b)  versions: $(grep -oE '(landing|lang|base)\.(css|js)\?v=[0-9]+' /tmp/b | tr '\n' ' ')"
+          done
+          echo "=== landing.css"; curl -sSI "https://reeadvent.fun/assets/landing.css?v=14" | grep -iE '^(HTTP|cache-control|cf-cache-status|age)'
