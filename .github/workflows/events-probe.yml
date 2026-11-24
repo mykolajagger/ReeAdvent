@@ -1,0 +1,21 @@
+name: Діагностика сайтів афіш (лише читання)
+
+# Перевіряє, чи можна брати реальні події дня (афіша, концерти, театр) із сайтів квитків: JSON-LD, структура сторінок. Нічого не змінює.
+on:
+  workflow_dispatch:
+    inputs:
+      urls:
+        description: 'Необов’язково: адреси через кому'
+        required: false
+        default: ''
+
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: node tools/events-probe.mjs "${{ github.event.inputs.urls }}"
