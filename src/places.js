@@ -26,6 +26,14 @@ export function pickTop(places, n = 3) {
     .sort((a, b) => b.score - a.score).slice(0, n).map(({ score, ...p }) => p);
 }
 
+/** «Схоже, нещодавно відкрились»: високі оцінки (≥ 4.5), але ще мало відгуків (5–60), діючі; не ті, що вже в топі. Google не дає дати відкриття, тож це обережна ознака. */
+export function pickFresh(places, exclude = [], n = 2) {
+  const ex = new Set(exclude.map(p => p.url));
+  return (places || []).filter(p => p && p.displayName && p.displayName.text && p.rating >= 4.5 && p.userRatingCount >= 5 && p.userRatingCount <= 60 && (!p.businessStatus || p.businessStatus === 'OPERATIONAL'))
+    .map(p => ({ name: String(p.displayName.text).slice(0, 80), rating: Math.round(p.rating * 10) / 10, count: p.userRatingCount, address: p.shortFormattedAddress ? String(p.shortFormattedAddress).slice(0, 80) : '', url: p.googleMapsUri || '', fresh: true }))
+    .filter(p => /^https:\/\/(www\.)?(google\.[a-z.]+|maps\.google\.[a-z.]+|maps\.app\.goo\.gl|goo\.gl)\//i.test(p.url) && !ex.has(p.url))
+    .sort((a, b) => b.rating - a.rating || a.count - b.count).slice(0, n);
+}
 /**
  * Повертає [{ name, rating, count, address, url }] або [] (немає ключа, ліміт, помилка, мало даних).
  * query — готовий пошуковий запит із містом («cafe Lyon»).
@@ -40,10 +48,11 @@ export async function recommend(env, { query, lang, country, memberId, day, fetc
     const res = await fetchImpl('https://places.googleapis.com/v1/places:searchText', {
       method: 'POST', signal: ctl.signal,
       headers: { 'Content-Type': 'application/json', 'X-Goog-Api-Key': env.GOOGLE_PLACES_KEY, 'X-Goog-FieldMask': 'places.displayName,places.rating,places.userRatingCount,places.googleMapsUri,places.shortFormattedAddress,places.businessStatus' },
-      body: JSON.stringify({ textQuery: query, languageCode: lang === 'en' ? 'en' : 'uk', ...(country && /^[A-Z]{2}$/.test(country) ? { regionCode: country } : {}), maxResultCount: 10, minRating: 4 })
+      body: JSON.stringify({ textQuery: query, languageCode: lang === 'en' ? 'en' : 'uk', ...(country && /^[A-Z]{2}$/.test(country) ? { regionCode: country } : {}), maxResultCount: 20, minRating: 4 })
     });
     clearTimeout(timer);
     if (!res.ok) return [];
-    return pickTop((await res.json()).places);
+    const all = (await res.json()).places || [], fresh = pickFresh(all), fu = new Set(fresh.map(p => p.url));
+    return [...pickTop(all.filter(p => !fu.has(p.googleMapsUri))), ...fresh];   // топ за рейтингом + «нещодавно відкрились»
   } catch { return []; }
 }

@@ -164,13 +164,39 @@ export function storeLink(store, q, city) {
 /** Посилання на подарунок: у країнах, окрім України, магазини Rozetka/Prom тощо неактуальні, тож ведемо в Google Shopping (англійський запит для англійського інтерфейсу). */
 const shopLink = (q, lang) => q ? { url: 'https://www.google.com/search?tbm=shop&q=' + encodeURIComponent(q), label: lang === 'en' ? 'Search online' : 'Шукати в інтернеті' } : null;
 function mapsLink(q, city, lang) { return q ? { url: 'https://www.google.com/maps/search/' + encodeURIComponent(String(q).replace('{city}', city)), label: lang === 'en' ? 'On the map' : 'На мапі' } : null; }
+// Де купити подарунок: 2–3 інтернет-магазини за категорією (в Україні українські, за кордоном Google Shopping, Amazon, Etsy)
+// і одне місце в місті (пошук на мапі). Саморобні подарунки (store 'd') посилань не мають.
+const UA_SHOPS = {
+  r: ['https://rozetka.com.ua/ua/search/?text=', 'Rozetka'], p: ['https://prom.ua/ua/search?search_term=', 'Prom.ua'], e: ['https://epicentrk.ua/ua/search/?q=', 'Епіцентр'],
+  y: ['https://www.yakaboo.ua/ua/search/?q=', 'Yakaboo'], m: ['https://makeup.com.ua/ua/search/?q=', 'Makeup']
+};
+const SHOPS_BY_TAG = { book: 'yrp', beauty: 'mrp', scent: 'mrp', tech: 'rep', game: 'rpe', sport: 'rep', music: 'rpe', photo: 'rpe', plant: 'per', craft: 'per', art: 'pry', jewel: 'prm', cozy: 'pre', sweet: 'pre', tea: 'pre', gourmet: 'pre', alcohol: 'rpe', fun: 'rpe' };
+const LOCAL_BY_TAG = { book: ['книгарня', 'bookshop'], beauty: ['магазин косметики', 'cosmetics store'], scent: ['парфумерія', 'perfumery'], tech: ['магазин електроніки', 'electronics store'], game: ['магазин настільних ігор', 'board game shop'], sport: ['спортивний магазин', 'sports shop'], music: ['музичний магазин', 'music store'], photo: ['фотосалон', 'photo studio'], plant: ['квітковий магазин', 'flower shop'], craft: ['магазин для творчості', 'craft store'], art: ['магазин для художників', 'art supply store'], jewel: ['ювелірний магазин', 'jewellery store'], sweet: ['кондитерська', 'confectionery'], tea: ['чайна крамниця', 'tea shop'], gourmet: ['гастрономія', 'delicatessen'], alcohol: ['винна крамниця', 'wine shop'], cozy: ['магазин подарунків', 'gift shop'], fun: ['магазин подарунків', 'gift shop'] };
+export function giftLinks(g, city, lang = 'uk', country = 'UA') {
+  const en = GIFTS_EN[g.id], abroad = country && country !== 'UA', Lb = (uk, e) => (lang === 'en' ? e : uk);
+  if (g.store === 'd' || !g.q) return { online: [], local: null };
+  if (g.store === 'g') {   // місцевий подарунок (обсмажка кави, гравіювання…): місце в місті першим, плюс пошук в інтернеті
+    const q = (lang === 'en' && en && en[2]) ? en[2] : g.q, bare = String(g.q).replace('{city}', '').trim(), m = mapsLink(q, city, lang);
+    const online = abroad ? [{ url: 'https://www.google.com/search?tbm=shop&q=' + encodeURIComponent(String(q).replace('{city}', '').trim()), label: 'Google Shopping' }, { url: 'https://www.etsy.com/search?q=' + encodeURIComponent(String(q).replace('{city}', '').trim()), label: 'Etsy' }]
+      : [{ url: UA_SHOPS.p[0] + encodeURIComponent(bare), label: UA_SHOPS.p[1] }, { url: UA_SHOPS.r[0] + encodeURIComponent(bare), label: UA_SHOPS.r[1] }];
+    return { online, local: m && { url: m.url, label: Lb('Де купити в місті', 'Where to buy in town') } };
+  }
+  const tag = (g.tags || []).find(t => SHOPS_BY_TAG[t]) || 'fun', loc = LOCAL_BY_TAG[tag] || LOCAL_BY_TAG.fun;
+  const local = { url: 'https://www.google.com/maps/search/' + encodeURIComponent(`${lang === 'en' || abroad ? loc[1] : loc[0]} ${city}`), label: Lb(`Де купити в місті: ${loc[0]}`, `Where to buy in town: ${loc[1]}`) };
+  if (abroad) {
+    const q = en && en[2] ? en[2] : g.q, e = encodeURIComponent(q);
+    return { online: [{ url: 'https://www.google.com/search?tbm=shop&q=' + e, label: 'Google Shopping' }, { url: 'https://www.amazon.com/s?k=' + e, label: 'Amazon' }, { url: 'https://www.etsy.com/search?q=' + e, label: 'Etsy' }], local };
+  }
+  const order = [g.store, ...SHOPS_BY_TAG[tag]].filter((x, i, a) => UA_SHOPS[x] && a.indexOf(x) === i).slice(0, 3);
+  return { online: order.map(k => ({ url: UA_SHOPS[k][0] + encodeURIComponent(g.q), label: UA_SHOPS[k][1] })), local };
+}
 export const giftView = (g, city, lang = 'uk', country = 'UA') => {
   const en = lang === 'en' ? GIFTS_EN[g.id] : null, abroad = country && country !== 'UA';
   let link;
   if (abroad) link = shopLink(en ? en[2] : g.q, lang);
   else if (en) link = g.store === 'g' ? mapsLink(en[2], city, lang) : (en[2] && g.store ? shopLink(en[2], lang) : null);
   else link = storeLink(g.store, g.q, city);
-  return { title: en ? en[0] : g.title, desc: en ? en[1] : g.desc, price: g.price, link };
+  return { title: en ? en[0] : g.title, desc: en ? en[1] : g.desc, price: g.price, link, shops: giftLinks(g, city, lang, country) };
 };
 export const intimView = (x, lang = 'uk') => { const en = lang === 'en' ? INTIMATE_EN[x.id] : null; return { title: en ? en[0] : x.title, desc: en ? en[1] : x.desc, level: x.level }; };
 export const actView = (x, city, lang = 'uk') => {

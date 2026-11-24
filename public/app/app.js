@@ -208,6 +208,18 @@ const footTools = () => `<div class="tools"><button class="btn ghost sm" id="out
 const bindTools = () => { $('#out').onclick = () => logout(); $('#outall').onclick = () => confirm(L('Вийти з усіх пристроїв?', 'Sign out on all devices?')) && logout(true); };
 
 let timerI;
+/* Прогрес виконання: 24 сегменти (відповідь на питання + позначені завдання дня) і відсоток */
+function progHtml(p) {
+  const pct = Math.round((p.answered + p.tasks) / (24 + p.total) * 100);
+  const seg = d => { const [a, n, t] = p.days[d] || [0, 0, 0], lv = !a ? 0 : n >= t ? 3 : n ? 2 : 1;
+    return `<i title="${L(`Вікно №${d}: ${a ? 'відповідь є' : 'без відповіді'}, завдань ${n} з ${t}`, `Window ${d}: ${a ? 'answered' : 'not answered'}, tasks ${n} of ${t}`)}" style="flex:1;height:8px;border-radius:3px;background:${['var(--line, #2a2b36)', '#d6b46a55', '#d6b46aaa', 'var(--gold, #d6b46a)'][lv]}"></i>`; };
+  return `<div class="cprog" style="display:grid;gap:6px;max-width:520px;width:100%;margin:4px auto 0">
+    <div style="display:flex;justify-content:space-between;align-items:baseline;gap:8px;font-size:13px"><b style="color:var(--gold, #d6b46a)">${L(`Календар виконано на ${pct}%`, `Calendar ${pct}% complete`)}</b><span class="muted" style="font-size:12px">${L(`відповідей ${p.answered} з 24 · завдань ${p.tasks} з ${p.total}`, `answers ${p.answered}/24 · tasks ${p.tasks}/${p.total}`)}</span></div>
+    <div style="display:flex;gap:3px">${Array.from({ length: 24 }, (_, i) => seg(i + 1)).join('')}</div></div>`;
+}
+function finaleCard() {
+  return `<div class="card" style="margin:10px auto 0;max-width:520px;text-align:center;display:grid;gap:10px;border-color:#d6b46a88"><div class="eyebrow">${L('Календар завершено', 'Calendar complete')}</div><p class="muted" style="margin:0">${L('Усі 24 дні в одній книзі: питання, ваші відповіді, фото, подарунки й пригоди.', 'All 24 days in one book: questions, your answers, photos, gifts and adventures.')}</p><button class="btn" data-book="1">${L('Завантажити книгу', 'Download the book')} «${esc(window.raBookTitle ? window.raBookTitle() : 'ReeAdvent')}» (PDF)</button></div>`;
+}
 function showCalendar() {
   const opened = new Set(st.opened), today = st.today, nextDay = today + 1, hasNext = nextDay <= st.totalDays;
   app.innerHTML = `${tabsHtml()}<div class="head">
@@ -215,8 +227,9 @@ function showCalendar() {
       ${st.testMode ? `<div class="pill" style="display:inline-block;margin:6px 0;border:1px solid var(--gold2, #d6b46a);color:var(--gold2, #d6b46a);border-radius:99px;padding:4px 12px;font-size:12px;letter-spacing:.06em">${L('Тестовий режим: вікна відкриваються по черзі', 'Test mode: windows open one after another')}</div>` : ''}
       <p class="muted">${today === 0 ? L(`Календар відкриється ${dayDate(1)} о ${hh()}`, `The calendar opens on ${dayDate(1)} at ${hh()}`) : st.testMode ? L(`Привіт, ${esc(st.me.name)}. Зараз вікно №${today}`, `Hi ${esc(st.me.name)}. Now: window ${today}`) : L(`Привіт, ${esc(st.me.name)}. Сьогодні вікно №${today}`, `Hi ${esc(st.me.name)}. Today is window ${today}`)}</p>
       ${st.testMode && today < 24 ? `<div class="muted" style="max-width:420px;margin:6px auto">${L(`Вікно №${today + 1} відкриється, щойно ви відповісте на питання вікна №${today}.`, `Window ${today + 1} opens as soon as you answer the question in window ${today}.`)}</div>` : hasNext && !st.testMode ? `<div class="timer" id="tm"></div><div class="eyebrow" style="color:var(--muted)">${L(`до вікна №${nextDay}`, `until window ${nextDay}`)}</div>` : st.finished ? `<div class="timer" style="font-size:24px">${L('Календар завершено', 'The calendar is complete')}</div><div class="muted" style="max-width:420px;margin:0 auto">${L('Дякуємо, що були з нами. Усі вікна, питання й відповіді залишаються доступними в розділі «Історія».', 'Thank you for being with us. All windows, questions and answers stay available in the History tab.')}</div>` : `<div class="timer">${L('Усі вікна відкриті', 'All windows are open')}</div>`}
-      <div class="progress"><i style="width:${(opened.size / 24) * 100}%"></i></div>
-      <div class="muted" style="font-size:12px;letter-spacing:.1em">${L(`відкрито ${opened.size} з 24`, `${opened.size} of 24 opened`)}</div>
+      ${st.prog ? progHtml(st.prog) : `<div class="progress"><i style="width:${(opened.size / 24) * 100}%"></i></div>
+      <div class="muted" style="font-size:12px;letter-spacing:.1em">${L(`відкрито ${opened.size} з 24`, `${opened.size} of 24 opened`)}</div>`}
+      ${st.prog && st.prog.days[24] && st.prog.days[24][0] ? finaleCard() : ''}
     </div>
     <div class="grid">${order().map(d => {
       const lock = d > today;
@@ -261,13 +274,38 @@ const ICONS = {
 /* Рекомендації закладів: Google Maps (якщо ввімкнено) або наша база OpenStreetMap + оцінки користувачів. Сервер їх для Google не зберігає */
 const placesCache = {};
 const fmtKm = km => km < 1 ? `${Math.max(50, Math.round(km * 20) * 50)} ${L('м', 'm')}` : `${km.toFixed(1)} ${L('км', 'km')}`;
+/* Реальні події дня в місті (концерти, театр, шоу) для активності «виходимо» */
+const eventsCache = {};
+function eventsHtml(x) {
+  if (!x || (!x.events.length && !x.more.length)) return '';
+  const chip = l => `<a href="${esc(l.url)}" target="_blank" rel="noopener noreferrer" style="display:inline-block;border:1px solid var(--line);border-radius:99px;padding:5px 11px;margin:0 6px 6px 0;font-size:12px;color:var(--ink);text-decoration:none">${esc(l.label)} ↗</a>`;
+  const [y, m, d] = x.date.split('-').map(Number), when = new Date(Date.UTC(y, m - 1, d)).toLocaleDateString(LANG === 'en' ? 'en-GB' : 'uk-UA', { day: 'numeric', month: 'long', weekday: 'long', timeZone: 'UTC' });
+  return `<div class="muted" style="font-size:12px;letter-spacing:.12em;text-transform:uppercase;margin-top:10px">${L('Події цього дня в місті', 'Events in town that day')} · ${esc(when)}</div>
+    ${x.events.length ? `<ul class="plist">${x.events.map(e => `<li><a href="${esc(e.url)}" target="_blank" rel="noopener noreferrer"><b>${esc(e.name)}</b></a><small class="muted">${[e.cat, e.time, e.venue, e.price].filter(Boolean).map(esc).join(' · ')}</small></li>`).join('')}</ul>` : `<div class="muted" style="font-size:13px;margin:4px 0">${L('Ми не знайшли подій на цей день у квитковому сервісі. Перегляньте афішу:', 'We found no events for this day. Check the listings:')}</div>`}
+    ${x.more.length ? `<div style="margin-top:4px"><span class="muted" style="font-size:12px;margin-right:6px">${L('Ще події:', 'More events:')}</span>${x.more.map(chip).join('')}</div>` : ''}
+    ${x.events.length ? `<div class="muted" style="font-size:11px">${L('Афіша й квитки: Ticketsbox. Час і наявність квитків перевіряйте на сайті.', 'Listings and tickets: Ticketsbox. Check time and availability on the site.')}</div>` : ''}`;
+}
+async function loadEvents(day) {
+  const box = () => document.getElementById('events-box');
+  if (day in eventsCache) { const b = box(); if (b) b.innerHTML = eventsHtml(eventsCache[day]); return; }
+  eventsCache[day] = null;
+  try { const x = await api('GET', '/api/events/' + day); eventsCache[day] = x; const b = box(); if (b) b.innerHTML = eventsHtml(x); } catch { delete eventsCache[day]; }
+}
+/* Подарунок: 2–3 інтернет-магазини й одне місце в місті */
+function shopsHtml(sh) {
+  const chip = l => `<a href="${esc(l.url)}" target="_blank" rel="noopener noreferrer" style="display:inline-block;border:1px solid var(--line);border-radius:99px;padding:6px 12px;margin:0 6px 6px 0;font-size:13px;color:var(--ink);text-decoration:none">${esc(l.label)} ↗</a>`;
+  return `<div class="shops" style="margin-top:6px">${sh.online.length ? `<div class="muted" style="font-size:12px;letter-spacing:.12em;text-transform:uppercase;margin:4px 0 6px">${L('Купити в інтернеті', 'Buy online')}</div><div>${sh.online.map(chip).join('')}</div>` : ''}${sh.local ? `<a class="link" href="${esc(sh.local.url)}" target="_blank" rel="noopener noreferrer"><span class="ml">${esc(sh.local.label)}</span> ↗</a>` : ''}</div>`;
+}
 function placesHtml(day, k = 'act') {
   const p = placesCache[day + k]; if (!p || !p.length) return '';
   const osm = p.some(x => x.id), head = k === 'gift' ? L('Де купити поблизу', 'Where to buy nearby') : osm ? L('Куди піти поблизу', 'Where to go nearby') : L('Рекомендуємо за рейтингом', 'Top rated nearby');
   const OSM = '<a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener noreferrer">OpenStreetMap contributors</a>';
-  return `<div class="muted" style="font-size:12px;letter-spacing:.12em;text-transform:uppercase;margin-top:4px">${head}</div><ul class="plist">${p.map(x => {
+  const top = p.filter(x => !x.fresh), fresh = p.filter(x => x.fresh), sub = t => `<div class="muted" style="font-size:12px;letter-spacing:.12em;text-transform:uppercase;margin-top:4px">${t}</div>`;
+  const li = x => {
     const meta = [x.address, x.km != null ? L(`${fmtKm(x.km)} від центру`, `${fmtKm(x.km)} from the centre`) : '', x.hours ? L('Години: ', 'Hours: ') + x.hours : ''].filter(Boolean).map(esc).join(' · ');
-    return `<li><a href="${esc(x.url)}" target="_blank" rel="noopener noreferrer"><b>${esc(x.name)}</b></a>${x.rating ? `<span class="stars">★ ${x.rating} <small>(${x.count})</small></span>` : ''}${meta ? `<small class="muted">${meta}</small>` : ''}${x.id ? `<button type="button" class="rep" data-v="${x.id}">${L('Закрито або не існує?', 'Closed or gone?')}</button><span class="rate" data-v="${x.id}"><small class="muted">${L('Ваша оцінка:', 'Your rating:')}</small>${[1, 2, 3, 4, 5].map(n => `<button type="button" data-s="${n}" aria-label="${n}">★</button>`).join('')}</span>` : ''}</li>`; }).join('')}</ul>
+    return `<li><a href="${esc(x.url)}" target="_blank" rel="noopener noreferrer"><b>${esc(x.name)}</b></a>${x.rating ? `<span class="stars">★ ${x.rating} <small>(${x.count})</small></span>` : ''}${meta ? `<small class="muted">${meta}</small>` : ''}${x.id ? `<button type="button" class="rep" data-v="${x.id}">${L('Закрито або не існує?', 'Closed or gone?')}</button><span class="rate" data-v="${x.id}"><small class="muted">${L('Ваша оцінка:', 'Your rating:')}</small>${[1, 2, 3, 4, 5].map(n => `<button type="button" data-s="${n}" aria-label="${n}">★</button>`).join('')}</span>` : ''}</li>`; };
+  const NEW = `<span style="display:inline-block;margin-left:6px;padding:1px 8px;border-radius:99px;background:#d6b46a;color:#14110a;font:600 10px var(--body, Inter, sans-serif);letter-spacing:.06em;vertical-align:2px">${L('НОВЕ', 'NEW')}</span>`;
+  return `${top.length ? sub(head) + `<ul class="plist">${top.map(li).join('')}</ul>` : ''}${fresh.length ? sub(L('Нещодавно відкрились', 'Recently opened')) + `<ul class="plist">${fresh.map(x => li(x).replace('</b></a>', '</b></a>' + NEW)).join('')}</ul><div class="muted" style="font-size:11px;margin-top:-4px">${osm ? L('З’явилися на мапі за останні місяці.', 'Appeared on the map in recent months.') : L('Високі оцінки й поки мало відгуків: схоже, відкрились нещодавно.', 'High ratings and few reviews so far: they seem to have opened recently.')}</div>` : ''}
     <div class="muted" style="font-size:11px">${osm ? L(`Добірка за даними OpenStreetMap, Overture Maps і оцінками користувачів ReeAdvent. Години роботи можуть бути неточними, перевіряйте на мапі. © ${OSM}, © Overture Maps Foundation. Не знайшли заклад або бачите помилку? <a href="https://www.openstreetmap.org/fixthemap" target="_blank" rel="noopener noreferrer">Додайте чи виправте його на openstreetmap.org</a>.`, `Picked from OpenStreetMap, Overture Maps data and ReeAdvent users’ ratings. Opening hours may be inaccurate, check the map. © ${OSM}, © Overture Maps Foundation. Can’t find a place or see a mistake? <a href="https://www.openstreetmap.org/fixthemap" target="_blank" rel="noopener noreferrer">Add or fix it on openstreetmap.org</a>.`) : L('Рейтинги: Google Maps. Години роботи перевіряйте на мапі.', 'Ratings: Google Maps. Check opening hours on the map.')}</div>`;
 }
 function bindRate(box) {
@@ -337,7 +375,8 @@ async function openDay(day) {
   const ov = document.createElement('div'); ov.className = 'overlay';
   ov.innerHTML = `<div class="sheet"><div class="center"><div class="spinner"></div></div></div>`;
   document.body.appendChild(ov);
-  const close = () => { ov.remove(); document.removeEventListener('keydown', onKey); refresh(); };
+  let poll = null, finished = false;
+  const close = () => { clearInterval(poll); ov.remove(); document.removeEventListener('keydown', onKey); refresh().then(() => { if (finished && day === 24 && window.raFinale) window.raFinale(); }); };
   const onKey = e => e.key === 'Escape' && close();
   document.addEventListener('keydown', onKey);
   ov.addEventListener('click', e => { if (e.target === ov) close(); });
@@ -382,27 +421,36 @@ async function openDay(day) {
   };
   const qTile = () => `<div class="reveal"><div class="tag">${L('Питання дня', 'Question of the day')}</div><h3>${esc(d.question.text)}</h3>
       <div class="ans"><span class="who">${L('Ви', 'You')}</span>${d.question.mine ? `<p>${esc(d.question.mine)}</p>` : ''}${mediaHtml(d.question.mineMedia)}</div>
-      ${d.question.partner != null ? `<div class="ans them"><span class="who">${esc(d.forName)}</span>${d.question.partner ? `<p>${esc(d.question.partner)}</p>` : ''}${mediaHtml(d.question.partnerMedia)}</div>` : `<div class="hint">${L(`${esc(d.forName)} ще не відповів(ла). Зазирніть сюди пізніше: відповідь з’явиться тут.`, `${esc(d.forName)} has not answered yet. Check back later: the answer will appear here.`)}</div>`}${starsHtml('q', (d.ratings || {}).q)}</div>`;
+      ${d.question.partner != null ? `<div class="ans them"><span class="who">${esc(d.forName)}</span>${d.question.partner ? `<p>${esc(d.question.partner)}</p>` : ''}${mediaHtml(d.question.partnerMedia)}</div>` : `<div class="hint pwait">${L(`Відповіді від ${esc(d.forName)} ще немає. Ми перевіряємо кожні 20 секунд, поки це вікно відкрите, або натисніть кнопку.`, `No answer from ${esc(d.forName)} yet. We check every 20 seconds while this window is open, or tap the button.`)}<div style="margin-top:8px"><button type="button" class="btn ghost sm" id="chkp">${L(`Перевірити, чи відповіли`, `Check for an answer`)}</button></div></div>`}${starsHtml('q', (d.ratings || {}).q)}</div>`;
   const tileBody = (t) => {
     const x = d[t.k]; let meta = '', hint = '', tag = t.t;
     if (t.k === 'gift') { tag = L(`Подарунок для: ${d.forName}`, `Gift for: ${d.forName}`); meta = `<span>${x.price ? money(x.price) : L('у межах твого бюджету', 'within your budget')}</span>`; hint = `<div class="hint">${L('Це сюрприз: не показуй і не розповідай.', 'It is a surprise: do not show or tell.')}</div>`; }
     if (t.k === 'intim') { meta = `<span>${L(LEVELS[x.level - 1][0], LEVELS[x.level - 1][1])}</span>`; hint = `<div class="hint">${L('Лише для вас двох. Зупиняйтесь, якщо комусь некомфортно.', 'Just for the two of you. Stop if anyone feels uncomfortable.')}</div>`; }
     if (t.k === 'act') { if (x.out === true) tag = L('Спільна активність · виходимо', 'Shared activity · going out'); else if (x.out === false) tag = L('Спільна активність · вдома', 'Shared activity · at home'); meta = `<span>${[L('безкоштовно', 'free'), L(`до ${fmtCur(300).replace('≈ ', '~')}`, `up to ${fmtCur(300).replace('≈ ', '~')}`), L(`до ${fmtCur(800).replace('≈ ', '~')}`, `up to ${fmtCur(800).replace('≈ ', '~')}`), L('дорожче / далі', 'pricier / farther')][x.cost]}</span>${x.car ? `<span>${L('потрібна машина', 'car needed')}</span>` : ''}`; }
     return `<div class="reveal"><div class="tag">${esc(tag)}</div><h3>${esc(x.title)}</h3><p>${esc(x.desc)}</p>
-      <div class="meta">${meta}</div>${t.k === 'act' || t.k === 'gift' ? `<div class="places" id="places-box-${t.k}">${placesHtml(day, t.k)}</div>` : ''}${x.link ? `<a class="link ${t.k === 'act' ? 'maplink' : ''}" href="${esc(x.link.url)}" target="_blank" rel="noopener noreferrer"><span class="ml">${esc(x.link.label)}</span> ↗</a>` : ''}${hint}
+      <div class="meta">${meta}</div>${t.k === 'act' || t.k === 'gift' ? `<div class="places" id="places-box-${t.k}">${placesHtml(day, t.k)}</div>` : ''}${t.k === 'gift' && x.shops && (x.shops.online.length || x.shops.local) ? shopsHtml(x.shops) : x.link ? `<a class="link ${t.k === 'act' ? 'maplink' : ''}" href="${esc(x.link.url)}" target="_blank" rel="noopener noreferrer"><span class="ml">${esc(x.link.label)}</span> ↗</a>` : ''}${t.k === 'act' ? `<div id="events-box"></div>` : ''}${hint}
       ${starsHtml(t.k, (d.ratings || {})[t.k])}<label class="tick"><input type="checkbox" data-mark="${t.k}" ${d.done[t.k] ? 'checked' : ''}> ${L('Виконано', 'Done')}</label></div>`;
   };
   const render = () => {
     if (d.needAnswer) return renderQuestion();
     ov.firstElementChild.innerHTML = `${head}${qTile()}
       ${TILES().map(t => !d[t.k] ? `<div class="tile" data-k="${t.k}"><div class="reveal nogift"><div class="tag">${esc(t.t)}</div><p>${L('Сьогодні без подарунка: відпочиньте від покупок.', 'No gift today: take a break from shopping.')}${d.nextGiftDay ? L(` Наступний подарунок у вікні №${d.nextGiftDay}, ${dayDate(d.nextGiftDay)}.`, ` The next gift is in window ${d.nextGiftDay}, ${dayDate(d.nextGiftDay)}.`) : ''}</p></div></div>` : `<div class="tile" data-k="${t.k}">${revealed[t.k] ? tileBody(t) : `<button class="wrap" data-rev="${t.k}">${ICONS[t.k].replace('class="ico"', 'class="ico sm"')}<b>${t.t}</b><small>${L('торкнись, щоб відкрити', 'tap to open')}</small></button>`}</div>`).join('')}
-      <div class="row"><button class="btn ghost sm" id="all">${L('Відкрити все', 'Open all')}</button><button class="btn ghost sm" id="story">${L('Поділитися в Stories', 'Share to Stories')}</button></div>`;
+      <div class="row"><button class="btn ghost sm" id="all">${L('Відкрити все', 'Open all')}</button><button class="btn ghost sm" id="story">${L('Поділитися в Stories', 'Share to Stories')}</button></div>
+      <button class="btn" id="finish" style="width:100%;margin-top:6px">${day === 24 ? L('Завершити календар ✦', 'Finish the calendar ✦') : L('Завершити день ✓', 'Finish the day ✓')}</button>`;
     ov.querySelector('.x').onclick = close;
     ov.querySelector('#story').onclick = () => shareStory(day);
+    ov.querySelector('#finish').onclick = () => { confetti(innerWidth / 2, innerHeight - 80, 70); finished = true; close(); };
+    const cb = ov.querySelector('#chkp'); if (cb) cb.onclick = () => checkPartner(true);
     ov.querySelector('#all').onclick = () => { TILES().forEach(t => { if (d[t.k]) revealed[t.k] = true; }); render(); confetti(); };
-    if (revealed.act) loadPlaces(day, 'act');
+    if (revealed.act) { loadPlaces(day, 'act'); loadEvents(day); }
     if (revealed.gift) loadPlaces(day, 'gift');
   };
+  // відповідь партнера: кнопка й автоматична перевірка кожні 20 с, поки вікно відкрите й відповіді ще немає
+  const checkPartner = async manual => {
+    if (d.needAnswer || d.question.partner != null) return;
+    try { const x = await api('GET', '/api/day/' + day); if (x.question && x.question.partner != null) { d.question = x.question; render(); toast(L(`${d.forName} відповів(ла)!`, `${d.forName} has answered!`)); confetti(innerWidth / 2, 220, 40); } else if (manual) toast(L('Поки що немає відповіді', 'No answer yet')); } catch (er) { if (manual) toast(errText(er)); }
+  };
+  poll = setInterval(() => { if (!document.body.contains(ov)) return clearInterval(poll); if (!document.hidden) checkPartner(false); }, 20000);
   render();
   ov.addEventListener('click', async e => {
     const r = e.target.closest('[data-rev]');
@@ -438,4 +486,5 @@ async function boot() {
 /* ---------- Старт ---------- */
 addEventListener('hashchange', () => { if (/login=/.test(location.hash)) location.reload(); });
 (async () => { if ((await consumeLoginHash()) !== 'fail') boot(); })();
+window.RA = { api, L, dayDate, confetti, toast, esc, st: () => st };   // для book.js (книга PDF і фінал)
 })();

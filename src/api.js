@@ -10,6 +10,7 @@ import { rateItem, myRatings, ratingStats, seenFor } from './feedback.js';
 import { verifyTurnstile } from './turnstile.js';
 import { handleAdmin } from './admin.js';
 import { recordVisit } from './visits.js';
+import { eventsOn, moreLinks } from './events.js';
 import { findPromo, priceWith, rateLimit, normCode } from './promo.js';
 import { getSettings } from './settings.js';
 import { cleanUtm, publicTrackConfig } from './ads.js';
@@ -76,6 +77,7 @@ export async function handle(request, env) {
     if (m === 'GET' && (r = path.match(/^\/api\/answer-media\/([\w-]{8,40})$/))) return await serveAnswerMedia(env, member, r[1], request);
     if (m === 'POST' && (r = path.match(/^\/api\/answer-media\/([\w-]{8,40})\/delete$/))) return json(await deleteAnswerMedia(env, member, r[1]));
     if (m === 'GET' && (r = path.match(/^\/api\/places\/(\d+)$/))) return json(await placesFor(env, member, +r[1], url.searchParams.get('k')));
+    if (m === 'GET' && (r = path.match(/^\/api\/events\/(\d+)$/))) return json(await eventsFor(env, member, +r[1]));
     if (m === 'POST' && (r = path.match(/^\/api\/venues\/(\d+)\/rate$/))) { const b = await readJson(request); const out = await rateVenue(env, { memberId: member.id, country: member.country, city: member.city, venueId: +r[1], stars: Number(b.stars) }); if (!out.ok) throw new HttpError(out.error === 'too_many' ? 429 : out.error === 'not_found' ? 404 : 400, out.error); return json(out); }
     if (m === 'POST' && (r = path.match(/^\/api\/venues\/(\d+)\/report$/))) { const out = await reportVenue(env, { memberId: member.id, country: member.country, city: member.city, venueId: +r[1] }); if (!out.ok) throw new HttpError(out.error === 'too_many' ? 429 : 404, out.error); return json(out); }
     if (m === 'GET' && path === '/api/history') return json(await history(env, member));
@@ -337,13 +339,20 @@ const surveyName = m => (m.survey_json ? JSON.parse(m.survey_json).name : null);
 async function stateOf(env, mem) {
   const partner = await partnerOf(env, mem);
   const rows = (await env.DB.prepare('SELECT day FROM progress WHERE member_id = ? AND opened = 1').bind(mem.id).all()).results;
+  const done = (await env.DB.prepare('SELECT day, COALESCE(done_gift,0) + COALESCE(done_intim,0) + COALESCE(done_act,0) AS n FROM progress WHERE member_id = ?').bind(mem.id).all()).results;
+  const ans = new Set(((await env.DB.prepare('SELECT day FROM answers WHERE member_id = ?').bind(mem.id).all()).results || []).map(r => r.day));
+  let prog = null;
+  if (mem.schedule_json) {   // виконання календаря: відповідь + завдання дня (подарунок лише в дні з подарунком)
+    const days = JSON.parse(mem.schedule_json).days, dn = Object.fromEntries((done || []).map(r => [r.day, r.n])); prog = { days: {}, answered: ans.size, tasks: 0, total: 0 };
+    for (let d = 1; d <= DAYS; d++) { const x = days[d] || {}, t = 2 + (x.gift && x.gift[mem.slot] != null ? 1 : 0), n = Math.min(t, dn[d] || 0); prog.days[d] = [ans.has(d) ? 1 : 0, n, t]; prog.tasks += n; prog.total += t; }
+  }
   return {
     ok: true,
     me: { name: surveyName(mem), suggestedName: mem.suggested_name },
     partner: { name: surveyName(partner) || partner.suggested_name, done: !!partner.survey_json },
     myDone: !!mem.survey_json, partnerDone: !!partner.survey_json, ready: !!mem.schedule_json,
     lang: mem.lang, country: mem.country || 'UA', usdRate: (await getSettings(env)).usd_rate, currency: priceCurrency(await getFx(env), mem.country || 'UA', (await getSettings(env)).usd_rate), unlockTimes: unlockTimes(mem.start_date, mem.tz), finished: localDayNumber(mem.start_date, nowOf(env), mem.tz) > DAYS, today: dayFor(mem, env), startDate: mem.start_date, unlockHour: UNLOCK_HOUR, totalDays: DAYS,
-    opened: rows.map(r => r.day), city: mem.city, testMode: !!mem.test_mode
+    opened: rows.map(r => r.day), city: mem.city, testMode: !!mem.test_mode, prog
   };
 }
 
@@ -528,6 +537,18 @@ async function configResponse(request, env) {
   return json({ price: eur ? p.eur : p.uah, currency: { code: eur ? 'EUR' : 'UAH', rate: 1 }, prices: { uah: p.uah, eur: p.eur }, uahPerEur: p.uahPerEur,
     usdRate: st.usd_rate, detected: det, country: cc, fxUpdated: fx ? fx.updated : null,
     regions: REGIONS, turnstileSiteKey: env.TURNSTILE_SITE_KEY || null, googleClientId: env.GOOGLE_CLIENT_ID || null });
+}
+
+// ---------- Реальні події дня (концерти, театр, шоу) для активності «виходимо» (лише після відповіді на питання дня) ----------
+async function eventsFor(env, mem, d) {
+  if (!(d >= 1 && d <= DAYS) || d > dayFor(mem, env)) throw new HttpError(403, 'not_yet');
+  if (!mem.schedule_json) throw new HttpError(409, 'not_ready');
+  if (!(await q1(env, 'SELECT 1 AS x FROM answers WHERE member_id = ? AND day = ?', mem.id, d))) throw new HttpError(403, 'answer_first');
+  const plan = JSON.parse(mem.schedule_json).days[d], act = ACTIVITIES[plan.act], out = plan.out === true || (plan.out == null && act.tags.includes('out'));
+  const date = toDateStr(fromDateStr(mem.start_date) + d - 1), today = toDateStr(Math.floor(nowOf(env).getTime() / 864e5));
+  if (!out || (mem.country && mem.country !== 'UA') || date < today || date > toDateStr(Math.floor(nowOf(env).getTime() / 864e5) + 60)) return { ok: true, date, events: [], more: [] };
+  const r = await eventsOn(env, { city: mem.city, date, tags: act.tags, lang: mem.lang });
+  return { ok: true, date, events: r.events, more: moreLinks(r.slug) };
 }
 
 // ---------- Рекомендації закладів за публічними рейтингами (лише після відповіді на питання дня) ----------

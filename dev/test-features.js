@@ -288,7 +288,7 @@ const anon = raw.prepare('SELECT * FROM orders WHERE id = ?').get(o1); assert(an
   let calls = 0, body = null, hdr = null; const fake = async (url, init) => { calls++; body = JSON.parse(init.body); hdr = init.headers; assert(String(url).startsWith('https://places.googleapis.com/v1/places:searchText')); return new Response(JSON.stringify({ places: sample }), { status: 200 }); };
   assert.deepEqual(await recommend(env, { query: 'cafe Lyon', lang: 'en', country: 'FR', memberId: 'm1', day: 1, fetchImpl: fake }), []); assert.equal(calls, 0, 'no key: no request');
   env.GOOGLE_PLACES_KEY = 'KEY123';
-  let rec = await recommend(env, { query: 'cafe Lyon', lang: 'en', country: 'FR', memberId: 'm1', day: 1, fetchImpl: fake }); assert.equal(rec.length, 3); assert.equal(calls, 1);
+  let rec = await recommend(env, { query: 'cafe Lyon', lang: 'en', country: 'FR', memberId: 'm1', day: 1, fetchImpl: fake }); assert.equal(rec.length, 4, '3 за рейтингом + 1 «нещодавно відкрились»'); assert.deepEqual(rec.filter(x => x.fresh).map(x => x.name), ['Small Gem']); assert.equal(calls, 1);
   assert.equal(hdr['X-Goog-Api-Key'], 'KEY123'); assert(hdr['X-Goog-FieldMask'].includes('places.rating')); assert.deepEqual([body.textQuery, body.languageCode, body.regionCode], ['cafe Lyon', 'en', 'FR']);
   assert.equal(await placesUsage(env), 1, 'usage counted');
   // ліміт на учасника: не більше 4 запитів за вікно
@@ -301,7 +301,7 @@ const anon = raw.prepare('SELECT * FROM orders WHERE id = ?').get(o1); assert(an
   raw.prepare("INSERT INTO settings (key, value, updated_at) VALUES ('places_monthly_cap', '0', 1) ON CONFLICT(key) DO UPDATE SET value = '0'").run();
   calls = 0; assert.deepEqual(await recommend(env, { query: 'q', lang: 'uk', memberId: 'm4', day: 1, fetchImpl: fake }), []); assert.equal(calls, 0, 'cap 0 disables');
   const used = await placesUsage(env); raw.prepare("UPDATE settings SET value = ? WHERE key = 'places_monthly_cap'").run(String(used + 1));
-  assert.equal((await recommend(env, { query: 'q', lang: 'uk', memberId: 'm5', day: 1, fetchImpl: fake })).length, 3); assert.deepEqual(await recommend(env, { query: 'q', lang: 'uk', memberId: 'm6', day: 1, fetchImpl: fake }), [], 'monthly cap reached'); assert.equal(calls, 1);
+  assert.equal((await recommend(env, { query: 'q', lang: 'uk', memberId: 'm5', day: 1, fetchImpl: fake })).length, 4); assert.deepEqual(await recommend(env, { query: 'q', lang: 'uk', memberId: 'm6', day: 1, fetchImpl: fake }), [], 'monthly cap reached'); assert.equal(calls, 1);
   raw.prepare("DELETE FROM settings WHERE key = 'places_monthly_cap'").run();
   // ендпоінт: лише після відповіді на питання дня
   env.NOW_OVERRIDE = '2026-12-05T06:30:00Z'; const deDay = 1;

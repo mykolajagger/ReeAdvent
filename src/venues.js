@@ -179,7 +179,7 @@ export async function resolveCoords(env, c, fetchImpl = fetch) {
 
 /** Записує заклади міста (upsert), прибирає зниклі з OSM без оцінок і позначає місто готовим. note — примітка про часткове наповнення. */
 export async function storeCityVenues(env, c, rows, note = null, now = Date.now()) {
-  const st = rows.map(v => env.DB.prepare('INSERT INTO venues (city_id, osm, cat, name, address, lat, lon, prior, hours, edited, seen_at) VALUES (?,?,?,?,?,?,?,?,?,?,?) ON CONFLICT(city_id, osm, cat) DO UPDATE SET name = excluded.name, address = excluded.address, lat = excluded.lat, lon = excluded.lon, prior = excluded.prior, hours = excluded.hours, edited = excluded.edited, seen_at = excluded.seen_at').bind(c.id, v.osm, v.cat, v.name, v.address, v.lat, v.lon, v.prior, v.hours, v.edited ?? null, now));
+  const st = rows.map(v => env.DB.prepare('INSERT INTO venues (city_id, osm, cat, name, address, lat, lon, prior, hours, edited, seen_at, first_seen) VALUES (?,?,?,?,?,?,?,?,?,?,?,?) ON CONFLICT(city_id, osm, cat) DO UPDATE SET name = excluded.name, address = excluded.address, lat = excluded.lat, lon = excluded.lon, prior = excluded.prior, hours = excluded.hours, edited = excluded.edited, seen_at = excluded.seen_at').bind(c.id, v.osm, v.cat, v.name, v.address, v.lat, v.lon, v.prior, v.hours, v.edited ?? null, now, now));
   for (let i = 0; i < st.length; i += 100) await env.DB.batch(st.slice(i, i + 100));
   if (rows.length) await env.DB.prepare('DELETE FROM venues WHERE city_id = ? AND seen_at < ? AND r_cnt = 0 AND osm NOT LIKE \'ov:%\'').bind(c.id, now).run(); // зниклі з OSM без оцінок прибираємо (заклади з Overture не чіпаємо)
   await env.DB.prepare("UPDATE venue_cities SET status = 'ready', venues_count = ?, fetched_at = ?, attempts = 0, error = ? WHERE id = ?").bind(rows.length, now, note, c.id).run();
@@ -295,15 +295,20 @@ export const mapUrl = (v, city) => v.lat != null && v.lon != null
 /** До 3 закладів категорії: найкращі за (оцінки користувачів + повнота даних OSM), з варіативністю за учасником/днем. Порожньо, якщо база міста ще не готова. */
 export async function venuePicks(env, { country, city, cat, seedKey, lang = 'uk' }) {
   const c = await cityId(env, country, city); if (!c || !cat || (c.status !== 'ready' && !(c.n > 0))) return [];
-  const { results } = await env.DB.prepare('SELECT id, name, address, prior, r_sum, r_cnt, lat, lon, hours, ov_conf, ov_state, edited FROM venues WHERE city_id = ? AND cat = ? AND hidden = 0 AND closed_reports < 2 AND (ov_state IS NULL OR ov_state != \'closed\')').bind(c.id, cat).all();
+  const { results } = await env.DB.prepare('SELECT id, name, address, prior, r_sum, r_cnt, lat, lon, hours, ov_conf, ov_state, edited, first_seen FROM venues WHERE city_id = ? AND cat = ? AND hidden = 0 AND closed_reports < 2 AND (ov_state IS NULL OR ov_state != \'closed\')').bind(c.id, cat).all();
   const ok = results.filter(v => !(v.r_cnt >= 5 && v.r_sum / v.r_cnt < 3));
   const score = v => bayes(v) + v.prior * 0.35 + ovAdj(v);
   // «Немає в Overture» відсікаємо, якщо є хоча б 3 підтверджені, але не чіпаємо заклади, які нещодавно (до ~14 міс.) редагували або перевіряли в OSM: це можуть бути нові заклади
   const recent = v => v.edited && Date.now() - v.edited < 14 * 30.4 * 864e5, solid = ok.filter(v => v.ov_state !== 'miss' || recent(v)), pool = solid.length >= 3 ? solid : ok;
   pool.sort((a, b) => score(b) - score(a));
   const top = dedupeByName(pool).slice(0, 12).map(v => ({ v, k: hash(seedKey + ':' + v.id) })).sort((a, b) => a.k - b.k).slice(0, 3).map(x => x.v);
-  return top.sort((a, b) => bayes(b) - bayes(a)).map(v => ({ id: v.id, name: v.name, address: v.address || '', km: c.lat != null && v.lat != null ? Math.round(dist(v.lat, v.lon, c.lat, c.lon) * 10) / 10 : null, hours: formatHours(v.hours, lang), rating: v.r_cnt >= 3 ? Math.round(v.r_sum / v.r_cnt * 10) / 10 : null, count: v.r_cnt,
-    url: mapUrl(v, city), source: 'osm' }));
+  // «Нещодавно відкрились»: заклади, що з'явилися в базі під час оновлень міста за останні 120 днів (не під час першого наповнення)
+  const base = Math.min(...results.map(v => v.first_seen || Infinity)), FRESH = 120 * 864e5, ids = new Set(top.map(v => v.id));
+  const fresh = isFinite(base) ? dedupeByName(ok.filter(v => v.first_seen && v.first_seen > base + 14 * 864e5 && Date.now() - v.first_seen < FRESH && !ids.has(v.id))).sort((a, b) => b.first_seen - a.first_seen).slice(0, 2) : [];
+  const view = v => ({ id: v.id, name: v.name, address: v.address || '', km: c.lat != null && v.lat != null ? Math.round(dist(v.lat, v.lon, c.lat, c.lon) * 10) / 10 : null, hours: formatHours(v.hours, lang), rating: v.r_cnt >= 3 ? Math.round(v.r_sum / v.r_cnt * 10) / 10 : null, count: v.r_cnt,
+    url: mapUrl(v, city), source: 'osm' });
+  if (fresh.length) return [...top.sort((a, b) => bayes(b) - bayes(a)).map(view), ...fresh.map(v => ({ ...view(v), fresh: true }))];
+  return top.sort((a, b) => bayes(b) - bayes(a)).map(view);
 }
 
 /** Оцінка закладу від учасника (1–5); повторна оцінка замінює попередню. Лише для закладів міста календаря. */

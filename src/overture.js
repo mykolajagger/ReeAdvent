@@ -63,8 +63,8 @@ export async function enrichCity(env, c, items, now = Date.now()) {
     const n = (perCat[p.cat] = (perCat[p.cat] || 0) + 1); if (n > KEEP_OV) continue;
     const centrality = Math.max(0, 1 - dist(p.lat, p.lon, c.lat, c.lon) / (RADIUS / 1000)) * 1.5;
     const prior = Math.round((p.conf * 3 + (p.web ? 0.7 : 0) + centrality) * 100) / 100;
-    st.push(env.DB.prepare("INSERT INTO venues (city_id, osm, cat, name, address, lat, lon, prior, hours, edited, seen_at, ov_conf, ov_state) VALUES (?,?,?,?,?,?,?,?,NULL,NULL,?,?, 'ov') ON CONFLICT(city_id, osm, cat) DO UPDATE SET name = excluded.name, lat = excluded.lat, lon = excluded.lon, prior = excluded.prior, seen_at = excluded.seen_at, ov_conf = excluded.ov_conf, ov_state = 'ov'")
-      .bind(c.id, 'ov:' + String(p.id).slice(0, 40), p.cat, String(p.name).slice(0, 90), '', p.lat, p.lon, prior, now, p.conf)); added++;
+    st.push(env.DB.prepare("INSERT INTO venues (city_id, osm, cat, name, address, lat, lon, prior, hours, edited, seen_at, ov_conf, ov_state, first_seen) VALUES (?,?,?,?,?,?,?,?,NULL,NULL,?,?, 'ov', ?) ON CONFLICT(city_id, osm, cat) DO UPDATE SET name = excluded.name, lat = excluded.lat, lon = excluded.lon, prior = excluded.prior, seen_at = excluded.seen_at, ov_conf = excluded.ov_conf, ov_state = 'ov'")
+      .bind(c.id, 'ov:' + String(p.id).slice(0, 40), p.cat, String(p.name).slice(0, 90), '', p.lat, p.lon, prior, now, p.conf, now)); added++;
   }
   for (let i = 0; i < st.length; i += 100) await env.DB.batch(st.slice(i, i + 100));
   // нові з Overture, яких більше немає в поточному релізі й без оцінок, прибираємо

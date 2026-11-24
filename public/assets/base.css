@@ -7,7 +7,7 @@
 html,body{margin:0;min-height:100%}
 body{font-family:var(--body);color:var(--ink);background:radial-gradient(900px 600px at 80% -10%,#1c1a2e55,transparent 70%),radial-gradient(700px 500px at 0% 100%,#2a1a1a44,transparent 70%),var(--bg) fixed;overflow-x:hidden;-webkit-font-smoothing:antialiased}
 #fx{position:fixed;inset:0;width:100%;height:100%;pointer-events:none;z-index:50}
-main{position:relative;z-index:2;max-width:720px;margin:0 auto;padding:56px 18px 56px;min-height:100vh}
+main{position:relative;z-index:2;max-width:720px;margin:0 auto;padding:calc(56px + env(safe-area-inset-top)) max(18px, env(safe-area-inset-right)) calc(56px + env(safe-area-inset-bottom)) max(18px, env(safe-area-inset-left));min-height:100vh}
 h1,h2,h3,.door,.timer,.big{font-variant-numeric:lining-nums;font-family:var(--head);font-weight:500;margin:0;letter-spacing:.2px}
 h1{font-size:clamp(46px,12vw,76px);line-height:1;font-weight:400;letter-spacing:.5px}
 h1 em{font-style:italic;color:var(--gold)}
@@ -85,7 +85,7 @@ input[type=text]:focus{outline:none;border-color:var(--gold)}
 .door:not(.locked):not(.opened):hover .front{border-color:var(--gold)}
 .tools{display:flex;justify-content:center;margin-top:34px}
 
-.overlay{position:fixed;inset:0;z-index:20;background:#05060bd9;backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px);display:grid;place-items:start center;overflow:auto;padding:48px 16px 34px;animation:fade .35s}
+.overlay{position:fixed;inset:0;z-index:20;background:#05060bd9;backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px);display:grid;place-items:start center;overflow:auto;padding:calc(48px + env(safe-area-inset-top)) 16px calc(34px + env(safe-area-inset-bottom));animation:fade .35s}
 @keyframes fade{from{opacity:0}}
 .sheet{width:100%;max-width:540px;display:grid;gap:14px;animation:pop .6s cubic-bezier(.2,.9,.3,1)}
 @keyframes pop{from{opacity:0;transform:translateY(24px) scale(.97)}}
@@ -180,3 +180,6 @@ input[type=number]:focus{outline:none;border-color:var(--gold)}
 .irate button{background:none;border:0;padding:2px 3px;font-size:20px;line-height:1;color:#ffffff30;cursor:pointer}
 .irate button.on,.irate button:hover{color:var(--gold)}
 .reveal.nogift{border-style:dashed;border-color:var(--line);animation:none}.reveal.nogift p{color:var(--muted)}
+
+/* Режим застосунку (іконка на головному екрані): рядок стану накриває верх, тож трохи більше повітря зверху */
+@media (display-mode: standalone){main{padding-top:calc(64px + env(safe-area-inset-top))}.overlay{padding-top:calc(58px + env(safe-area-inset-top))}}
