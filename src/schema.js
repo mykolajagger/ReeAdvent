@@ -6,7 +6,7 @@ export const ORDER_COLUMNS = [
   ['currency', 'TEXT'], ['uah_rate', 'REAL'],                                                                              // 0012: валюта ціни (UAH або EUR) і курс гривні на момент замовлення
   ['inv_ccy', 'INTEGER'], ['inv_amount', 'INTEGER']                                                                        // 0012: валюта й сума виставленого рахунку Monobank
 ];
-export const CAL_COLUMNS = [['test_mode', 'INTEGER']];   // 0015: тестовий режим (усі 24 вікна відкриті одразу)
+export const CAL_COLUMNS = [['test_mode', 'INTEGER']];   // 0015: тестовий режим (вікна по черзі без очікування дат)
 const TABLES = [
   'CREATE TABLE IF NOT EXISTS ad_spend (id INTEGER PRIMARY KEY AUTOINCREMENT, day TEXT NOT NULL, channel TEXT NOT NULL, campaign TEXT, amount_cents INTEGER NOT NULL, note TEXT, created_at INTEGER NOT NULL)',
   'CREATE INDEX IF NOT EXISTS idx_ad_spend_day ON ad_spend(day)',

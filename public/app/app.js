@@ -212,15 +212,15 @@ function showCalendar() {
   const opened = new Set(st.opened), today = st.today, nextDay = today + 1, hasNext = nextDay <= st.totalDays;
   app.innerHTML = `${tabsHtml()}<div class="head">
       <div class="eyebrow">${L('ReeAdvent · 24 дні', 'ReeAdvent · 24 days')}</div><h1>${L('Ваш <em>Адвент</em>', 'Your <em>Advent</em>')}</h1>
-      ${st.testMode ? `<div class="pill" style="display:inline-block;margin:6px 0;border:1px solid var(--gold2, #d6b46a);color:var(--gold2, #d6b46a);border-radius:99px;padding:4px 12px;font-size:12px;letter-spacing:.06em">${L('Тестовий режим: усі 24 вікна відкриті', 'Test mode: all 24 windows are open')}</div>` : ''}
-      <p class="muted">${today === 0 ? L(`Календар відкриється ${dayDate(1)} о ${hh()}`, `The calendar opens on ${dayDate(1)} at ${hh()}`) : st.testMode ? L(`Привіт, ${esc(st.me.name)}. Відкривайте будь-яке вікно`, `Hi ${esc(st.me.name)}. Open any window`) : L(`Привіт, ${esc(st.me.name)}. Сьогодні вікно №${today}`, `Hi ${esc(st.me.name)}. Today is window ${today}`)}</p>
-      ${hasNext ? `<div class="timer" id="tm"></div><div class="eyebrow" style="color:var(--muted)">${L(`до вікна №${nextDay}`, `until window ${nextDay}`)}</div>` : st.finished ? `<div class="timer" style="font-size:24px">${L('Календар завершено', 'The calendar is complete')}</div><div class="muted" style="max-width:420px;margin:0 auto">${L('Дякуємо, що були з нами. Усі вікна, питання й відповіді залишаються доступними в розділі «Історія».', 'Thank you for being with us. All windows, questions and answers stay available in the History tab.')}</div>` : `<div class="timer">${L('Усі вікна відкриті', 'All windows are open')}</div>`}
+      ${st.testMode ? `<div class="pill" style="display:inline-block;margin:6px 0;border:1px solid var(--gold2, #d6b46a);color:var(--gold2, #d6b46a);border-radius:99px;padding:4px 12px;font-size:12px;letter-spacing:.06em">${L('Тестовий режим: вікна відкриваються по черзі', 'Test mode: windows open one after another')}</div>` : ''}
+      <p class="muted">${today === 0 ? L(`Календар відкриється ${dayDate(1)} о ${hh()}`, `The calendar opens on ${dayDate(1)} at ${hh()}`) : st.testMode ? L(`Привіт, ${esc(st.me.name)}. Зараз вікно №${today}`, `Hi ${esc(st.me.name)}. Now: window ${today}`) : L(`Привіт, ${esc(st.me.name)}. Сьогодні вікно №${today}`, `Hi ${esc(st.me.name)}. Today is window ${today}`)}</p>
+      ${st.testMode && today < 24 ? `<div class="muted" style="max-width:420px;margin:6px auto">${L(`Вікно №${today + 1} відкриється, щойно ви відповісте на питання вікна №${today}.`, `Window ${today + 1} opens as soon as you answer the question in window ${today}.`)}</div>` : hasNext && !st.testMode ? `<div class="timer" id="tm"></div><div class="eyebrow" style="color:var(--muted)">${L(`до вікна №${nextDay}`, `until window ${nextDay}`)}</div>` : st.finished ? `<div class="timer" style="font-size:24px">${L('Календар завершено', 'The calendar is complete')}</div><div class="muted" style="max-width:420px;margin:0 auto">${L('Дякуємо, що були з нами. Усі вікна, питання й відповіді залишаються доступними в розділі «Історія».', 'Thank you for being with us. All windows, questions and answers stay available in the History tab.')}</div>` : `<div class="timer">${L('Усі вікна відкриті', 'All windows are open')}</div>`}
       <div class="progress"><i style="width:${(opened.size / 24) * 100}%"></i></div>
       <div class="muted" style="font-size:12px;letter-spacing:.1em">${L(`відкрито ${opened.size} з 24`, `${opened.size} of 24 opened`)}</div>
     </div>
     <div class="grid">${order().map(d => {
       const lock = d > today;
-      return `<button class="door ${lock ? 'locked' : ''} ${d === today && !opened.has(d) && !st.testMode ? 'today' : ''} ${opened.has(d) ? 'opened' : ''}" data-d="${d}" aria-label="${L('Вікно', 'Window')} ${d}">
+      return `<button class="door ${lock ? 'locked' : ''} ${d === today && !opened.has(d) ? 'today' : ''} ${opened.has(d) ? 'opened' : ''}" data-d="${d}" aria-label="${L('Вікно', 'Window')} ${d}">
         <div class="face front">${d}</div><div class="face back"><div>${d}<small>${L('ВІДКРИТО', 'OPENED')}</small></div></div></button>`;
     }).join('')}</div>${footTools()}`;
   bindTools(); clearInterval(timerI);
@@ -232,7 +232,7 @@ function showCalendar() {
 app.addEventListener('click', e => {
   const d = e.target.closest('.door'); if (!d) return;
   const day = +d.dataset.d;
-  if (day > st.today) { d.classList.remove('shake'); void d.offsetWidth; d.classList.add('shake'); toast(L(`Це вікно відкриється ${dayDate(day)} о ${hh()}`, `This window opens on ${dayDate(day)} at ${hh()}`)); return; }
+  if (day > st.today) { d.classList.remove('shake'); void d.offsetWidth; d.classList.add('shake'); toast(st.testMode ? L(`Спершу вікно №${st.today}: відповідайте по черзі`, `Window ${st.today} first: answer in order`) : L(`Це вікно відкриється ${dayDate(day)} о ${hh()}`, `This window opens on ${dayDate(day)} at ${hh()}`)); return; }
   openDay(day);
 });
 

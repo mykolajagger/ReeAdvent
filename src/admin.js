@@ -249,7 +249,7 @@ async function orderAction(request, env, admin, id, action) {
     return { ok: true, archived: on };
   }
   if (action === 'delete') { await deleteOrder(env, admin, o); return { ok: true, deleted: true }; }
-  // Тестовий режим: усі 24 вікна відкриті одразу, а порядок дій у дні звичайний (відповідь → подарунок, пригода, активність)
+  // Тестовий режим: вікна по черзі без очікування дат (наступне після відповіді на попереднє), порядок дій у дні звичайний (відповідь → подарунок, пригода, активність)
   if (action === 'test') {
     if (!cal) throw new HttpError(409, 'no_calendar');
     const on = !!b.on; await run(env, 'UPDATE calendars SET test_mode = ? WHERE id = ?', on ? 1 : null, cal.id);

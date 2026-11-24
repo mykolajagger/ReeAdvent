@@ -18,7 +18,7 @@ import { serveMedia } from './media.js';
 import { getFx, priceCurrency } from './currency.js';
 import { sendEmail, welcomeEmail, partnerInviteEmail, loginEmail } from './email.js';
 import { runDaily, checkUnsub } from './reminders.js';
-import { json, HttpError, localDayNumber, unlockTimes, randomToken, uid, sha256, parseCookies, sessionCookie, EMAIL_RE, normEmail, cleanText, nowOf, tomorrowStr, fromDateStr, toDateStr, todayIndex, dayFor, windowDates, validTz, DAYS, UNLOCK_HOUR } from './util.js';
+import { json, HttpError, localDayNumber, unlockTimes, randomToken, uid, sha256, parseCookies, sessionCookie, EMAIL_RE, normEmail, cleanText, nowOf, tomorrowStr, fromDateStr, toDateStr, todayIndex, dayFor, withTestDay, windowDates, validTz, DAYS, UNLOCK_HOUR } from './util.js';
 
 // Тимчасово окуповані території України не обслуговуємо: області (Крим, Донеччина, Луганщина) і міста окупованих частин інших областей
 const OCCUPIED_REGIONS = ['Автономна Республіка Крим', 'Донецька', 'Луганська'];
@@ -325,7 +325,7 @@ async function requireMember(request, env) {
   if (!s || s.expires_at < Date.now()) throw new HttpError(401, 'auth');
   const mem = await q1(env, `SELECT m.*, c.city, c.region, c.start_date, c.schedule_json, c.lang, c.tz, c.country, c.test_mode, o.refunded_at FROM members m JOIN calendars c ON c.id = m.calendar_id JOIN orders o ON o.id = c.order_id WHERE m.id = ?`, s.member_id);
   if (!mem || mem.refunded_at) throw new HttpError(401, 'auth');
-  return mem;
+  return withTestDay(env, mem);
 }
 
 // ---------- Календар ----------
@@ -362,7 +362,7 @@ async function saveSurvey(request, env, mem) {
   const fresh = await requireMemberById(env, mem.id);
   return stateOf(env, fresh);
 }
-const requireMemberById = (env, id) => q1(env, `SELECT m.*, c.city, c.region, c.start_date, c.schedule_json, c.lang, c.tz, c.country, c.test_mode FROM members m JOIN calendars c ON c.id = m.calendar_id WHERE m.id = ?`, id);
+const requireMemberById = async (env, id) => withTestDay(env, await q1(env, `SELECT m.*, c.city, c.region, c.start_date, c.schedule_json, c.lang, c.tz, c.country, c.test_mode FROM members m JOIN calendars c ON c.id = m.calendar_id WHERE m.id = ?`, id));
 
 async function getDay(env, mem, d) {
   if (!(d >= 1 && d <= DAYS)) throw new HttpError(400, 'bad_day');
