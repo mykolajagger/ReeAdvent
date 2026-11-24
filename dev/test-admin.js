@@ -136,7 +136,7 @@ assert((await A('a', 'POST', '/api/admin/settings', { fee_percent: 1.3, fee_fore
 const d = (await A('a', 'GET', '/api/admin/dashboard?days=30')).j.kpi;
 assert.equal(d.paid, 2); assert.equal(d.created, 3); assert.equal(d.revenue_kop, 76000); assert.equal(d.discount_kop, 4000); assert.equal(d.list_kop, 80000);
 assert.equal(d.refunds_kop, 10000); assert.equal(d.net_revenue_kop, 66000);
-assert.equal(d.fee_kop, 720, 'o1 refunded the same day: no fee; o2 (UA card, 2% from env): 36000 * 2%'); assert.equal(d.tax_kop, 3300, '5% of net revenue'); assert.equal(d.profit_kop, 66000 - 720 - 3300);
+assert.equal(d.fee_kop, 720, 'o1 refunded the same day: no fee; o2 (UA card, 2% from env): 36000 * 2%'); assert.equal(d.tax_base_kop, 66000 - 720, 'податкова база: після повернень і комісії банку'); assert.equal(d.tax_kop, 3264, '5% від (66000 - 720)'); assert.equal(d.profit_kop, 66000 - 720 - 3264);
 assert.equal(d.abandoned, 0); assert.equal(d.pending, 1); assert(Math.abs(d.conversion - 2 / 3) < 1e-9);
 const dash = (await A('a', 'GET', '/api/admin/dashboard?days=30')).j;
 assert.equal(dash.series.length, 30); assert.equal(dash.series.reduce((s, x) => s + x.revenue_kop, 0), 66000);

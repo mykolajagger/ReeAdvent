@@ -427,7 +427,7 @@ export async function dashboard(env, daysParam) {
     if (o.refunded_at && kyivDay(o.paid_at) === kyivDay(o.refunded_at)) continue;
     fee += Math.round(o.amount_kop * ((o.country && o.country !== 'UA') ? st.fee_foreign_percent : st.fee_percent) / 100);
   }
-  const tax = Math.round(netRevenue * taxPct / 100);
+  const taxBase = Math.max(0, netRevenue - fee), tax = Math.round(taxBase * taxPct / 100);   // податки з того, що зайшло на рахунок ФОП: виручка мінус повернення й комісія банку
   const paidCount = paid.length, freeCount = paid.filter(o => o.amount_kop === 0).length;
   const createdPaid = created.filter(o => o.paid_at).length;
   const pending = created.filter(o => !o.paid_at && now - o.created_at <= 3600e3).length, abandoned = created.filter(o => !o.paid_at && now - o.created_at > 3600e3).length;
@@ -466,7 +466,7 @@ export async function dashboard(env, daysParam) {
     period: days || 'all',
     kpi: { paid: paidCount, free: freeCount, created: created.length, conversion: created.length ? createdPaid / created.length : null, list_kop: list, discount_kop: discount, revenue_kop: revenue, refunds_kop: refunds, net_revenue_kop: netRevenue,
       avg_check_kop: paidCount - freeCount > 0 ? Math.round(sum(paid.filter(o => o.amount_kop > 0), o => o.amount_kop) / (paidCount - freeCount)) : 0,
-      fee_kop: fee, tax_kop: tax, profit_kop: netRevenue - fee - tax, fee_pct: st.fee_percent, fee_foreign_pct: st.fee_foreign_percent, tax_pct: taxPct, tax_single_pct: st.tax_percent, tax_military_pct: st.military_percent, pending, abandoned, customers, inbox_open: inbox.open, inbox_unread: inbox.unread, eur },
+      fee_kop: fee, tax_base_kop: taxBase, tax_kop: tax, profit_kop: netRevenue - fee - tax, fee_pct: st.fee_percent, fee_foreign_pct: st.fee_foreign_percent, tax_pct: taxPct, tax_single_pct: st.tax_percent, tax_military_pct: st.military_percent, pending, abandoned, customers, inbox_open: inbox.open, inbox_unread: inbox.unread, eur },
     series: fill, funnel, regions: byRegion, cities: byCity, promos: promoRows, upcoming_starts: starts
   };
 }

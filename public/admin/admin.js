@@ -168,7 +168,7 @@ async function dashboard() {
   </div>
   <div class="card" style="margin-top:14px"><h2>Промокоди за період</h2><div class="tw" style="margin-top:12px"><table><thead><tr><th>Код</th><th class="num">Замовлень</th><th class="num">Знижок</th><th class="num">Виручка</th></tr></thead><tbody>${d.promos.map(p => `<tr><td><b>${esc(p.name)}</b></td><td class="num">${p.orders}</td><td class="num">−${UAH(p.discount_kop)}</td><td class="num">${UAH(p.revenue_kop)}</td></tr>`).join('') || '<tr><td colspan="4" class="empty">Промокодами ще не користувались</td></tr>'}</tbody></table></div></div>
   <div class="card sec" id="rtcard" style="margin-top:14px"><h2>Оцінки клієнтів</h2><div class="muted">Завантаження…</div></div>
-  <p class="muted" style="margin-top:16px;font-size:12px">Прибуток орієнтовний: комісія Monobank ${k.fee_pct}% (українські картки) і ${k.fee_foreign_pct}% (іноземні), податки ${k.tax_pct}% (${k.tax_single_pct}% єдиний податок + ${k.tax_military_pct}% військовий збір) задаються в розділі <a href="#/settings">Налаштування</a>; ЄСВ та інші витрати не враховано. Звіряйте з бухгалтером.</p>`;
+  <p class="muted" style="margin-top:16px;font-size:12px">Прибуток орієнтовний: комісія Monobank ${k.fee_pct}% (українські картки) і ${k.fee_foreign_pct}% (іноземні), податки ${k.tax_pct}% (${k.tax_single_pct}% єдиний податок + ${k.tax_military_pct}% військовий збір) рахуються з суми, що зайшла на рахунок, тобто після комісії банку${k.tax_base_kop != null ? ` (${UAH(k.tax_base_kop)})` : ''}; відсотки задаються в розділі <a href="#/settings">Налаштування</a>; ЄСВ та інші витрати не враховано. Звіряйте з бухгалтером.</p>`;
   $('#seg').onclick = e => { const b = e.target.closest('[data-p]'); if (b) { period = b.dataset.p; dashboard(); } };
   // оцінки пунктів календаря (1–5 зірок): найкращі частіше потрапляють у нові календарі, слабкі рідше
   api('GET', '/api/admin/ratings').then(rt => {
@@ -598,8 +598,8 @@ async function settings() {
     <form id="sf" class="grid" style="gap:12px">
       <label class="f">Комісія Monobank з українських карток, %<input id="s1" type="number" step="0.01" min="0" max="100" value="${v.fee_percent}" required></label>
       <label class="f">Комісія Monobank з іноземних карток, %<input id="s1f" type="number" step="0.01" min="0" max="100" value="${v.fee_foreign_percent}" required></label>
-      <label class="f">Єдиний податок, % від доходу<input id="s2" type="number" step="0.01" min="0" max="100" value="${v.tax_percent}" required></label>
-      <label class="f">Військовий збір, % від доходу<input id="s3" type="number" step="0.01" min="0" max="100" value="${v.military_percent}" required></label>
+      <label class="f">Єдиний податок, % від доходу (після комісії банку)<input id="s2" type="number" step="0.01" min="0" max="100" value="${v.tax_percent}" required></label>
+      <label class="f">Військовий збір, % від доходу (після комісії банку)<input id="s3" type="number" step="0.01" min="0" max="100" value="${v.military_percent}" required></label>
     </form>
     <div class="muted">За даними Monobank: 1,3% з українських карток і 2% з іноземних (країну беремо із замовлення). Повернення в день оплати комісію не стягує, в інший день комісія не повертається. ЄП 3 група 5% і військовий збір 1%: уточніть у бухгалтера. ЄСВ (фіксована сума) не враховується.</div>
     <div><button class="btn" id="ss">Зберегти</button></div></div>
