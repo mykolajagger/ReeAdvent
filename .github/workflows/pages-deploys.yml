@@ -1,0 +1,26 @@
+name: Збірки Cloudflare Pages
+
+# status — показати останні збірки; retry — перезапустити останню збірку main, якщо вона зависла понад 15 хв або впала.
+on:
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: 'status або retry'
+        required: true
+        type: choice
+        options: [status, retry]
+        default: status
+
+jobs:
+  run:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: node tools/pages-deploys.mjs "${{ github.event.inputs.mode }}"
