@@ -24,7 +24,9 @@ export async function threadsStatus(env, now = Date.now()) {
 }
 /** Зберігає токен після перевірки (GET /me); за наявності THREADS_APP_SECRET короткий токен обмінюється на 60-денний. */
 export async function saveThreadsToken(env, token, { fetchImpl = fetch, now = Date.now() } = {}) {
-  token = String(token || '').trim(); if (token.length < 20) return { ok: false, error: 'Вставте токен Threads' };
+  token = String(token || '').replace(/^\s*(bearer|access_token=)\s*/i, '').replace(/[\s"'`]/g, ''); if (token.length < 20) return { ok: false, error: 'Вставте токен Threads' };
+  const kind = /^EAA/.test(token) ? 'Facebook' : /^IG/.test(token) ? 'Instagram' : null;   // токени Threads починаються з TH
+  if (kind) return { ok: false, error: `Це токен ${kind}, а потрібен токен Threads (починається з «TH»). Його генерує Threads API → User Token Generator у сценарії «Access the Threads API».` };
   let me; try { me = await call(fetchImpl, 'GET', `${TH}/me`, { fields: 'id,username', access_token: token }); } catch (e) { return { ok: false, error: 'Threads не прийняв токен: ' + e.message }; }
   let expires = now + 60 * DAY;
   if (env.THREADS_APP_SECRET) { try { const x = await call(fetchImpl, 'GET', 'https://graph.threads.net/access_token', { grant_type: 'th_exchange_token', client_secret: env.THREADS_APP_SECRET, access_token: token }); if (x.access_token) { token = x.access_token; expires = now + (Number(x.expires_in) || 60 * 86400) * 1000; } } catch {} }

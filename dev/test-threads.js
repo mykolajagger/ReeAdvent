@@ -30,8 +30,10 @@ const f = async (url, o = {}) => { url = String(url); const u = new URL(url); co
   return new Response('{}', { status: 404 }); };
 assert.equal((await saveThreadsToken(env, 'BAD'.padEnd(3), { fetchImpl: f })).ok, false);
 let r = await saveThreadsToken(env, 'BAD'.repeat(10), { fetchImpl: f }); assert.equal(r.ok, false);
-r = await saveThreadsToken(env, 'T'.repeat(40), { fetchImpl: f, now: 1000 }); assert.equal(r.ok, true); assert.equal(r.username, 'reeadvent');
-let s = await threadsStatus(env, 1000); assert.equal(s.connected, true); assert.equal(s.userId, 'TU1'); assert.equal(s.daysLeft, 60);
+assert.match((await saveThreadsToken(env, 'EAA' + 'x'.repeat(40), { fetchImpl: f })).error, /токен Facebook/);
+assert.match((await saveThreadsToken(env, 'IGAA' + 'x'.repeat(40), { fetchImpl: f })).error, /токен Instagram/);
+r = await saveThreadsToken(env, ' "' + 'T'.repeat(20) + '\n' + 'T'.repeat(20) + '"', { fetchImpl: f, now: 1000 }); assert.equal(r.ok, true); assert.equal(r.username, 'reeadvent');
+let s = await threadsStatus(env, 1000); assert.equal(s.connected, true); assert.equal(s.userId, 'TU1'); assert.equal(s.daysLeft, 60); assert.equal((await db.prepare("SELECT value FROM settings WHERE key = 'th_token'").first()).value, 'T'.repeat(40), 'пробіли, лапки й перенос рядка прибрано');
 assert.equal((await refreshThreadsToken(env, { fetchImpl: f, now: 1000 + 864e5 })).skipped, true, 'раніше тижня не продовжує');
 assert.equal((await refreshThreadsToken(env, { fetchImpl: f, now: 1000 + 8 * 864e5 })).ok, true);
 assert.equal((await db.prepare("SELECT value FROM settings WHERE key = 'th_token'").first()).value, 'R'.repeat(40));
