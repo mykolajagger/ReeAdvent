@@ -1,5 +1,7 @@
 // Мова сайту: вибір користувача (localStorage / ?lang=) > мова за країною (сервер) > мова браузера. Елементи з data-i18n перемикаються без перезавантаження.
 (() => {
+  // Українські тексти для службових ключів (решта українських рядків передається в t() як є)
+  const UK_KEYS = { d_open: 'торкніться, щоб відкрити', f_none: 'Не знайшли: залишимо ваш варіант', p_fail: 'Не вдалося перевірити промокод.' };
   const EN = {
     title: 'Advent for two · ReeAdvent', desc: 'A private advent calendar for couples: every day a question for each other, a gift idea, a romantic adventure and a shared activity in your city. 24 surprise windows.',
     nav_login: 'Sign in', hero_eyebrow: 'An advent calendar for two', hero_h1: '24 days <em>just</em> for you',
@@ -61,7 +63,7 @@
     window.dispatchEvent(new CustomEvent('langchange', { detail: lang }));
   }
   window.LANG = {
-    get: () => lang, EN, DEMO, t: (k, v = {}) => { let s = lang === 'en' ? (EN[k] ?? k) : k; for (const [a, b] of Object.entries(v)) s = s.replace('{' + a + '}', b); return s; },
+    get: () => lang, EN, DEMO, t: (k, v = {}) => { let s = lang === 'en' ? (EN[k] ?? k) : (UK_KEYS[k] ?? k); for (const [a, b] of Object.entries(v)) s = s.replace('{' + a + '}', b); return s; },
     set(l) { lang = l; explicit = true; save(l); apply(); },
     suggest(l) { if (!explicit && l && l !== lang) { lang = l; apply(); } }, apply
   };
