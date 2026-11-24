@@ -95,26 +95,35 @@ export async function run({ mode = 'check', only = [], spec, token, ver, adAccou
   const camps = spec.campaigns.filter(c => !only.length || only.includes(c.name)), report = [], media = { video: {}, image: {} };   // медіа вантажимо один раз на запуск
   for (const c of camps) {
     const ex = d.existing.find(x => x.name === c.name);
-    if (ex) { log(`• ${c.name}: уже існує (${ex.id}, ${ex.status}) — пропускаю`); report.push({ name: c.name, skipped: ex.id }); continue; }
     const campParams = { name: c.name, objective: 'OUTCOME_TRAFFIC', status: 'PAUSED', special_ad_categories: [], buying_type: 'AUCTION', daily_budget: Math.round(c.daily_budget_usd * 100), bid_strategy: 'LOWEST_COST_WITHOUT_CAP' };
+    // Наявна кампанія: дотворюємо те, чого бракує (група оголошень, оголошення), нічого не дублюючи
+    let campId = ex ? ex.id : null, adsetId = null, haveAds = [];
+    if (ex) {
+      const sets = (await g.get(`/${ex.id}/adsets`, { fields: 'id,name', limit: 50 })).data || [], st = sets.find(x => x.name === c.name + '_all');
+      if (st) { adsetId = st.id; haveAds = ((await g.get(`/${st.id}/ads`, { fields: 'id,name', limit: 100 })).data || []).map(a => a.name); }
+      const missing = c.ads.filter(k => !haveAds.includes(k));
+      if (adsetId && !missing.length) { log(`• ${c.name}: уже існує повністю (${ex.id}, ${ex.status}) — пропускаю`); report.push({ name: c.name, skipped: ex.id }); continue; }
+      log(`• ${c.name}: уже існує (${ex.id}), бракує: ${adsetId ? '' : 'групи оголошень, '}оголошень ${missing.join(', ')}`);
+    }
     if (mode !== 'create') {
-      await g.post(`/${d.acc.id}/campaigns`, { ...campParams, execution_options: ['validate_only'] });
+      if (!ex) await g.post(`/${d.acc.id}/campaigns`, { ...campParams, execution_options: ['validate_only'] });
       log(`• ${c.name}: перевірено ✓ — $${c.daily_budget_usd}/день, ${c.countries.join(', ')}, вік ${c.age_min}–${c.age_max}${(c.locales || []).length ? ', мова ' + c.locales.join(', ') : ''}; оголошення: ${c.ads.join(', ')}`);
       for (const k of c.ads) log(`    ${k}: ${linkFor(spec, c.name, k)}`);
       report.push({ name: c.name, validated: true }); continue;
     }
-    await uploadMedia(g, spec, d, c.ads, { fetchImpl, log, sleep, media });
-    const camp = await g.post(`/${d.acc.id}/campaigns`, campParams);
-    const adset = await g.post(`/${d.acc.id}/adsets`, { name: c.name + '_all', campaign_id: camp.id, optimization_goal: 'LANDING_PAGE_VIEWS', billing_event: 'IMPRESSIONS', destination_type: 'WEBSITE', status: 'PAUSED', targeting: adsetTargeting(c, d) });
+    const todo = c.ads.filter(k => !haveAds.includes(k));
+    await uploadMedia(g, spec, d, todo, { fetchImpl, log, sleep, media });
+    if (!campId) campId = (await g.post(`/${d.acc.id}/campaigns`, campParams)).id;
+    if (!adsetId) adsetId = (await g.post(`/${d.acc.id}/adsets`, { name: c.name + '_all', campaign_id: campId, optimization_goal: 'LANDING_PAGE_VIEWS', billing_event: 'IMPRESSIONS', destination_type: 'WEBSITE', status: 'PAUSED', targeting: adsetTargeting(c, d) })).id;
     const ads = [];
-    for (const k of c.ads) {
+    for (const k of todo) {
       const cr = spec.creatives[k], link = linkFor(spec, c.name, k);
       const creative = await g.post(`/${d.acc.id}/adcreatives`, { name: `${c.name}_${k}`, object_story_spec: storySpec(spec, cr, d, link, media) });
-      const ad = await g.post(`/${d.acc.id}/ads`, { name: k, adset_id: adset.id, creative: { creative_id: creative.id }, status: 'PAUSED', tracking_specs: [{ 'action.type': ['offsite_conversion'], fb_pixel: [spec.pixel_id] }] });
+      const ad = await g.post(`/${d.acc.id}/ads`, { name: k, adset_id: adsetId, creative: { creative_id: creative.id }, status: 'PAUSED', tracking_specs: [{ 'action.type': ['offsite_conversion'], fb_pixel: [spec.pixel_id] }] });
       ads.push({ key: k, id: ad.id });
     }
-    log(`• ${c.name}: створено на паузі ✓ кампанія ${camp.id}, група ${adset.id}, оголошення ${ads.map(a => a.key + ' ' + a.id).join(', ')}`);
-    report.push({ name: c.name, campaign: camp.id, adset: adset.id, ads });
+    log(`• ${c.name}: ${ex ? 'дотворено' : 'створено'} на паузі ✓ кампанія ${campId}, група ${adsetId}, оголошення ${ads.map(a => a.key + ' ' + a.id).join(', ')}`);
+    report.push({ name: c.name, campaign: campId, adset: adsetId, ads });
   }
   return { discovered: d, report };
 }

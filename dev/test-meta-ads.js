@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import { run, adsetTargeting, linkFor } from '../tools/meta-ads.mjs';
 const spec = JSON.parse(fs.readFileSync(new URL('../marketing/ads/meta-campaigns.json', import.meta.url), 'utf8'));
-const calls = []; let n = 100, videoPolls = 0; const existing = [];
+const calls = []; let n = 100, videoPolls = 0, failCreatives = false; const existing = [], adsets = [], adsList = [];
 const J = (o, s = 200) => new Response(JSON.stringify(o), { status: s, headers: { 'content-type': 'application/json' } });
 const fake = async (url, init = {}) => {
   url = String(url); const u = new URL(url); const body = init.body ? Object.fromEntries(new URLSearchParams(String(init.body))) : Object.fromEntries(u.searchParams);
@@ -21,7 +21,12 @@ const fake = async (url, init = {}) => {
   if (p === '/act_42/advideos') return J({ id: 'v1' });
   if (p === '/v1') return J({ status: { video_status: ++videoPolls >= 2 ? 'ready' : 'processing' } });
   if (p === '/act_42/adimages') return J({ images: { bytes: { hash: 'h' + n++ } } });
-  if (p === '/act_42/adsets' || p === '/act_42/adcreatives' || p === '/act_42/ads') return J({ id: 'x' + n++ });
+  const seg = p.split('/');
+  if (seg.length === 3 && seg[2] === 'adsets' && seg[1].startsWith('c')) return J({ data: adsets.filter(a => a.campaign === seg[1]).map(a => ({ id: a.id, name: a.name })) });
+  if (seg.length === 3 && seg[2] === 'ads' && seg[1].startsWith('x')) return J({ data: adsList.filter(a => a.adset === seg[1]).map(a => ({ id: a.id, name: a.name })) });
+  if (p === '/act_42/adsets') { const id = 'x' + n++; adsets.push({ id, name: body.name, campaign: body.campaign_id }); return J({ id }); }
+  if (p === '/act_42/adcreatives') { if (failCreatives) return J({ error: { message: 'dev mode', code: 100, error_subcode: 1885183 } }, 400); return J({ id: 'x' + n++ }); }
+  if (p === '/act_42/ads') { const id = 'x' + n++; adsList.push({ id, name: body.name, adset: body.adset_id }); return J({ id }); }
   return J({ error: { message: 'unexpected ' + p } }, 400);
 };
 const log = () => {};
@@ -50,4 +55,12 @@ const ads = posts.filter(c => c.p === '/act_42/ads'); assert.equal(ads.length, 6
 calls.length = 0; r = await run({ mode: 'create', spec, token: 'TKN', fetchImpl: fake, log, sleep: async () => {} });
 assert.ok(r.report.every(x => x.skipped)); assert.equal(calls.filter(c => c.m === 'POST').length, 0);
 assert.equal(linkFor(spec, 'eu_ua', 'couple1'), 'https://reeadvent.fun/?utm_source=meta&utm_medium=paid&utm_campaign=eu_ua&utm_content=couple1');
+// часткове створення (помилка на креативах) → повторний запуск дотворює оголошення в наявних кампанії й групі
+existing.length = 0; adsets.length = 0; adsList.length = 0; failCreatives = true;
+await assert.rejects(run({ mode: 'create', spec, token: 'TKN', fetchImpl: fake, log, sleep: async () => {} }), /dev mode/);
+assert.equal(existing.length, 1); assert.equal(adsets.length, 1); assert.equal(adsList.length, 0);
+failCreatives = false; calls.length = 0;
+r = await run({ mode: 'create', spec, token: 'TKN', fetchImpl: fake, log, sleep: async () => {} });
+assert.equal(existing.length, 2, 'ua_cold не дублюється, eu_ua створено'); assert.equal(adsets.length, 2, 'група ua_cold не дублюється'); assert.equal(adsList.length, 6);
+assert.equal(r.report[0].ads.length, 3); assert.equal(calls.filter(c => c.m === 'POST' && c.p === '/act_42/campaigns').length, 1);
 console.log('OK meta-ads');
