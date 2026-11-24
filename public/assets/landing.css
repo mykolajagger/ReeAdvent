@@ -31,6 +31,11 @@ main.land{max-width:1040px;padding-top:0}
 .order form{display:grid;gap:16px}
 .price{text-align:center;margin-bottom:22px}
 .price b{font:500 64px var(--head);color:var(--gold);line-height:1}
+.price .was{display:flex;gap:10px;justify-content:center;align-items:center;min-height:34px;margin-bottom:2px}
+.price #old{font:500 22px var(--body);color:var(--muted);text-decoration:line-through;text-decoration-color:#e8777fcc;text-decoration-thickness:2px}
+.price .disc{border:1px solid #e8777f88;background:#e8777f1f;color:#f3a3a8;border-radius:99px;padding:3px 10px;font:600 13px var(--body);letter-spacing:.04em}
+.price.sale b{font-size:76px;display:block;line-height:1.12;margin-bottom:4px}
+.price .until{margin-top:12px;display:inline-block;border:1px solid #d6b46a55;background:#d6b46a14;color:var(--gold2);border-radius:99px;padding:6px 14px;font:600 13px var(--body);letter-spacing:.06em}
 .price span{display:block;color:var(--muted);font-size:13px;letter-spacing:.1em;text-transform:uppercase;margin-top:4px}
 .f2{display:grid;gap:12px}
 @media(min-width:560px){.f2{grid-template-columns:1fr 1fr}}

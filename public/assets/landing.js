@@ -84,7 +84,7 @@ function refreshLabels() {
 }
 
 /* ---------- Ціна: для України в гривнях, для інших країн єдина ціна в євро (задається в адмінці) ---------- */
-let basePrice = null, cur = { code: 'UAH', rate: 1 }, promoOk = null, curReq = 0, uahPerEur = null;
+let basePrice = null, cur = { code: 'UAH', rate: 1 }, promoOk = null, curReq = 0, uahPerEur = null, wasPrice = null, saleUntil = null;
 const fmtKop = kop => (kop % 100 ? (kop / 100).toFixed(2) : String(kop / 100)).replace('.', LG() === 'en' ? '.' : ',');
 const uahTxt = kop => new Intl.NumberFormat(LG() === 'en' ? 'en' : 'uk', { minimumFractionDigits: kop % 100 ? 2 : 0, maximumFractionDigits: 2 }).format(kop / 100) + ' ₴';   // «1 499 ₴»
 function money(kop) {
@@ -101,13 +101,17 @@ function fxNote(finalKop) {
 }
 function showPrice(finalKop) {
   if (basePrice === null) return;
-  const base = Math.round(basePrice * 100);
-  $('#old').textContent = finalKop < base ? money(base) : '';
+  const base = Math.round(basePrice * 100), was = wasPrice ? Math.round(wasPrice * 100) : 0;
+  const ref = was > finalKop ? was : finalKop < base ? base : 0;   // перекреслена: стандартна ціна акції, інакше ціна до промокоду
+  $('#old').textContent = ref ? money(ref) : '';
+  const pct = ref ? Math.round((1 - finalKop / ref) * 100) : 0, disc = $('#disc'); disc.hidden = !(pct > 0); disc.textContent = pct > 0 ? '−' + pct + '%' : '';
+  $('.price').classList.toggle('sale', !!ref);
+  const u = $('#until'); u.hidden = !(saleUntil && was); if (saleUntil && was) { const [y, m, d] = saleUntil.split('-').map(Number), ds = new Date(Date.UTC(y, m - 1, d)).toLocaleDateString(LG() === 'en' ? 'en-GB' : 'uk-UA', { day: 'numeric', month: 'long', timeZone: 'UTC' }); u.textContent = LG() === 'en' ? `Offer valid until ${ds}` : `Ціна діє до ${ds}`; }
   $('#price').textContent = money(finalKop);
   fxNote(finalKop);
   $('#ob').textContent = finalKop === 0 ? tl('f_free') : tl('f_pay');
 }
-const useConfig = c => { cur = c.currency || cur; basePrice = c.price; uahPerEur = Number(c.uahPerEur) || null; };
+const useConfig = c => { cur = c.currency || cur; basePrice = c.price; uahPerEur = Number(c.uahPerEur) || null; wasPrice = Number(c.was) > Number(c.price) ? Number(c.was) : null; saleUntil = c.saleUntil || null; };
 const curFinal = () => promoOk ? promoOk.finalKop : Math.round(basePrice * 100);
 async function loadCurrency(code) {
   const my = ++curReq;

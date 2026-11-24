@@ -81,7 +81,7 @@ export async function handleAdmin(request, env, path, m) {
   const url = new URL(request.url);
   let r;
 
-  if (m === 'GET' && path === '/api/admin/me') return json({ ok: true, email: admin, price: await getPriceUah(env) });
+  if (m === 'GET' && path === '/api/admin/me') return json({ ok: true, email: admin, price: (await getPrices(env)).uah });
   if (m === 'GET' && path === '/api/admin/settings') { const fx = await getFx(env); return json({ ok: true, settings: await getSettings(env), places: { enabled: !!env.GOOGLE_PLACES_KEY, used: await placesUsage(env) }, venues: { ...(await venueStats(env)), problems: await venueProblems(env) }, fx: fx ? { updated: fx.updated, usd: fx.rates.USD ? Math.round(1 / fx.rates.USD * 100) / 100 : null, eur: fx.rates.EUR ? Math.round(1 / fx.rates.EUR * 100) / 100 : null, count: Object.keys(fx.rates).length, mono: fx.sources ? fx.sources.mono : null } : null, prices: await getPrices(env) }); }
   if (m === 'POST' && path === '/api/admin/venues/retry') { const b = await readJson(request); const n = await retryCities(env, b.id ? Number(b.id) : null); await audit(env, admin, 'venues_retry', b.id || 'all', { n }); return json({ ok: true, n }); }
   if (m === 'POST' && path === '/api/admin/venues/pause') { const b = await readJson(request); await setVenuesPaused(env, !!b.paused); await audit(env, admin, 'venues_pause', null, { paused: !!b.paused }); return json({ ok: true, paused: !!b.paused }); }
@@ -142,7 +142,7 @@ export async function handleAdmin(request, env, path, m) {
     await audit(env, admin, 'export_customers', null, { count: rows.length });
     return csvResponse('customers.csv', ['email', 'імена', 'замовлень', 'сплачено_грн', 'останнє_замовлення', 'міста'], rows.map(c => [c.email, c.names, c.orders, (c.paid_kop / 100).toFixed(2), new Date(c.last_at).toISOString().slice(0, 10), c.cities]));
   }
-  if (m === 'GET' && path === '/api/admin/promos') return json({ ok: true, promos: await listPromos(env), price: await getPriceUah(env) });
+  if (m === 'GET' && path === '/api/admin/promos') return json({ ok: true, promos: await listPromos(env), price: (await getPrices(env)).uah });
   if (m === 'POST' && path === '/api/admin/promos') return json(await createPromo(request, env, admin));
   if (m === 'POST' && (r = path.match(/^\/api\/admin\/promos\/([\w-]+)$/))) return json(await updatePromo(request, env, admin, r[1]));
   if (m === 'GET' && path === '/api/admin/audit') return json({ ok: true, rows: await qa(env, 'SELECT * FROM audit_log ORDER BY id DESC LIMIT 200') });

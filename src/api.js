@@ -539,7 +539,7 @@ async function configResponse(request, env) {
   const asked = (url.searchParams.get('country') || '').toUpperCase(), cc = /^[A-Z]{2}$/.test(asked) ? asked : (det.country || 'UA');
   const st = await getSettings(env), fx = await getFx(env), p = await getPrices(env), eur = cc !== 'UA';
   // ціна у валюті країни: гривня для України, євро для решти (рахунок однаково в гривнях за курсом uahPerEur)
-  return json({ price: eur ? p.eur : p.uah, currency: { code: eur ? 'EUR' : 'UAH', rate: 1 }, prices: { uah: p.uah, eur: p.eur }, uahPerEur: p.uahPerEur,
+  return json({ price: eur ? p.eur : p.uah, was: eur ? p.eurWas : p.uahWas, saleUntil: p.saleUntil, currency: { code: eur ? 'EUR' : 'UAH', rate: 1 }, prices: { uah: p.uah, eur: p.eur }, uahPerEur: p.uahPerEur,
     usdRate: st.usd_rate, detected: det, country: cc, fxUpdated: fx ? fx.updated : null,
     regions: REGIONS, turnstileSiteKey: env.TURNSTILE_SITE_KEY || null, googleClientId: env.GOOGLE_CLIENT_ID || null });
 }

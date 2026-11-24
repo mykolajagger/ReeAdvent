@@ -18,7 +18,7 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,400;0,500;0,600;1,400;1,500&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="/assets/base.css?v=11">
-<link rel="stylesheet" href="/assets/landing.css?v=10">
+<link rel="stylesheet" href="/assets/landing.css?v=12">
 </head>
 <body><!-- Google Tag Manager (noscript) --><noscript><iframe src="https://www.googletagmanager.com/ns.html?id=GTM-TTT3ZSPD" height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript><!-- End Google Tag Manager (noscript) -->
 <canvas id="fx" aria-hidden="true"></canvas>
@@ -67,7 +67,7 @@
   <section class="sec" id="order">
     <span class="eyebrow" data-i18n="or_eyebrow">Замовлення</span><h2 data-i18n="or_h2">Подаруйте собі різдвяний настрій</h2>
     <div class="card order">
-      <div class="price"><div id="old" class="muted" style="text-decoration:line-through;min-height:1.4em"></div><b id="price">—</b><span data-i18n="price_sub">за календар для двох · 24 вікна</span></div>
+      <div class="price"><div class="was"><s id="old"></s><span class="disc" id="disc" hidden></span></div><b id="price">—</b><span data-i18n="price_sub">за календар для двох · 24 вікна</span><div class="until" id="until" hidden></div></div>
       <form id="of" novalidate>
         <div class="f2">
           <div class="fld"><label for="nameA" data-i18n="f_nameA">Ваше ім’я</label><input id="nameA" maxlength="30" required autocomplete="given-name"></div>
@@ -121,6 +121,6 @@
 <script src="/assets/countries.js"></script>
 <script src="/assets/fx.js?v=2"></script>
 <script src="/assets/track.js?v=4" defer></script>
-<script src="/assets/landing.js?v=13"></script>
+<script src="/assets/landing.js?v=14"></script>
 </body>
 </html>

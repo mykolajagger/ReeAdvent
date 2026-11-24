@@ -1,7 +1,7 @@
 // Налаштування, які власник змінює в адмінці: ціни календаря (гривня для України, євро для інших країн) і відсотки для дашборда.
 // fee_percent: комісія Monobank з українських карток (1,3%), fee_foreign_percent: з іноземних (2%).
 export const DEFAULTS = { fee_percent: 1.3, fee_foreign_percent: 2, tax_percent: 5, military_percent: 1, places_monthly_cap: 2000 };
-const PERCENT_KEYS = ['fee_percent', 'fee_foreign_percent', 'tax_percent', 'military_percent'], KEYS = [...PERCENT_KEYS, 'price_uah', 'price_eur', 'usd_rate', 'places_monthly_cap'];
+const PERCENT_KEYS = ['fee_percent', 'fee_foreign_percent', 'tax_percent', 'military_percent'], KEYS = [...PERCENT_KEYS, 'price_uah', 'price_eur', 'price_uah_std', 'price_eur_std', 'usd_rate', 'places_monthly_cap'];   // *_std — стандартна (перекреслена) ціна; price_uah/price_eur — акційна (діюча)
 export { KEYS };
 
 const bad = code => { const e = new Error(code); e.status = 400; e.code = code; return e; };
@@ -9,7 +9,8 @@ const bad = code => { const e = new Error(code); e.status = 400; e.code = code; 
 export async function getSettings(env) {
   const rows = (await env.DB.prepare('SELECT key, value FROM settings').all()).results;
   const out = { ...DEFAULTS, ...(env.ACQUIRING_FEE_PERCENT !== undefined ? { fee_percent: Number(env.ACQUIRING_FEE_PERCENT) || 0 } : {}), price_uah: Number(env.PRICE_UAH) || 0, price_eur: Number(env.PRICE_EUR) || 0, usd_rate: Number(env.USD_RATE) || 41 };
-  for (const r of rows) if (KEYS.includes(r.key) && isFinite(Number(r.value))) out[r.key] = Number(r.value);
+  out.price_uah_std = 0; out.price_eur_std = 0; out.sale_until = '';
+  for (const r of rows) { if (KEYS.includes(r.key) && isFinite(Number(r.value))) out[r.key] = Number(r.value); else if (r.key === 'sale_until') out.sale_until = /^\d{4}-\d{2}-\d{2}$/.test(r.value) ? r.value : ''; }
   return out;
 }
 
@@ -24,11 +25,17 @@ export async function saveSettings(env, input) {
     const v = Number(String(input[k]).replace(',', '.'));
     if (k === 'price_uah') { if (!isFinite(v) || v < 1 || v > 100000) throw bad('bad_price'); }
     else if (k === 'price_eur') { if (!isFinite(v) || v < 1 || v > 10000) throw bad('bad_price_eur'); }
+    else if (k === 'price_uah_std') { if (!isFinite(v) || v < 0 || v > 100000) throw bad('bad_price'); }   // 0 — акції немає
+    else if (k === 'price_eur_std') { if (!isFinite(v) || v < 0 || v > 10000) throw bad('bad_price_eur'); }
     else if (k === 'places_monthly_cap') { if (!isFinite(v) || v < 0 || v > 1000000) throw bad('bad_cap'); }
     else if (k === 'usd_rate') { if (!isFinite(v) || v < 1 || v > 1000) throw bad('bad_rate'); }
     else if (!isFinite(v) || v < 0 || v > 100) throw bad('bad_percent');
     const r = Math.round(v * 100) / 100; saved[k] = r;
     stmts.push(env.DB.prepare('INSERT INTO settings (key, value, updated_at) VALUES (?,?,?) ON CONFLICT(key) DO UPDATE SET value = excluded.value, updated_at = excluded.updated_at').bind(k, String(r), Date.now()));
+  }
+  if (input.sale_until !== undefined) {   // «Ціна діє до»: дата YYYY-MM-DD або порожньо (без кінцевої дати)
+    const d = String(input.sale_until || '').trim(); if (d && (!/^\d{4}-\d{2}-\d{2}$/.test(d) || isNaN(Date.parse(d)))) throw bad('bad_date');
+    saved.sale_until = d; stmts.push(env.DB.prepare('INSERT INTO settings (key, value, updated_at) VALUES (?,?,?) ON CONFLICT(key) DO UPDATE SET value = excluded.value, updated_at = excluded.updated_at').bind('sale_until', d, Date.now()));
   }
   if (stmts.length) await env.DB.batch(stmts);
   return saved;

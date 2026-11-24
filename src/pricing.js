@@ -16,10 +16,20 @@ export function uahPerEur(fx, usdRate) {
 }
 
 /** Поточні ціни: { uah, eur, eurSet, uahPerEur }. Поки ціну в євро не задано, вона рахується з гривневої за курсом і округлюється вгору до цілого євро. */
+/** Діючі ціни з урахуванням акції: стандартна (перекреслена) і акційна; після «Ціна діє до» (кінець дня за Києвом) діє стандартна. */
+export function salePrices(st, rate, now = Date.now()) {
+  const eurSet = Number(st.price_eur) > 0, uahSale = Number(st.price_uah) || 0, eurSale = eurSet ? Number(st.price_eur) : Math.max(1, Math.ceil(uahSale / rate));
+  const uahStd = Number(st.price_uah_std) || 0, eurStd = Number(st.price_eur_std) || (uahStd ? Math.max(1, Math.ceil(uahStd / rate)) : 0);
+  const today = new Date(now + 2 * 36e5).toISOString().slice(0, 10), until = st.sale_until || '', inTime = !until || today <= until;
+  const pick = (sale, std) => std > sale ? (inTime ? { price: sale, was: std } : { price: std, was: null }) : { price: sale, was: null };
+  const u = pick(uahSale, uahStd), e = pick(eurSale, eurStd), active = !!(u.was || e.was);
+  return { uah: u.price, eur: e.price, uahWas: u.was, eurWas: e.was, saleActive: active, saleUntil: active ? until || null : null, saleEnded: !!(until && !inTime && (uahStd > uahSale || eurStd > eurSale)),
+    uahSale, eurSale, uahStd, eurStd, eurSet };
+}
 export async function getPrices(env) {
   const st = await getSettings(env), fx = await getFx(env), rate = Math.round(uahPerEur(fx, st.usd_rate) * 10000) / 10000;
-  const eurSet = Number(st.price_eur) > 0;
-  return { uah: st.price_uah, eur: eurSet ? st.price_eur : Math.max(1, Math.ceil(st.price_uah / rate)), eurSet, uahPerEur: rate };
+  const now = env && env.NOW_OVERRIDE ? Date.parse(env.NOW_OVERRIDE) : Date.now();
+  return { ...salePrices(st, rate, now), uahPerEur: rate };
 }
 
 /** Прайс для країни: { currency, list (мінімальні одиниці), uahRate (гривень за 1 одиницю валюти), fixedScale (як перерахувати фіксовану знижку в гривнях) }. */
