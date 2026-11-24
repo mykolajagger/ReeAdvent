@@ -57,6 +57,10 @@ export function adsetTargeting(c, d) {
   return t;
 }
 
+// Реклама на аудиторію в ЄС (Закон про цифрові послуги): обов'язково вказати, хто рекламується і хто платить (видно в бібліотеці реклами).
+const EU = new Set(['AT', 'BE', 'BG', 'HR', 'CY', 'CZ', 'DK', 'EE', 'FI', 'FR', 'DE', 'GR', 'HU', 'IE', 'IT', 'LV', 'LT', 'LU', 'MT', 'NL', 'PL', 'PT', 'RO', 'SK', 'SI', 'ES', 'SE']);
+export const dsaFor = (spec, c) => (c.countries || []).some(x => EU.has(x)) ? { dsa_beneficiary: spec.dsa_beneficiary || 'ReeAdvent', dsa_payor: spec.dsa_payor || spec.dsa_beneficiary || 'ReeAdvent' } : {};
+
 export function storySpec(spec, cr, d, link, media) {
   const cta = { type: 'LEARN_MORE', value: { link } }, base = { page_id: d.page.id, ...(d.ig ? { instagram_user_id: d.ig.id } : {}) };
   if (cr.type === 'video') return { ...base, video_data: { video_id: media.video[cr.video], image_url: spec.site + cr.thumb, message: cr.message, title: cr.headline, link_description: cr.description, call_to_action: cta } };
@@ -114,7 +118,7 @@ export async function run({ mode = 'check', only = [], spec, token, ver, adAccou
     const todo = c.ads.filter(k => !haveAds.includes(k));
     await uploadMedia(g, spec, d, todo, { fetchImpl, log, sleep, media });
     if (!campId) campId = (await g.post(`/${d.acc.id}/campaigns`, campParams)).id;
-    if (!adsetId) adsetId = (await g.post(`/${d.acc.id}/adsets`, { name: c.name + '_all', campaign_id: campId, optimization_goal: 'LANDING_PAGE_VIEWS', billing_event: 'IMPRESSIONS', destination_type: 'WEBSITE', status: 'PAUSED', targeting: adsetTargeting(c, d) })).id;
+    if (!adsetId) adsetId = (await g.post(`/${d.acc.id}/adsets`, { name: c.name + '_all', campaign_id: campId, optimization_goal: 'LANDING_PAGE_VIEWS', billing_event: 'IMPRESSIONS', destination_type: 'WEBSITE', status: 'PAUSED', targeting: adsetTargeting(c, d), ...dsaFor(spec, c) })).id;
     const ads = [];
     for (const k of todo) {
       const cr = spec.creatives[k], link = linkFor(spec, c.name, k);

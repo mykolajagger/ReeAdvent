@@ -3,6 +3,8 @@
   "site": "https://reeadvent.fun",
   "pixel_id": "2111183512849298",
   "exclude_audiences": ["Купили"],
+  "dsa_beneficiary": "ReeAdvent",
+  "dsa_payor": "ReeAdvent",
   "creatives": {
     "reel1": { "type": "video", "video": "/social/02-reel.mp4", "thumb": "/social/02-reel-cover.jpg",
       "message": "Подаруй їй не річ, а 24 дні уваги ✦\nReeAdvent: щодня нове вікно з питанням одне одному, подарунком, пригодою й спільною активністю у вашому місті. Підбираємо за вашими смаками, а що всередині — сюрприз.\nСтарт 1 грудня або з будь-якого дня.",

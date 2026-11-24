@@ -43,6 +43,7 @@ assert.deepEqual(camps.map(c => [c.body.name, c.body.daily_budget]), [['ua_cold'
 const sets = posts.filter(c => c.p === '/act_42/adsets'); assert.equal(sets.length, 2);
 const t0 = JSON.parse(sets[0].body.targeting), t1 = JSON.parse(sets[1].body.targeting);
 assert.equal(sets[0].body.optimization_goal, 'LANDING_PAGE_VIEWS'); assert.equal(sets[0].body.status, 'PAUSED');
+assert.equal(sets[0].body.dsa_beneficiary, undefined, 'Україна: без полів DSA'); assert.equal(sets[1].body.dsa_beneficiary, 'ReeAdvent'); assert.equal(sets[1].body.dsa_payor, 'ReeAdvent');
 assert.deepEqual(t0.geo_locations.countries, ['UA']); assert.equal(t0.age_min, 22); assert.equal(t0.age_max, 45); assert.ok(!t0.publisher_platforms.includes('audience_network'));
 assert.deepEqual(t0.excluded_custom_audiences, [{ id: 'aud9' }]); assert.equal(t0.locales, undefined); assert.deepEqual(t1.locales, [52]); assert.equal(t1.geo_locations.countries.length, 9);
 const crs = posts.filter(c => c.p === '/act_42/adcreatives'); assert.equal(crs.length, 6);
