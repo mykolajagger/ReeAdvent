@@ -1,6 +1,6 @@
 // Оцінки пунктів календаря (подарунок, пригода, активність, питання дня) від 1 до 5 зірок.
 // Зведений рейтинг впливає на вибір у нових календарях: улюблене трапляється частіше, слабке рідше. Пара, що замовляє знову, не отримує вже отримане.
-import { HttpError, DAYS, todayIndex, nowOf } from './util.js';
+import { HttpError, DAYS, todayIndex, dayFor, nowOf } from './util.js';
 import { GIFTS, INTIMATE, ACTIVITIES, QUESTIONS } from './logic.js';
 
 export const KINDS = ['gift', 'intim', 'act', 'q'];
@@ -17,7 +17,7 @@ export function itemOf(plan, kind, slot) {
 /** Оцінка пункту дня. Можна змінювати; лише для відкритого дня (після відповіді на питання). */
 export async function rateItem(env, mem, b) {
   const d = Math.round(Number(b.day)), kind = String(b.kind || ''), stars = Math.round(Number(b.stars));
-  if (!(d >= 1 && d <= DAYS) || d > todayIndex(mem.start_date, nowOf(env), mem.tz)) throw new HttpError(400, 'bad_day');
+  if (!(d >= 1 && d <= DAYS) || d > dayFor(mem, env)) throw new HttpError(400, 'bad_day');
   if (!KINDS.includes(kind)) throw new HttpError(400, 'bad_kind');
   if (!(stars >= 1 && stars <= 5)) throw new HttpError(400, 'bad_stars');
   if (!mem.schedule_json) throw new HttpError(409, 'not_ready');
@@ -44,7 +44,7 @@ export async function seenFor(env, calendarId) {
   const seen = new Set();
   try {
     const rows = await qa(env, `SELECT DISTINCT c.schedule_json FROM calendars c JOIN members m ON m.calendar_id = c.id
-      WHERE c.id <> ? AND c.schedule_json IS NOT NULL AND lower(m.email) IN (SELECT lower(email) FROM members WHERE calendar_id = ?)`, calendarId, calendarId);
+      WHERE c.id <> ? AND c.schedule_json IS NOT NULL AND c.test_mode IS NOT 1 AND lower(m.email) IN (SELECT lower(email) FROM members WHERE calendar_id = ?)`, calendarId, calendarId);
     for (const r of rows) { const s = JSON.parse(r.schedule_json); for (const p of Object.values(s.days || {})) { for (const g of p.gift || []) if (g != null) seen.add('gift:' + g); for (const k of ['intim', 'act', 'q']) if (p[k] != null) seen.add(k + ':' + p[k]); } }
   } catch {}
   return seen;

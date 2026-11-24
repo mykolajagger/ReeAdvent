@@ -18,7 +18,7 @@ import { serveMedia } from './media.js';
 import { getFx, priceCurrency } from './currency.js';
 import { sendEmail, welcomeEmail, partnerInviteEmail, loginEmail } from './email.js';
 import { runDaily, checkUnsub } from './reminders.js';
-import { json, HttpError, localDayNumber, unlockTimes, randomToken, uid, sha256, parseCookies, sessionCookie, EMAIL_RE, normEmail, cleanText, nowOf, tomorrowStr, fromDateStr, toDateStr, todayIndex, windowDates, validTz, DAYS, UNLOCK_HOUR } from './util.js';
+import { json, HttpError, localDayNumber, unlockTimes, randomToken, uid, sha256, parseCookies, sessionCookie, EMAIL_RE, normEmail, cleanText, nowOf, tomorrowStr, fromDateStr, toDateStr, todayIndex, dayFor, windowDates, validTz, DAYS, UNLOCK_HOUR } from './util.js';
 
 // Тимчасово окуповані території України не обслуговуємо: області (Крим, Донеччина, Луганщина) і міста окупованих частин інших областей
 const OCCUPIED_REGIONS = ['Автономна Республіка Крим', 'Донецька', 'Луганська'];
@@ -323,7 +323,7 @@ async function requireMember(request, env) {
   if (!t) throw new HttpError(401, 'auth');
   const s = await q1(env, 'SELECT member_id, expires_at FROM sessions WHERE token_hash = ?', await sha256(t));
   if (!s || s.expires_at < Date.now()) throw new HttpError(401, 'auth');
-  const mem = await q1(env, `SELECT m.*, c.city, c.region, c.start_date, c.schedule_json, c.lang, c.tz, c.country, o.refunded_at FROM members m JOIN calendars c ON c.id = m.calendar_id JOIN orders o ON o.id = c.order_id WHERE m.id = ?`, s.member_id);
+  const mem = await q1(env, `SELECT m.*, c.city, c.region, c.start_date, c.schedule_json, c.lang, c.tz, c.country, c.test_mode, o.refunded_at FROM members m JOIN calendars c ON c.id = m.calendar_id JOIN orders o ON o.id = c.order_id WHERE m.id = ?`, s.member_id);
   if (!mem || mem.refunded_at) throw new HttpError(401, 'auth');
   return mem;
 }
@@ -342,8 +342,8 @@ async function stateOf(env, mem) {
     me: { name: surveyName(mem), suggestedName: mem.suggested_name },
     partner: { name: surveyName(partner) || partner.suggested_name, done: !!partner.survey_json },
     myDone: !!mem.survey_json, partnerDone: !!partner.survey_json, ready: !!mem.schedule_json,
-    lang: mem.lang, country: mem.country || 'UA', usdRate: (await getSettings(env)).usd_rate, currency: priceCurrency(await getFx(env), mem.country || 'UA', (await getSettings(env)).usd_rate), unlockTimes: unlockTimes(mem.start_date, mem.tz), finished: localDayNumber(mem.start_date, nowOf(env), mem.tz) > DAYS, today: todayIndex(mem.start_date, nowOf(env), mem.tz), startDate: mem.start_date, unlockHour: UNLOCK_HOUR, totalDays: DAYS,
-    opened: rows.map(r => r.day), city: mem.city
+    lang: mem.lang, country: mem.country || 'UA', usdRate: (await getSettings(env)).usd_rate, currency: priceCurrency(await getFx(env), mem.country || 'UA', (await getSettings(env)).usd_rate), unlockTimes: unlockTimes(mem.start_date, mem.tz), finished: localDayNumber(mem.start_date, nowOf(env), mem.tz) > DAYS, today: dayFor(mem, env), startDate: mem.start_date, unlockHour: UNLOCK_HOUR, totalDays: DAYS,
+    opened: rows.map(r => r.day), city: mem.city, testMode: !!mem.test_mode
   };
 }
 
@@ -362,11 +362,11 @@ async function saveSurvey(request, env, mem) {
   const fresh = await requireMemberById(env, mem.id);
   return stateOf(env, fresh);
 }
-const requireMemberById = (env, id) => q1(env, `SELECT m.*, c.city, c.region, c.start_date, c.schedule_json, c.lang, c.tz, c.country FROM members m JOIN calendars c ON c.id = m.calendar_id WHERE m.id = ?`, id);
+const requireMemberById = (env, id) => q1(env, `SELECT m.*, c.city, c.region, c.start_date, c.schedule_json, c.lang, c.tz, c.country, c.test_mode FROM members m JOIN calendars c ON c.id = m.calendar_id WHERE m.id = ?`, id);
 
 async function getDay(env, mem, d) {
   if (!(d >= 1 && d <= DAYS)) throw new HttpError(400, 'bad_day');
-  if (d > todayIndex(mem.start_date, nowOf(env), mem.tz)) throw new HttpError(403, 'not_yet');
+  if (d > dayFor(mem, env)) throw new HttpError(403, 'not_yet');
   if (!mem.schedule_json) throw new HttpError(409, 'not_ready');
   const plan = JSON.parse(mem.schedule_json).days[d];
   const partner = await partnerOf(env, mem);
@@ -390,7 +390,7 @@ async function getDay(env, mem, d) {
 async function saveAnswer(request, env, mem) {
   const b = await readJson(request);
   const d = Math.round(Number(b.day));
-  if (!(d >= 1 && d <= DAYS) || d > todayIndex(mem.start_date, nowOf(env), mem.tz)) throw new HttpError(400, 'bad_day');
+  if (!(d >= 1 && d <= DAYS) || d > dayFor(mem, env)) throw new HttpError(400, 'bad_day');
   if (!mem.schedule_json) throw new HttpError(409, 'not_ready');
   const text = String(b.text || '').replace(/[<>]/g, '').replace(/\r/g, '').replace(/\n{3,}/g, '\n\n').trim().slice(0, 600);
   const files = text.length < 2 ? (await listAnswerMedia(env, mem.id, d)).length : 0;   // відповідь може бути й лише фото чи відео
@@ -403,7 +403,7 @@ async function saveAnswer(request, env, mem) {
 async function mark(request, env, mem) {
   const b = await readJson(request);
   const d = Math.round(Number(b.day));
-  if (!(d >= 1 && d <= DAYS) || d > todayIndex(mem.start_date, nowOf(env), mem.tz)) throw new HttpError(400, 'bad_day');
+  if (!(d >= 1 && d <= DAYS) || d > dayFor(mem, env)) throw new HttpError(400, 'bad_day');
   const col = { gift: 'done_gift', intim: 'done_intim', act: 'done_act' }[b.key];
   if (!col) throw new HttpError(400, 'bad_key');
   await run(env, `INSERT INTO progress (member_id, day, ${col}) VALUES (?,?,?) ON CONFLICT(member_id, day) DO UPDATE SET ${col} = excluded.${col}`, mem.id, d, b.done ? 1 : 0);
@@ -468,7 +468,7 @@ async function authGoogle(request, env) {
 async function history(env, mem) {
   if (!mem.schedule_json) return { ok: true, days: [], finished: false };
   const sched = JSON.parse(mem.schedule_json), partner = await partnerOf(env, mem);
-  const last = Math.min(todayIndex(mem.start_date, nowOf(env), mem.tz), DAYS);
+  const last = Math.min(dayFor(mem, env), DAYS);
   const mine = (await env.DB.prepare('SELECT day, text, created_at FROM answers WHERE member_id = ?').bind(mem.id).all()).results;
   const theirs = (await env.DB.prepare('SELECT day, text, created_at FROM answers WHERE member_id = ?').bind(partner.id).all()).results;
   const prog = (await env.DB.prepare('SELECT day, opened, opened_at, done_gift, done_intim, done_act FROM progress WHERE member_id = ?').bind(mem.id).all()).results;
@@ -532,7 +532,7 @@ async function configResponse(request, env) {
 
 // ---------- Рекомендації закладів за публічними рейтингами (лише після відповіді на питання дня) ----------
 async function placesFor(env, mem, d, kind) {
-  if (!(d >= 1 && d <= DAYS) || d > todayIndex(mem.start_date, nowOf(env), mem.tz)) throw new HttpError(403, 'not_yet');
+  if (!(d >= 1 && d <= DAYS) || d > dayFor(mem, env)) throw new HttpError(403, 'not_yet');
   if (!mem.schedule_json) throw new HttpError(409, 'not_ready');
   const answered = await q1(env, 'SELECT 1 AS x FROM answers WHERE member_id = ? AND day = ?', mem.id, d);
   if (!answered) throw new HttpError(403, 'answer_first');

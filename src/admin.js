@@ -135,7 +135,7 @@ export async function handleAdmin(request, env, path, m) {
   if (m === 'GET' && path === '/api/admin/orders') return json({ ok: true, ...(await listOrders(env, url)) });
   if (m === 'GET' && (r = path.match(/^\/api\/admin\/orders\/([\w-]+)$/))) return json({ ok: true, ...(await orderDetail(env, r[1])) });
   if (m === 'POST' && path === '/api/admin/orders/bulk') return json(await ordersBulk(env, admin, await readJson(request)));
-  if (m === 'POST' && (r = path.match(/^\/api\/admin\/orders\/([\w-]+)\/(update|resend|refund|note|archive|delete)$/))) return json(await orderAction(request, env, admin, r[1], r[2]));
+  if (m === 'POST' && (r = path.match(/^\/api\/admin\/orders\/([\w-]+)\/(update|resend|refund|note|archive|delete|test|testreset|testlinks)$/))) return json(await orderAction(request, env, admin, r[1], r[2]));
   if (m === 'GET' && path === '/api/admin/customers') return json({ ok: true, customers: await customers(env, url.searchParams.get('q') || '') });
   if (m === 'GET' && path === '/api/admin/customers.csv') {
     const rows = await customers(env, '');
@@ -175,14 +175,14 @@ async function listOrders(env, url) {
   if (q) { const like = '%' + esc(q) + '%'; where.push("(email_a LIKE ? ESCAPE '\\' OR email_b LIKE ? ESCAPE '\\' OR name_a LIKE ? ESCAPE '\\' OR name_b LIKE ? ESCAPE '\\' OR city LIKE ? ESCAPE '\\' OR id = ?)"); args.push(like, like, like, like, like, q); }
   const W = where.length ? 'WHERE ' + where.join(' AND ') : '';
   const total = (await q1(env, `SELECT COUNT(*) AS n FROM orders ${W}`, ...args)).n;
-  const rows = await qa(env, `SELECT id, created_at, paid_at, refunded_at, amount_kop, list_kop, discount_kop, promo_code, name_a, email_a, name_b, email_b, city, region, start_date, currency, archived_at FROM orders ${W} ORDER BY created_at DESC LIMIT ? OFFSET ?`, ...args, limit, (page - 1) * limit);
+  const rows = await qa(env, `SELECT id, created_at, paid_at, refunded_at, amount_kop, list_kop, discount_kop, promo_code, name_a, email_a, name_b, email_b, city, region, start_date, currency, archived_at, (SELECT test_mode FROM calendars c WHERE c.order_id = orders.id) AS test_mode FROM orders ${W} ORDER BY created_at DESC LIMIT ? OFFSET ?`, ...args, limit, (page - 1) * limit);
   return { total, page, pages: Math.max(1, Math.ceil(total / limit)), orders: rows.map(o => ({ ...o, status: statusOf(o) })) };
 }
 
 async function orderDetail(env, id) {
   const o = await q1(env, 'SELECT * FROM orders WHERE id = ?', id);
   if (!o) throw new HttpError(404, 'not_found');
-  const cal = await q1(env, 'SELECT id, start_date, (schedule_json IS NOT NULL) AS ready FROM calendars WHERE order_id = ?', id);
+  const cal = await q1(env, 'SELECT id, start_date, (schedule_json IS NOT NULL) AS ready, test_mode FROM calendars WHERE order_id = ?', id);
   let members = [];
   if (cal) {
     members = await qa(env, 'SELECT id, slot, email, suggested_name, (survey_json IS NOT NULL) AS survey_done FROM members WHERE calendar_id = ? ORDER BY slot', cal.id);
@@ -194,7 +194,7 @@ async function orderDetail(env, id) {
   }
   const log = await qa(env, "SELECT at, admin_email, action, detail FROM audit_log WHERE target = ? ORDER BY id DESC LIMIT 30", id);
   const threads = await qa(env, 'SELECT email, status, unread, last_at, last_subject FROM threads WHERE email IN (?, ?)', o.email_a, o.email_b);
-  return { order: { ...o, status: statusOf(o) }, calendar: cal ? { ...cal, ready: !!cal.ready, today: todayIndex(cal.start_date, nowOf(env)) } : null, members, log, threads };
+  return { order: { ...o, status: statusOf(o) }, calendar: cal ? { ...cal, ready: !!cal.ready, test_mode: !!cal.test_mode, today: todayIndex(cal.start_date, nowOf(env)) } : null, members, log, threads };
 }
 
 /** Остаточне видалення замовлення (лише з архіву): календар, учасники, їхні відповіді й прогрес, входи, листи в журналі. Для реальних оплат краще лишити в архіві. */
@@ -249,6 +249,25 @@ async function orderAction(request, env, admin, id, action) {
     return { ok: true, archived: on };
   }
   if (action === 'delete') { await deleteOrder(env, admin, o); return { ok: true, deleted: true }; }
+  // Тестовий режим: усі 24 вікна відкриті одразу, а порядок дій у дні звичайний (відповідь → подарунок, пригода, активність)
+  if (action === 'test') {
+    if (!cal) throw new HttpError(409, 'no_calendar');
+    const on = !!b.on; await run(env, 'UPDATE calendars SET test_mode = ? WHERE id = ?', on ? 1 : null, cal.id);
+    await audit(env, admin, on ? 'order_test_on' : 'order_test_off', id, {}); return { ok: true, test: on };
+  }
+  if (action === 'testreset') {   // лише в тестовому режимі: стерти прогрес (і за бажання анкети), щоб пройти календар ще раз
+    if (!cal || !cal.test_mode) throw new HttpError(409, 'not_test');
+    const ids = members.map(m => m.id), stmts = [];
+    await purgeAnswerMedia(env, ids);
+    for (const mid of ids) for (const t of ['answers', 'progress', 'item_ratings', 'answer_media', 'reminders_sent']) stmts.push(env.DB.prepare(`DELETE FROM ${t} WHERE member_id = ?`).bind(mid));
+    if (b.surveys) { stmts.push(env.DB.prepare('UPDATE members SET survey_json = NULL WHERE calendar_id = ?').bind(cal.id)); stmts.push(env.DB.prepare('UPDATE calendars SET schedule_json = NULL WHERE id = ?').bind(cal.id)); }
+    await env.DB.batch(stmts); await audit(env, admin, 'order_test_reset', id, { surveys: !!b.surveys }); return { ok: true, reset: true, surveys: !!b.surveys };
+  }
+  if (action === 'testlinks') {   // одноразові посилання для входу за кожного учасника (діють 30 хв), лише в тестовому режимі
+    if (!cal || !cal.test_mode) throw new HttpError(409, 'not_test');
+    const links = []; for (const m of members) links.push({ slot: m.slot, name: m.suggested_name, email: m.email, link: await issueLoginLink(env, m.id, 30 * 60e3) });
+    await audit(env, admin, 'order_test_links', id, {}); return { ok: true, links };
+  }
   if (action === 'note') {
     await run(env, 'UPDATE orders SET note = ? WHERE id = ?', cleanText(b.note, 1000) || null, id);
     await audit(env, admin, 'note', id);

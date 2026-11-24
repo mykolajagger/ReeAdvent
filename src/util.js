@@ -42,6 +42,8 @@ export function fromDateStr(s) { const [y, m, d] = s.split('-').map(Number); ret
 export function tomorrowStr(now, tz = TZ) { const p = localParts(now, tz); return toDateStr(dayNum(p.y, p.m, p.d) + 1); }
 
 /** Який день календаря доступний зараз: 0 — ще не почався, 1..24 */
+/** Скільки вікон уже відкрито для учасника. У тестовому режимі (адмінка → замовлення) відкриті всі 24. */
+export const dayFor = (mem, env) => (mem && mem.test_mode ? DAYS : todayIndex(mem.start_date, nowOf(env), mem.tz));
 export function todayIndex(startDate, now, tz = TZ) {
   const p = localParts(now, tz);
   const idx = dayNum(p.y, p.m, p.d) - fromDateStr(startDate) + 1 - (p.h < UNLOCK_HOUR ? 1 : 0);

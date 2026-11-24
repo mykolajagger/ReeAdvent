@@ -6,6 +6,7 @@ export const ORDER_COLUMNS = [
   ['currency', 'TEXT'], ['uah_rate', 'REAL'],                                                                              // 0012: валюта ціни (UAH або EUR) і курс гривні на момент замовлення
   ['inv_ccy', 'INTEGER'], ['inv_amount', 'INTEGER']                                                                        // 0012: валюта й сума виставленого рахунку Monobank
 ];
+export const CAL_COLUMNS = [['test_mode', 'INTEGER']];   // 0015: тестовий режим (усі 24 вікна відкриті одразу)
 const TABLES = [
   'CREATE TABLE IF NOT EXISTS ad_spend (id INTEGER PRIMARY KEY AUTOINCREMENT, day TEXT NOT NULL, channel TEXT NOT NULL, campaign TEXT, amount_cents INTEGER NOT NULL, note TEXT, created_at INTEGER NOT NULL)',
   'CREATE INDEX IF NOT EXISTS idx_ad_spend_day ON ad_spend(day)',
@@ -27,6 +28,10 @@ export async function ensureSchema(env) {
     if (!have.size) return;                                                       // таблиці замовлень ще немає (порожня база): нічого не чіпаємо
     for (const [col, type] of ORDER_COLUMNS) if (!have.has(col)) {
       try { await db.prepare(`ALTER TABLE orders ADD COLUMN ${col} ${type}`).run(); } catch (e) { if (!/duplicate column/i.test(String(e && e.message))) throw e; }
+    }
+    const calHave = new Set(((await db.prepare('PRAGMA table_info(calendars)').all()).results || []).map(c => c.name));
+    for (const [col, type] of CAL_COLUMNS) if (calHave.size && !calHave.has(col)) {
+      try { await db.prepare(`ALTER TABLE calendars ADD COLUMN ${col} ${type}`).run(); } catch (e) { if (!/duplicate column/i.test(String(e && e.message))) throw e; }
     }
     for (const sql of TABLES) await db.prepare(sql).run();
     done.add(db);

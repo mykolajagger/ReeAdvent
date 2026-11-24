@@ -1,6 +1,6 @@
 // Фото й відео у відповідях на питання дня. Бачать лише учасники календаря: автор і партнер (партнер — коли сам відповів на питання цього дня, як і з текстом).
 // Сховище: R2 (біндинг MEDIA, ключ ans/<id>), без нього фото зберігаються в базі (D1). Відео потребують R2: у базі вони займали б забагато місця.
-import { HttpError, randomToken, DAYS, todayIndex, nowOf } from './util.js';
+import { HttpError, randomToken, DAYS, todayIndex, dayFor, nowOf } from './util.js';
 
 export const MAX_FILES = 4, MAX_VIDEOS = 2, MAX_PHOTO = 1.5 * 1024 * 1024, MAX_VIDEO = 60 * 1024 * 1024;
 const r2 = env => (env.MEDIA && typeof env.MEDIA.put === 'function' ? env.MEDIA : null);
@@ -21,7 +21,7 @@ const toB64 = bytes => { let s = ''; for (let i = 0; i < bytes.length; i += 0x80
 const fromB64 = s => { const bin = atob(s), out = new Uint8Array(bin.length); for (let i = 0; i < bin.length; i++) out[i] = bin.charCodeAt(i); return out; };
 
 async function checkDay(env, mem, d) {
-  if (!(d >= 1 && d <= DAYS) || d > todayIndex(mem.start_date, nowOf(env), mem.tz)) throw new HttpError(400, 'bad_day');
+  if (!(d >= 1 && d <= DAYS) || d > dayFor(mem, env)) throw new HttpError(400, 'bad_day');
   if (!mem.schedule_json) throw new HttpError(409, 'not_ready');
 }
 
