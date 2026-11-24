@@ -72,6 +72,49 @@ export function ratingMult(r) {
  * Повертає { seed, days: {1: {gift:[idA,idB] | [null,null], intim, act, out, q}}, giftDays, outDays, stretched }
  * gift[k] — те, що дарує k-й учасник іншому (null — у цей день без подарунка).
  */
+// Подарунки, що пасують лише одній статі (номери в GIFTS; решта універсальні). Стать отримувача — з його анкети («я — він / вона»).
+export const GIFT_FOR = { f: [10, 12, 38, 39, 76, 77, 97, 98, 144, 145, 146, 147, 148, 150, 176, 177, 204, 241], m: [240, 244] };
+const giftFits = (g, sex) => sex === 'm' ? !GIFT_FOR.f.includes(g.id) : sex === 'f' ? !GIFT_FOR.m.includes(g.id) : true;
+
+// ---------- Без повторів схожого: теми (з лімітом на календар) і схожість назв ----------
+// Наприклад, «Пікнік у вітальні» й «Пікнік на підлозі» — одна тема «пікнік», тож у календарі буде лише один.
+const THEMES = {
+  act: [[/пікнік/i, 'picnic'], [/боулінг/i, 'bowling'], [/каток/i, 'skate'], [/квест/i, 'quest', 2], [/басейн|термальн|купальн|гарячі джерела|спа-комплекс|спа за містом/i, 'pool'], [/сауна|хамам/i, 'sauna'], [/масаж/i, 'massage'],
+    [/дегустац/i, 'tasting', 2], [/ботанічн|оранжере/i, 'botanic'], [/ярмар/i, 'fair'], [/філармон|органн|камерн/i, 'philharmonic'], [/кав.ярн|кава й|кави/i, 'cafe', 2], [/караоке/i, 'karaoke'],
+    [/кіно|фільм|мульт|серіал|мюзикл/i, 'movie', 3], [/йога|пілатес|розтяжк/i, 'yoga'], [/глінтвейн/i, 'mulled'], [/пельмен/i, 'dumplings'], [/піц/i, 'pizza'], [/суші|рол/i, 'sushi'], [/пазл/i, 'puzzle'],
+    [/настол|настіл|карти|шахи/i, 'boardgame', 2], [/медитац/i, 'meditation'], [/малюєм|портрет|картина|розмальовк|арт-вечір|розпис/i, 'drawing', 2], [/глин|гончар|керамік/i, 'clay'], [/свічк/i, 'candles'],
+    [/пряни/i, 'gingerbread'], [/прикрашаєм|прикраси|ялинков|прикрасу|вінок/i, 'decor', 2], [/танц/i, 'dance'], [/сніданок|бранч|снідан/i, 'breakfast', 2], [/нічна прогулянка|нічна екскурсія|ліхтарик/i, 'nightwalk'],
+    [/фото/i, 'photo', 2], [/музей|галере|експериментаріум/i, 'museum', 2], [/замок|фортец|паланок|палац|садиба/i, 'castle', 2], [/spa|маски для обличчя|ванна/i, 'homespa'], [/ліс|озер|водоспад|скелі|поляна|національний парк/i, 'nature', 2],
+    [/стендап|лекці/i, 'standup'], [/концерт|джаз|гурт/i, 'concert', 2], [/лист/i, 'letter', 2], [/коктейл/i, 'cocktail'], [/вин(о|а|ний)\b|винн/i, 'wine', 2], [/сир(н|ів|овар)/i, 'cheese'], [/мед(у)?\b|медов/i, 'honey'],
+    [/зоря|зорян|планетар|обсерватор|телескоп/i, 'stars'], [/конструктор|lego/i, 'lego'], [/спогад/i, 'memories'], [/мрі|плани|vision|бюджет/i, 'dreams'],
+    [/італійськ|грузинськ|японськ|мексиканськ|тайськ|країни|азійськ|французьк|тако|рамен|українськ.* кухн|закарпатськ/i, 'cuisine', 2], [/прибиранн|перестановк|розбір шафи|ремонт/i, 'chores'],
+    [/птах|качок/i, 'birds'], [/сніж|снігов|санки/i, 'snow'], [/лиж|сноутюб/i, 'ski'], [/скел/i, 'climb'], [/лазертаг|пейнтбол|тир|стрільб/i, 'shooting'], [/караоке|пісн|колядк|музичн|плейлист|альбом/i, 'music', 2]],
+  gift: [[/масаж/i, 'massage', 2], [/сертифікат/i, 'cert', 2], [/фото/i, 'photo', 3], [/глінтвейн/i, 'mulled'], [/свічк/i, 'candle', 2], [/шкарпетк/i, 'socks'], [/плед/i, 'plaid'], [/кав(а|и)\b|кавов|дріп|турка/i, 'coffee', 2], [/чай|чаю/i, 'tea', 2]],
+  intim: [[/масаж/i, 'massage', 3], [/поцілун/i, 'kiss', 3], [/пов.язк/i, 'blindfold', 2], [/рольов/i, 'role', 2], [/танц/i, 'dance', 2], [/роздяга/i, 'undress'], [/ванн/i, 'bath'], [/лист/i, 'letter']]
+};
+const STOPW = new Set('для та або чи від під над наш наша наше наші ваш свій своя разом вдома удома двох двоє пара пари як що цей один одна без при час'.split(' '));
+const stems0 = t => new Set(String(t).toLowerCase().replace(/[«»"'’().,:;!?—–-]/g, ' ').split(/\s+/).filter(w => w.length >= 3 && !STOPW.has(w)).map(w => w.slice(0, 5)));
+const jacc = (a, b) => { let i = 0; for (const x of a) if (b.has(x)) i++; const u = a.size + b.size - i; return u ? i / u : 0; };
+/** Стежить за вибраним у календарі й не пускає схоже: тема понад ліміт або назва, що збігається на ≥ 60%. */
+const LISTS = () => ({ act: ACTIVITIES, gift: GIFTS, intim: INTIMATE }), CONFLICTS = {}, THEME_IDX = {};
+/** Один раз на категорію: схожі за назвою (≥ 60%) пункти й теми кожного пункту. */
+function prep(kind) {
+  if (CONFLICTS[kind]) return;
+  const arr = LISTS()[kind], st = arr.map(x => stems0(x.title)), conf = arr.map(() => []), themes = THEMES[kind] || [];
+  for (let a = 0; a < arr.length; a++) for (let b = a + 1; b < arr.length; b++) if (jacc(st[a], st[b]) >= 0.6) { conf[a].push(arr[b].id); conf[b].push(arr[a].id); }
+  CONFLICTS[kind] = new Map(arr.map((x, k) => [x.id, conf[k]])); THEME_IDX[kind] = new Map(arr.map(x => [x.id, themes.filter(([re]) => re.test(x.title)).map(([, n, lim]) => [n, lim || 1])]));
+}
+/** Стежить за вибраним у календарі й не пускає схоже: тема понад ліміт або назва, що збігається на ≥ 60%. */
+function variety(kind) {
+  prep(kind); const used = {}, blocked = new Set(), conf = CONFLICTS[kind], th = THEME_IDX[kind];
+  return {
+    ok: x => !blocked.has(x.id) && (th.get(x.id) || []).every(([n, lim]) => (used[n] || 0) < lim),
+    add: x => { for (const [n] of th.get(x.id) || []) used[n] = (used[n] || 0) + 1; for (const c of conf.get(x.id) || []) blocked.add(c); }
+  };
+}
+/** Зважений вибір лише серед «різноманітних» кандидатів (якщо таких немає — з усіх). */
+function takeVaried(cands, rnd, v) { const ok = cands.filter(c => v.ok(c.item)); const src = ok.length ? ok : cands; const it = takeWeighted(src, rnd); const i = cands.findIndex(c => c.item === it); if (i >= 0) cands.splice(i, 1); v.add(it); return it; }
+
 export function generateSchedule(answers, seed, dates, region, country = 'UA', opts = {}) {
   const rnd = mulberry32(seed), ratings = opts.ratings || {}, seen = opts.seen || new Set();
   const rw = (kind, id) => ratingMult(ratings[kind + ':' + id]);
@@ -85,14 +128,15 @@ export function generateSchedule(answers, seed, dates, region, country = 'UA', o
   const giftN = Math.max(1, Math.min(DAYS, Math.round(avgOf(answers, 'gifts', DAYS)))), giftDays = giftDaysFor(giftN);
   for (const gi of [0, 1]) {
     const giver = answers[gi], recv = answers[1 - gi];
-    const regular = fresh('gift', GIFTS.filter(g => !g.day && !hasAvoided(g.tags, recv.avoid)), giftN);
+    const regular = fresh('gift', GIFTS.filter(g => !g.day && !hasAvoided(g.tags, recv.avoid) && giftFits(g, recv.sex)), giftN);
     let pool = regular.filter(g => g.price <= giver.budget);
     if (pool.length < giftN) { stretched = true; pool = regular.slice().sort((x, y) => x.price - y.price).slice(0, giftN + 6); }
     const cands = pool.map(g => ({ item: g, w: (1 + 3 * overlap(g.tags, recv.giftLikes)) * rw('gift', g.id) }));
+    const gv = variety('gift');
     for (let d = 1; d <= DAYS; d++) {
       if (!giftDays.has(d)) continue;
       const sp = GIFTS.find(g => specialFor(g, d));
-      days[d].gift[gi] = sp ? sp.id : takeWeighted(cands, rnd).id;
+      if (sp) { gv.add(sp); days[d].gift[gi] = sp.id; } else days[d].gift[gi] = takeVaried(cands, rnd, gv).id;
     }
   }
 
@@ -100,12 +144,13 @@ export function generateSchedule(answers, seed, dates, region, country = 'UA', o
   const maxLevel = Math.min(answers[0].level, answers[1].level);
   let iCands = fresh('intim', INTIMATE.filter(x => !x.day && x.level <= maxLevel), DAYS)
     .map(x => ({ item: x, w: (1 + 2 * overlap(x.tags, answers[0].intimLikes) + 2 * overlap(x.tags, answers[1].intimLikes)) * rw('intim', x.id) }));
+  const iv = variety('intim'); for (let d = 1; d <= DAYS; d++) { const sp = INTIMATE.find(x => specialFor(x, d)); if (sp) iv.add(sp); }
   for (let d = 1; d <= DAYS; d++) {
     const sp = INTIMATE.find(x => specialFor(x, d));
     if (sp) { days[d].intim = sp.id; continue; }
     const target = 1 + ((d - 1) / (DAYS - 1)) * (maxLevel - 1);
     const local = iCands.map(c => ({ item: c.item, w: c.w * (0.25 + 1 / (1 + 1.5 * Math.abs(c.item.level - target))) }));
-    const pick = takeWeighted(local, rnd);
+    const pick = takeVaried(local, rnd, iv);
     days[d].intim = pick.id;
     iCands = iCands.filter(c => c.item.id !== pick.id);
   }
@@ -123,6 +168,7 @@ export function generateSchedule(answers, seed, dates, region, country = 'UA', o
       return { item: x, w: (1 + 2 * oa + 2 * ob + (oa && ob ? 2 : 0)) * rw('act', x.id) };
     });
   const isHome = x => x.tags.includes('home');
+  const av = variety('act'); for (let d = 1; d <= DAYS; d++) { const sp = ACTIVITIES.find(x => specialFor(x, d)); if (sp) av.add(sp); }
   for (let d = 1; d <= DAYS; d++) {
     const sp = ACTIVITIES.find(x => specialFor(x, d));
     if (outDays) days[d].out = outDays.has(d);
@@ -137,7 +183,7 @@ export function generateSchedule(answers, seed, dates, region, country = 'UA', o
       if (c.item.cost >= 3 && !weekend) m *= 0.3;
       return { item: c.item, w: c.w * m };
     });
-    const pick = takeWeighted(local, rnd);
+    const pick = takeVaried(local, rnd, av);
     days[d].act = pick.id;
     aCands = aCands.filter(c => c.item.id !== pick.id);
   }
@@ -199,9 +245,33 @@ export const giftView = (g, city, lang = 'uk', country = 'UA') => {
   return { title: en ? en[0] : g.title, desc: en ? en[1] : g.desc, price: g.price, link, shops: giftLinks(g, city, lang, country) };
 };
 export const intimView = (x, lang = 'uk') => { const en = lang === 'en' ? INTIMATE_EN[x.id] : null; return { title: en ? en[0] : x.title, desc: en ? en[1] : x.desc, level: x.level }; };
+// Активності, де потрібен застосунок чи онлайн-сервіс: кілька перевірених варіантів (офіційні сайти)
+const APP = {
+  yoga: [['Down Dog', 'https://www.downdogapp.com/'], ['Yoga With Adriene', 'https://www.youtube.com/@yogawithadriene'], ['Asana Rebel', 'https://asanarebel.com/']],
+  calm: [['Insight Timer', 'https://insighttimer.com/'], ['Calm', 'https://www.calm.com/'], ['Headspace', 'https://www.headspace.com/']],
+  dance: [['Just Dance Now', 'https://justdancenow.com/'], ['STEEZY', 'https://www.steezy.co/'], ['YouTube: уроки сальси', 'https://www.youtube.com/results?search_query=salsa+for+beginners+couple']],
+  stars: [['Stellarium', 'https://stellarium.org/'], ['Star Walk 2', 'https://starwalk.space/'], ['SkyView', 'https://www.terminaleleven.com/skyview/']],
+  piano: [['Simply Piano', 'https://www.hellosimply.com/'], ['Yousician', 'https://yousician.com/'], ['flowkey', 'https://www.flowkey.com/']],
+  video: [['CapCut', 'https://www.capcut.com/'], ['InShot', 'https://inshot.com/'], ['iMovie', 'https://www.apple.com/imovie/']],
+  audio: [['Abuk', 'https://abuk.com.ua/'], ['Yakaboo Audio', 'https://www.yakaboo.ua/ua/audioknigi.html'], ['Audible', 'https://www.audible.com/']],
+  podcast: [['Spotify', 'https://open.spotify.com/genre/podcasts-web'], ['Apple Podcasts', 'https://podcasts.apple.com/'], ['YouTube Music', 'https://music.youtube.com/']],
+  music: [['Spotify', 'https://open.spotify.com/'], ['YouTube Music', 'https://music.youtube.com/'], ['Apple Music', 'https://music.apple.com/']],
+  karaoke: [['KaraFun', 'https://www.karafun.com/'], ['Smule', 'https://www.smule.com/'], ['YouTube: караоке', 'https://www.youtube.com/results?search_query=караоке+дуети']],
+  boardonline: [['Board Game Arena', 'https://boardgamearena.com/'], ['Codenames Online', 'https://codenames.game/'], ['Jackbox Games', 'https://www.jackboxgames.com/']],
+  quest: [['Duskwood', 'https://www.duskwood-game.com/'], ['Lifeline', 'https://www.3minutegames.com/lifeline'], ['Unlock!', 'https://www.spacecowboys.fr/unlock']],
+  museum: [['Google Arts & Culture', 'https://artsandculture.google.com/'], ['Лувр онлайн', 'https://www.louvre.fr/en/online-tours'], ['Прадо онлайн', 'https://www.museodelprado.es/en/the-collection']],
+  concert: [['Digital Concert Hall', 'https://www.digitalconcerthall.com/'], ['Medici.tv', 'https://www.medici.tv/'], ['YouTube: концерти', 'https://www.youtube.com/results?search_query=full+concert']],
+  course: [['Prometheus', 'https://prometheus.org.ua/'], ['Coursera', 'https://www.coursera.org/'], ['Khan Academy', 'https://www.khanacademy.org/']],
+  lang: [['Duolingo', 'https://www.duolingo.com/'], ['Memrise', 'https://www.memrise.com/'], ['Anki', 'https://apps.ankiweb.net/']],
+  quiz: [['Kahoot!', 'https://kahoot.com/'], ['Quizlet', 'https://quizlet.com/']],
+  massage: [['YouTube: масаж для пар', 'https://www.youtube.com/results?search_query=масаж+для+пар+урок']]
+};
+export const ACT_APPS = { 6: 'yoga', 67: 'yoga', 148: 'yoga', 150: 'yoga', 27: 'calm', 154: 'calm', 147: 'dance', 207: 'stars', 181: 'piano', 172: 'video', 180: 'video', 157: 'audio', 158: 'podcast', 13: 'music', 12: 'karaoke', 177: 'karaoke',
+  203: 'boardonline', 233: 'quest', 208: 'museum', 209: 'concert', 211: 'course', 210: 'lang', 139: 'quiz', 153: 'massage' };
+const appsFor = id => (APP[ACT_APPS[id]] || []).map(([name, url]) => ({ name, url }));
 export const actView = (x, city, lang = 'uk') => {
   const en = lang === 'en' ? ACTIVITIES_EN[x.id] : null, q = en ? en[2] : x.q;
-  return { title: en ? en[0] : x.title, desc: en ? en[1] : x.desc, cost: x.cost, car: x.tags.includes('car'), link: q ? mapsLink(q, city, lang) : null };
+  return { title: en ? en[0] : x.title, desc: en ? en[1] : x.desc, cost: x.cost, car: x.tags.includes('car'), link: q ? mapsLink(q, city, lang) : null, apps: appsFor(x.id) };
 };
 /** Пошуковий запит із містом для рекомендацій закладів (лише шаблонні запити з {city}; конкретні пам'ятки пропускаємо). */
 export const placesQuery = (x, city, lang = 'uk') => { const en = lang === 'en' ? ACTIVITIES_EN[x.id] : null, q = en ? en[2] : x.q; return q && q.includes('{city}') ? q.replace('{city}', city) : null; };
@@ -218,6 +288,7 @@ export function sanitizeSurvey(a) {
   if (!name) throw Object.assign(new Error('bad_name'), { status: 400, code: 'bad_name' });
   return {
     name,
+    sex: a.sex === 'f' || a.sex === 'm' ? a.sex : null,   // стать того, хто заповнює: подарунки йому/їй підбираються відповідно
     budget: Math.max(100, Math.min(1000, Math.round(Number(a.budget) || 300))),
     giftLikes: pickAllowed(a.giftLikes, GIFT_TAGS),
     avoid: pickAllowed(a.avoid, ['alcohol', 'sweet', 'scent']),

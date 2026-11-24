@@ -1,5 +1,5 @@
 import { GIFTS, INTIMATE, ACTIVITIES, QUESTIONS, REGIONS, generateSchedule, sanitizeSurvey, giftView, intimView, actView, questionText, placesQuery } from './logic.js';
-import { recommend } from './places.js';
+import { recommend, placeRule } from './places.js';
 import { instagramFeed, getEmbeds, IG_HANDLE } from './instagram.js';
 import { ensureCity, runVenuesLogged as runVenues, venuePicks, rateVenue, reportVenue, catOfQuery, catOfGift } from './venues.js';
 import { createInvoice, verifyPaid, invoiceStatus, invoiceOf } from './payments.js';
@@ -80,7 +80,7 @@ export async function handle(request, env) {
     if (m === 'GET' && (r = path.match(/^\/api\/events\/(\d+)$/))) return json(await eventsFor(env, member, +r[1]));
     if (m === 'POST' && (r = path.match(/^\/api\/venues\/(\d+)\/rate$/))) { const b = await readJson(request); const out = await rateVenue(env, { memberId: member.id, country: member.country, city: member.city, venueId: +r[1], stars: Number(b.stars) }); if (!out.ok) throw new HttpError(out.error === 'too_many' ? 429 : out.error === 'not_found' ? 404 : 400, out.error); return json(out); }
     if (m === 'POST' && (r = path.match(/^\/api\/venues\/(\d+)\/report$/))) { const out = await reportVenue(env, { memberId: member.id, country: member.country, city: member.city, venueId: +r[1] }); if (!out.ok) throw new HttpError(out.error === 'too_many' ? 429 : 404, out.error); return json(out); }
-    if (m === 'GET' && path === '/api/history') return json(await history(env, member));
+    if (m === 'GET' && path === '/api/history') return json(await history(env, member, url.searchParams.get('book') === '1'));
     if (m === 'POST' && path === '/api/mark') return json(await mark(request, env, member));
     throw new HttpError(404, 'not_found');
   } catch (e) {
@@ -474,13 +474,17 @@ async function authGoogle(request, env) {
 }
 
 // ---------- Історія: усі відкриті вікна, питання й відповіді (доступна й після завершення календаря) ----------
-async function history(env, mem) {
+const M_done24 = rows => rows.some(r => r.day === DAYS);
+async function history(env, mem, book = false) {
   if (!mem.schedule_json) return { ok: true, days: [], finished: false };
   const sched = JSON.parse(mem.schedule_json), partner = await partnerOf(env, mem);
   const last = Math.min(dayFor(mem, env), DAYS);
   const mine = (await env.DB.prepare('SELECT day, text, created_at FROM answers WHERE member_id = ?').bind(mem.id).all()).results;
   const theirs = (await env.DB.prepare('SELECT day, text, created_at FROM answers WHERE member_id = ?').bind(partner.id).all()).results;
   const prog = (await env.DB.prepare('SELECT day, opened, opened_at, done_gift, done_intim, done_act FROM progress WHERE member_id = ?').bind(mem.id).all()).results;
+  // Книга після завершення календаря: подарунки обох (сюрприз партнера вже не секрет, коли пройдено всі 24 вікна)
+  const reveal = book && (M_done24(mine) || localDayNumber(mem.start_date, nowOf(env), mem.tz) > DAYS);
+  const pprog = reveal ? new Map((await env.DB.prepare('SELECT day, done_gift FROM progress WHERE member_id = ?').bind(partner.id).all()).results.map(r => [r.day, r])) : null;
   const byDay = (arr, k = 'day') => new Map(arr.map(r => [r[k], r]));
   const M = byDay(mine), T = byDay(theirs), P = byDay(prog), MM = await mediaByDay(env, mem.id), TM = await mediaByDay(env, partner.id);
   const days = [];
@@ -495,6 +499,7 @@ async function history(env, mem) {
       row.opened_at = p.opened_at || null;
       row.gift = plan.gift && plan.gift[mem.slot] != null ? giftView(GIFTS[plan.gift[mem.slot]], mem.city, mem.lang, mem.country).title : null; row.intim = intimView(INTIMATE[plan.intim], mem.lang).title; row.act = actView(ACTIVITIES[plan.act], mem.city, mem.lang).title;
       row.done = { gift: !!p.done_gift, intim: !!p.done_intim, act: !!p.done_act };
+      if (reveal) { const pg = plan.gift && plan.gift[partner.slot]; row.partnerGift = pg != null ? giftView(GIFTS[pg], mem.city, mem.lang, mem.country).title : null; row.partnerGiftDone = !!(pprog.get(d) && pprog.get(d).done_gift); }
     }
     days.push(row);
   }
@@ -563,7 +568,9 @@ async function placesFor(env, mem, d, kind) {
     return { ok: true, places };
   }
   const query = placesQuery(ACTIVITIES[plan.act], mem.city, mem.lang);
-  let places = query ? await recommend(env, { query, lang: mem.lang, country: mem.country, memberId: mem.id, day: d }) : [];
-  if (!places.length) places = await venuePicks(env, { country: mem.country, city: mem.city, cat: catOfQuery(ACTIVITIES[plan.act].q), seedKey: mem.id + ':' + d, lang: mem.lang }); // власна база (OpenStreetMap + оцінки користувачів)
+  const act = ACTIVITIES[plan.act], rule = placeRule(`${act.q || ''} ${act.title}`);   // тип місця відповідає активності (музей → музеї, ліс → природа)
+  let places = query ? await recommend(env, { query, lang: mem.lang, country: mem.country, memberId: mem.id, day: d, rule }) : [];
+  if (!places.length) { places = await venuePicks(env, { country: mem.country, city: mem.city, cat: catOfQuery(act.q || act.title), seedKey: mem.id + ':' + d, lang: mem.lang }); // власна база (OpenStreetMap + оцінки користувачів)
+    if (rule && rule.nature) places = places.filter(p => !/площ|майдан|сквер|ринок|square|plaza|market/i.test(p.name)); }
   return { ok: true, places };
 }

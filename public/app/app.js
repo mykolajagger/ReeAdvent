@@ -122,7 +122,7 @@ const ACT_OPTS = { home: ['Затишок удома', 'Cosy at home'], out: ['�
 const LEVELS = [['Романтика', 'Romance', 'I', 'Ніжність, свічки, обійми, масаж і слова', 'Tenderness, candles, hugs, massage and words'], ['Гра', 'Play', 'II', 'Флірт, пікантні ігри, дотики із зав’язаними очима', 'Flirting, spicy games, blindfolded touch'], ['Смілива ніч', 'Bold night', 'III', 'Відверто, але завжди з повагою до комфорту обох', 'Explicit, but always respecting the comfort of both']];
 const ACT_BUDGETS = () => [['Безкоштовно', 'Free', 'Лише те, що не коштує грошей', 'Only things that cost nothing'], [`До ${fmtCur(300).replace('≈ ', '~')} на двох`, `Up to ${fmtCur(300).replace('≈ ', '~')} for two`, 'Кава, кіно, невеличкі розваги', 'Coffee, cinema, small fun'], [`До ${fmtCur(800).replace('≈ ', '~')}`, `Up to ${fmtCur(800).replace('≈ ', '~')}`, 'Ресторан, майстер-клас, концерт', 'Restaurant, workshop, concert'], ['Без обмежень', 'No limit', 'Термальні води, подорожі, свята', 'Thermal baths, trips, celebrations']];
 
-let ans = { name: '', budget: 300, giftLikes: [], avoid: [], level: 1, intimLikes: [], actLikes: [], actBudget: 1, car: false, gifts: 12, outDays: 3 };
+let ans = { name: '', sex: '', budget: 300, giftLikes: [], avoid: [], level: 1, intimLikes: [], actLikes: [], actBudget: 1, car: false, gifts: 12, outDays: 3 };
 let step = 0, budgetVal = null, giftCustom = false, outCustom = false;
 // Темп календаря: скільки подарунків за 24 дні й скільки днів на тиждень виходити з дому (береться середнє з двох анкет)
 const GIFT_N = [[24, 'Щодня', 'Every day', '24 подарунки', '24 gifts'], [12, 'Через день', 'Every other day', '12 подарунків', '12 gifts'], [8, 'Кожні 3 дні', 'Every 3 days', '8 подарунків', '8 gifts'], [4, 'Кожні 6 днів', 'Every 6 days', '4 подарунки', '4 gifts']];
@@ -135,7 +135,9 @@ const budgetShown = () => { const c = budgetCfg(); return c.show(budgetVal ?? c.
 
 const STEPS = [
   () => `<h2>${L('Привіт', 'Hello')}</h2><p>${L('Кілька швидких питань, щоб календар був саме для вас. Свої відповіді бачиш тільки ти: партнер їх не побачить, як і ти його.', 'A few quick questions so the calendar fits the two of you. Only you can see your answers, just as you will not see your partner’s.')}</p>
-    <div><label class="lbl" for="nm">${L('Як тебе називати?', 'What should we call you?')}</label><input id="nm" type="text" maxlength="30" value="${esc(ans.name)}" placeholder="${L('Ім’я', 'Name')}"></div>`,
+    <div><label class="lbl" for="nm">${L('Як тебе називати?', 'What should we call you?')}</label><input id="nm" type="text" maxlength="30" value="${esc(ans.name)}" placeholder="${L('Ім’я', 'Name')}"></div>
+    <div><label class="lbl">${L('Я —', 'I am')}</label><p class="muted small">${L('Щоб партнер отримував подарунки, які пасують саме тобі.', 'So that your partner gets gift ideas that suit you.')}</p><div class="opts two">${[['f', 'вона', 'she'], ['m', 'він', 'he']].map(([v, uk, en]) => `<button type="button" class="opt ${ans.sex === v ? 'on' : ''}" data-sex="${v}"><b>${L(uk, en)}</b></button>`).join('')}</div>
+    <button type="button" class="btn ghost sm ${ans.sex === 'x' ? 'on' : ''}" data-sex="x" style="margin-top:6px">${L('Не вказувати', 'Prefer not to say')}</button></div>`,
   () => `<h2>${L('Подарунки', 'Gifts')}</h2>
     <div><label class="lbl">${L('Мій бюджет на один подарунок', 'My budget for one gift')}</label><div class="big" id="bv">${budgetShown()}</div>
     ${(() => { const c = budgetCfg(); return `<input class="range" id="bg" type="range" min="${c.min}" max="${c.max}" step="${c.step}" value="${budgetVal ?? c.def}">`; })()}</div>
@@ -166,6 +168,7 @@ function showSurvey() {
   $('#back').onclick = () => { step--; showSurvey(); };
   $('#next').onclick = async () => {
     if (step === 0 && !ans.name.trim()) return toast(L('Напиши, як тебе називати', 'Tell us what to call you'));
+    if (step === 0 && !ans.sex) return toast(L('Обери «він», «вона» або «не вказувати»', 'Choose he, she or prefer not to say'));
     if (step < STEPS.length - 1) { step++; showSurvey(); scrollTo({ top: 0, behavior: 'smooth' }); return; }
     $('#next').disabled = true;
     try { st = await api('POST', '/api/survey', { answers: ans }); confetti(); route(); }
@@ -176,6 +179,7 @@ app.addEventListener('click', e => {
   const c = e.target.closest('[data-chip]'); if (c) { const arr = ans[c.dataset.chip], v = c.dataset.v, i = arr.indexOf(v); i < 0 ? arr.push(v) : arr.splice(i, 1); c.classList.toggle('on'); return; }
   const l = e.target.closest('[data-level]'); if (l) { ans.level = +l.dataset.level; document.querySelectorAll('[data-level]').forEach(x => x.classList.toggle('on', x === l)); return; }
   const a = e.target.closest('[data-ab]'); if (a) { ans.actBudget = +a.dataset.ab; document.querySelectorAll('[data-ab]').forEach(x => x.classList.toggle('on', x === a)); return; }
+  const sx = e.target.closest('[data-sex]'); if (sx) { ans.sex = sx.dataset.sex; document.querySelectorAll('[data-sex]').forEach(x => x.classList.toggle('on', x === sx)); return; }
   const k = e.target.closest('[data-car]'); if (k) { ans.car = k.dataset.car === '1'; document.querySelectorAll('[data-car]').forEach(x => x.classList.toggle('on', x === k)); return; }
   const pc = e.target.closest('[data-pace]'); if (pc) {
     const key = pc.dataset.pace, custom = pc.dataset.v === 'c';
@@ -428,7 +432,7 @@ async function openDay(day) {
     if (t.k === 'intim') { meta = `<span>${L(LEVELS[x.level - 1][0], LEVELS[x.level - 1][1])}</span>`; hint = `<div class="hint">${L('Лише для вас двох. Зупиняйтесь, якщо комусь некомфортно.', 'Just for the two of you. Stop if anyone feels uncomfortable.')}</div>`; }
     if (t.k === 'act') { if (x.out === true) tag = L('Спільна активність · виходимо', 'Shared activity · going out'); else if (x.out === false) tag = L('Спільна активність · вдома', 'Shared activity · at home'); meta = `<span>${[L('безкоштовно', 'free'), L(`до ${fmtCur(300).replace('≈ ', '~')}`, `up to ${fmtCur(300).replace('≈ ', '~')}`), L(`до ${fmtCur(800).replace('≈ ', '~')}`, `up to ${fmtCur(800).replace('≈ ', '~')}`), L('дорожче / далі', 'pricier / farther')][x.cost]}</span>${x.car ? `<span>${L('потрібна машина', 'car needed')}</span>` : ''}`; }
     return `<div class="reveal"><div class="tag">${esc(tag)}</div><h3>${esc(x.title)}</h3><p>${esc(x.desc)}</p>
-      <div class="meta">${meta}</div>${t.k === 'act' || t.k === 'gift' ? `<div class="places" id="places-box-${t.k}">${placesHtml(day, t.k)}</div>` : ''}${t.k === 'gift' && x.shops && (x.shops.online.length || x.shops.local) ? shopsHtml(x.shops) : x.link ? `<a class="link ${t.k === 'act' ? 'maplink' : ''}" href="${esc(x.link.url)}" target="_blank" rel="noopener noreferrer"><span class="ml">${esc(x.link.label)}</span> ↗</a>` : ''}${t.k === 'act' ? `<div id="events-box"></div>` : ''}${hint}
+      <div class="meta">${meta}</div>${t.k === 'act' || t.k === 'gift' ? `<div class="places" id="places-box-${t.k}">${placesHtml(day, t.k)}</div>` : ''}${t.k === 'gift' && x.shops && (x.shops.online.length || x.shops.local) ? shopsHtml(x.shops) : x.link ? `<a class="link ${t.k === 'act' ? 'maplink' : ''}" href="${esc(x.link.url)}" target="_blank" rel="noopener noreferrer"><span class="ml">${esc(x.link.label)}</span> ↗</a>` : ''}${t.k === 'act' && x.apps && x.apps.length ? `<div style="margin-top:8px"><div class="muted" style="font-size:12px;letter-spacing:.12em;text-transform:uppercase;margin:4px 0 6px">${L('Застосунки й сервіси', 'Apps & services')}</div>${x.apps.map(a => `<a href="${esc(a.url)}" target="_blank" rel="noopener noreferrer" style="display:inline-block;border:1px solid var(--line);border-radius:99px;padding:6px 12px;margin:0 6px 6px 0;font-size:13px;color:var(--ink);text-decoration:none">${esc(a.name)} ↗</a>`).join('')}</div>` : ''}${t.k === 'act' ? `<div id="events-box"></div>` : ''}${hint}
       ${starsHtml(t.k, (d.ratings || {})[t.k])}<label class="tick"><input type="checkbox" data-mark="${t.k}" ${d.done[t.k] ? 'checked' : ''}> ${L('Виконано', 'Done')}</label></div>`;
   };
   const render = () => {
