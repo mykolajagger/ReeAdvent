@@ -88,7 +88,7 @@ async function uploadMedia(g, spec, d, keys, { fetchImpl = fetch, log, sleep = m
 }
 
 /** Лише читання: усі кампанії в доступних рекламних акаунтах зі статусом, бюджетом, результатами й посиланнями оголошень. */
-export async function report(g, log, { adAccount } = {}) {
+export async function listReport(g, log, { adAccount } = {}) {
   const accounts = (await g.get('/me/adaccounts', { fields: 'id,name,currency,timezone_name,account_status,amount_spent', limit: 50 })).data || [];
   const list = adAccount ? accounts.filter(a => a.id === 'act_' + String(adAccount).replace(/^act_/, '')) : accounts;
   const act = (arr, t) => { const x = (arr || []).find(a => a.action_type === t); return x ? Number(x.value) : 0; };
@@ -117,7 +117,7 @@ export async function report(g, log, { adAccount } = {}) {
 
 export async function run({ mode = 'check', only = [], spec, token, ver, adAccount, pageId, igId, fetchImpl = fetch, log = console.log, sleep } = {}) {
   const g = graph({ token, ver, fetchImpl, log });
-  if (mode === 'report') return { report: await report(g, log, { adAccount }) };
+  if (mode === 'report') return { report: await listReport(g, log, { adAccount }) };
   const d = await discover(g, spec, { adAccount, pageId, igId });
   log(`Токен: ${d.me.name || d.me.id}`);
   log(`Рекламний акаунт: ${d.acc.id}${d.acc.name ? ` (${d.acc.name}, ${d.acc.currency}, ${d.acc.timezone_name})` : ''}`);
