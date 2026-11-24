@@ -3,6 +3,7 @@
 import { trackConfig } from './ads.js';
 import { getSettings } from './settings.js';
 import { igStatus } from './instagram.js';
+import { threadsStatus } from './threads.js';
 import { pubState, getFbPage, getPlan, effective, loadManifest, isComplete } from './igpublish.js';
 import { agentFlags } from './agent.js';
 import { funnel } from './visits.js';
@@ -72,6 +73,8 @@ export async function readiness(env, { now = Date.now(), fetchImpl = fetch } = {
   add('Соцмережі', 'ig', 'Instagram підключено', ig && ig.connected ? (ig.daysLeft != null && ig.daysLeft < 10 && !ig.neverExpires ? 'warn' : true) : false, ig && ig.connected ? `@${ig.username || 'reeadvent'}${ig.neverExpires ? ', токен безстроковий' : ig.daysLeft != null ? `, токен ще ${ig.daysLeft} дн.` : ''}` : 'Соцмережі й реклама → Підключення: Instagram і Facebook');
   let fbp = null; try { fbp = await getFbPage(env); } catch {}
   add('Соцмережі', 'fb', 'Сторінка Facebook для публікацій', fbp ? true : 'opt', fbp ? fbp.name || fbp.id : 'Необов’язково: пости підуть і на Facebook');
+  let th = null; try { th = await threadsStatus(env, now); } catch {}
+  add('Соцмережі', 'threads', 'Threads для публікацій', th && th.connected ? (th.daysLeft != null && th.daysLeft < 10 ? 'warn' : true) : 'opt', th && th.connected ? `@${th.username || 'reeadvent'}${th.daysLeft != null ? `, токен ще ${th.daysLeft} дн.` : ''}` : 'Необов’язково: пости, каруселі й Reels підуть і в Threads', 'Соцмережі й реклама → Підключення: Threads');
   try {
     const ps = await pubState(env), man = await loadManifest(fetchImpl, undefined, env), eff = effective(man, await getPlan(env));
     const left = eff.filter(p => !isComplete(ps, p, !!fbp)), soon = left.filter(p => p.at && p.at > now && p.at < now + 7 * DAY);

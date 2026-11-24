@@ -48,9 +48,35 @@ export async function discover(g, spec, { adAccount, pageId, igId } = {}) {
 
 export const linkFor = (spec, camp, key) => `${spec.site}/?utm_source=meta&utm_medium=paid&utm_campaign=${encodeURIComponent(camp)}&utm_content=${encodeURIComponent(key)}`;
 
+export const PLATFORMS = ['facebook', 'instagram', 'messenger', 'threads'];
+/** Майданчики зі специфікації (spec.placements). Threads Meta дозволяє лише разом з Instagram; позиція в Threads одна — стрічка. */
+export function placementsFor(spec) {
+  const pp = ((spec && spec.placements) || PLATFORMS).filter(x => PLATFORMS.includes(x));
+  if (pp.includes('threads') && !pp.includes('instagram')) throw new Error('Threads у рекламі можливий лише разом з Instagram: додайте "instagram" у placements');
+  return { publisher_platforms: pp, ...(pp.includes('threads') ? { threads_positions: ['threads_stream'] } : {}) };
+}
+
+/** Оновлює майданчики (publisher_platforms) у вже наявних групах оголошень «<кампанія>_all»: решта таргетингу береться з Meta як є.
+ *  check — лише перевірка (validate_only), placements — застосувати. Бюджет і статус не змінюються. */
+export async function updatePlacements(g, spec, d, camps, { apply = false, log = () => {} } = {}) {
+  const want = placementsFor(spec), out = [];
+  for (const c of camps) {
+    const ex = d.existing.find(x => x.name === c.name); if (!ex) { log(`• ${c.name}: кампанії ще немає — пропускаю`); out.push({ name: c.name, missing: true }); continue; }
+    const st = ((await g.get(`/${ex.id}/adsets`, { fields: 'id,name,targeting,effective_status', limit: 50 })).data || []).find(x => x.name === c.name + '_all');
+    if (!st) { log(`• ${c.name}: групи ${c.name}_all немає — пропускаю`); out.push({ name: c.name, missing: true }); continue; }
+    const t = { ...(st.targeting || {}) }, before = t.publisher_platforms || [];
+    if (want.publisher_platforms.every(x => before.includes(x)) && before.every(x => want.publisher_platforms.includes(x))) { log(`• ${c.name}: майданчики вже ${before.join(', ')} — нічого не змінюю`); out.push({ name: c.name, adset: st.id, unchanged: true }); continue; }
+    t.publisher_platforms = want.publisher_platforms; if (want.threads_positions) t.threads_positions = want.threads_positions; else delete t.threads_positions;
+    await g.post(`/${st.id}`, { targeting: t, ...(apply ? {} : { execution_options: ['validate_only'] }) });
+    log(`• ${c.name}: група ${st.id} (${st.effective_status}) — ${before.join(', ') || 'автоматичні'} → ${want.publisher_platforms.join(', ')} ${apply ? 'оновлено ✓' : 'перевірено ✓ (нічого не змінено)'}`);
+    out.push({ name: c.name, adset: st.id, from: before, to: want.publisher_platforms, applied: apply });
+  }
+  return out;
+}
+
 export function adsetTargeting(c, d) {
   const t = { geo_locations: { countries: c.countries }, age_min: c.age_min || 18, age_max: c.age_max || 65,
-    publisher_platforms: ['facebook', 'instagram', 'messenger'],           // без Audience Network
+    ...placementsFor(d.spec),                                              // без Audience Network; Threads — разом з Instagram
     targeting_automation: { advantage_audience: 0 } };                     // вік і країни — жорсткі межі
   const loc = (c.locales || []).map(n => d.locales[n]).filter(Boolean); if (loc.length) t.locales = loc;
   const ex = d.exclude.filter(x => x.a).map(x => ({ id: x.a.id })); if (ex.length) t.excluded_custom_audiences = ex;
@@ -118,7 +144,7 @@ export async function listReport(g, log, { adAccount } = {}) {
 export async function run({ mode = 'check', only = [], spec, token, ver, adAccount, pageId, igId, fetchImpl = fetch, log = console.log, sleep } = {}) {
   const g = graph({ token, ver, fetchImpl, log });
   if (mode === 'report') return { report: await listReport(g, log, { adAccount }) };
-  const d = await discover(g, spec, { adAccount, pageId, igId });
+  const d = await discover(g, spec, { adAccount, pageId, igId }); d.spec = spec;
   log(`Токен: ${d.me.name || d.me.id}`);
   log(`Рекламний акаунт: ${d.acc.id}${d.acc.name ? ` (${d.acc.name}, ${d.acc.currency}, ${d.acc.timezone_name})` : ''}`);
   if (d.acc.currency && d.acc.currency !== 'USD') log(`⚠ Валюта акаунта ${d.acc.currency}: бюджети в специфікації в доларах, перевірте суми.`);
@@ -126,6 +152,7 @@ export async function run({ mode = 'check', only = [], spec, token, ver, adAccou
   for (const x of d.exclude) log(`Виключити аудиторію «${x.name}»: ${x.a ? x.a.id : 'не знайдено (створіть її в Ads Manager → Аудиторії), поки без виключення'}`);
   for (const [n, k] of Object.entries(d.locales)) log(`Мова «${n}»: key ${k}`);
   const camps = spec.campaigns.filter(c => !only.length || only.includes(c.name)), report = [], media = { video: {}, image: {} };   // медіа вантажимо один раз на запуск
+  if (mode === 'placements' || mode === 'placements-check') return { discovered: d, report: await updatePlacements(g, spec, d, camps, { apply: mode === 'placements', log }) };
   for (const c of camps) {
     const ex = d.existing.find(x => x.name === c.name);
     const campParams = { name: c.name, objective: 'OUTCOME_TRAFFIC', status: 'PAUSED', special_ad_categories: [], buying_type: 'AUCTION', daily_budget: Math.round(c.daily_budget_usd * 100), bid_strategy: 'LOWEST_COST_WITHOUT_CAP' };

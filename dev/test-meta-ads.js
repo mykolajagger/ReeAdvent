@@ -1,7 +1,7 @@
 // Meta Ads через API: пошук ресурсів, режим перевірки (validate_only), створення на паузі, пропуск наявних. Імітація Graph API.
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
-import { run, adsetTargeting, linkFor } from '../tools/meta-ads.mjs';
+import { run, adsetTargeting, linkFor, placementsFor } from '../tools/meta-ads.mjs';
 const spec = JSON.parse(fs.readFileSync(new URL('../marketing/ads/meta-campaigns.json', import.meta.url), 'utf8'));
 const calls = []; let n = 100, videoPolls = 0, failCreatives = false; const existing = [], adsets = [], adsList = [];
 const J = (o, s = 200) => new Response(JSON.stringify(o), { status: s, headers: { 'content-type': 'application/json' } });
@@ -22,9 +22,10 @@ const fake = async (url, init = {}) => {
   if (p === '/v1') return J({ status: { video_status: ++videoPolls >= 2 ? 'ready' : 'processing' } });
   if (p === '/act_42/adimages') return J({ images: { bytes: { hash: 'h' + n++ } } });
   const seg = p.split('/');
-  if (seg.length === 3 && seg[2] === 'adsets' && seg[1].startsWith('c')) return J({ data: adsets.filter(a => a.campaign === seg[1]).map(a => ({ id: a.id, name: a.name })) });
+  if (seg.length === 3 && seg[2] === 'adsets' && seg[1].startsWith('c')) return J({ data: adsets.filter(a => a.campaign === seg[1]).map(a => ({ id: a.id, name: a.name, targeting: a.targeting, effective_status: 'ACTIVE' })) });
+  if (seg.length === 2 && seg[1].startsWith('x') && (init.method || 'GET') === 'POST') { const a = adsets.find(x => x.id === seg[1]); if (!JSON.parse(body.execution_options || '[]').includes('validate_only')) a.targeting = JSON.parse(body.targeting); return J({ success: true }); }
   if (seg.length === 3 && seg[2] === 'ads' && seg[1].startsWith('x')) return J({ data: adsList.filter(a => a.adset === seg[1]).map(a => ({ id: a.id, name: a.name })) });
-  if (p === '/act_42/adsets') { const id = 'x' + n++; adsets.push({ id, name: body.name, campaign: body.campaign_id }); return J({ id }); }
+  if (p === '/act_42/adsets') { const id = 'x' + n++; adsets.push({ id, name: body.name, campaign: body.campaign_id, targeting: JSON.parse(body.targeting) }); return J({ id }); }
   if (p === '/act_42/adcreatives') { if (failCreatives) return J({ error: { message: 'dev mode', code: 100, error_subcode: 1885183 } }, 400); return J({ id: 'x' + n++ }); }
   if (p === '/act_42/ads') { const id = 'x' + n++; adsList.push({ id, name: body.name, adset: body.adset_id }); return J({ id }); }
   return J({ error: { message: 'unexpected ' + p } }, 400);
@@ -64,4 +65,14 @@ failCreatives = false; calls.length = 0;
 r = await run({ mode: 'create', spec, token: 'TKN', fetchImpl: fake, log, sleep: async () => {} });
 assert.equal(existing.length, 2, 'ua_cold не дублюється, eu_ua створено'); assert.equal(adsets.length, 2, 'група ua_cold не дублюється'); assert.equal(adsList.length, 6);
 assert.equal(r.report[0].ads.length, 3); assert.equal(calls.filter(c => c.m === 'POST' && c.p === '/act_42/campaigns').length, 1);
+// Threads: нові групи одразу з Threads; наявні — оновлення майданчиків, решта таргетингу не чіпається
+assert.deepEqual(t0.publisher_platforms, ['facebook', 'instagram', 'messenger', 'threads']); assert.deepEqual(t0.threads_positions, ['threads_stream']);
+for (const a of adsets) { a.targeting.publisher_platforms = ['facebook', 'instagram', 'messenger']; delete a.targeting.threads_positions; a.targeting.age_min = 25; }
+calls.length = 0; r = await run({ mode: 'placements-check', spec, token: 'TKN', fetchImpl: fake, log });
+assert.ok(calls.filter(c => c.m === 'POST').every(c => JSON.parse(c.body.execution_options).includes('validate_only'))); assert.ok(adsets.every(a => !a.targeting.publisher_platforms.includes('threads')), 'check нічого не змінює');
+r = await run({ mode: 'placements', spec, token: 'TKN', fetchImpl: fake, log });
+assert.equal(r.report.length, 2); assert.ok(adsets.every(a => a.targeting.publisher_platforms.includes('threads') && a.targeting.age_min === 25 && a.targeting.threads_positions[0] === 'threads_stream'));
+calls.length = 0; r = await run({ mode: 'placements', spec, token: 'TKN', fetchImpl: fake, log }); assert.ok(r.report.every(x => x.unchanged)); assert.equal(calls.filter(c => c.m === 'POST').length, 0);
+assert.throws(() => placementsFor({ placements: ['facebook', 'threads'] }), /Instagram/);
+assert.deepEqual(placementsFor({ placements: ['facebook', 'instagram'] }), { publisher_platforms: ['facebook', 'instagram'] });
 console.log('OK meta-ads');
