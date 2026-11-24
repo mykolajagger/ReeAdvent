@@ -22,5 +22,6 @@ EMAIL_FROM = "ReeAdvent <hello@mail.reeadvent.fun>"
 EMAIL_SUPPORT_FROM = "ReeAdvent Підтримка <support@mail.reeadvent.fun>"   # відправник відповідей із адмінки
 SUPPORT_EMAIL = "support@reeadvent.fun"                                          # куди клієнти пишуть у відповідь (Reply-To)
 GOOGLE_CLIENT_ID = "146173246169-pt4hlnm4ff36h0vltfkuttmkbg8v5c3u.apps.googleusercontent.com"   # вхід клієнтів через Google (публічний ідентифікатор)
-TURNSTILE_SITE_KEY = "0x4AAAAAAGKl5K-FMADGWk21"   # публічний ключ; секрет TURNSTILE_SECRET додається в дашборді
+TURNSTILE_SITE_KEY = "0x4AAAAAAGKl5K-FMADGWk21"
+META_PIXEL_ID = "2111183512849298"   # піксель Meta (публічний ID); вмикається лише після згоди на cookies; в адмінці можна змінити чи вимкнути   # публічний ключ; секрет TURNSTILE_SECRET додається в дашборді
 # Секрети (НЕ тут, а в дашборді Cloudflare): RESEND_API_KEY, ADMIN_KEY, MONOBANK_TOKEN, TURNSTILE_SECRET, CRON_SECRET, ADMIN_EMAILS (пошти адміністраторів через кому; тип Secret)

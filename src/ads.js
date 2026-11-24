@@ -6,7 +6,10 @@ export const CHANNELS = ['meta', 'google', 'influencer', 'tiktok', 'telegram', '
 const RULES = { meta: /^\d{8,20}$/, ga4: /^G-[A-Z0-9]{6,14}$/, gads: /^AW-\d{6,14}$/, gads_label: /^[A-Za-z0-9_-]{6,40}$/ };
 
 export async function trackConfig(env) {
-  const out = {}; for (const k of Object.keys(RULES)) out[k] = (await getSetting(env, 'track_' + k)) || '';
+  // Значення з адмінки; якщо його ще ніколи не зберігали, береться з конфігурації сайту (wrangler.toml), наприклад META_PIXEL_ID.
+  // Порожнє поле, збережене в адмінці, вимикає інструмент.
+  const DEF = { meta: env.META_PIXEL_ID, ga4: env.GA4_ID, gads: env.GADS_ID, gads_label: env.GADS_LABEL };
+  const out = {}; for (const k of Object.keys(RULES)) { const v = await getSetting(env, 'track_' + k); out[k] = v == null ? (RULES[k].test(String(DEF[k] || '')) ? String(DEF[k]) : '') : v; }
   out.budget = Number(await getSetting(env, 'ads_budget_usd')) || 500; return out;
 }
 /** Публічна частина: лише ID, що й так видно в коді сторінки. */
