@@ -7,10 +7,10 @@ on:
   workflow_dispatch:
     inputs:
       mode:
-        description: 'check — лише перевірити; create — створити на паузі'
+        description: 'check — перевірити; create — створити на паузі; report — показати всі кампанії й результати (лише читання)'
         required: true
         type: choice
-        options: [check, create]
+        options: [check, create, report]
         default: check
       campaigns:
         description: 'Які кампанії (через кому; порожньо — усі)'

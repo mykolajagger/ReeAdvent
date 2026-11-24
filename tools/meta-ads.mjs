@@ -87,8 +87,37 @@ async function uploadMedia(g, spec, d, keys, { fetchImpl = fetch, log, sleep = m
   return media;
 }
 
+/** Лише читання: усі кампанії в доступних рекламних акаунтах зі статусом, бюджетом, результатами й посиланнями оголошень. */
+export async function report(g, log, { adAccount } = {}) {
+  const accounts = (await g.get('/me/adaccounts', { fields: 'id,name,currency,timezone_name,account_status,amount_spent', limit: 50 })).data || [];
+  const list = adAccount ? accounts.filter(a => a.id === 'act_' + String(adAccount).replace(/^act_/, '')) : accounts;
+  const act = (arr, t) => { const x = (arr || []).find(a => a.action_type === t); return x ? Number(x.value) : 0; };
+  const out = [];
+  for (const a of list) {
+    log(`Рекламний акаунт ${a.id} (${a.name || ''}, ${a.currency}, ${a.timezone_name})`);
+    const camps = (await g.get(`/${a.id}/campaigns`, { fields: 'id,name,objective,status,effective_status,daily_budget,lifetime_budget,created_time', limit: 100 })).data || [];
+    if (!camps.length) log('  кампаній немає');
+    for (const c of camps) {
+      let ins = {}; try { ins = ((await g.get(`/${c.id}/insights`, { fields: 'spend,impressions,reach,inline_link_clicks,ctr,cpc,actions', date_preset: 'maximum' })).data || [])[0] || {}; } catch {}
+      const budget = c.daily_budget ? `$${(c.daily_budget / 100).toFixed(2)}/день` : c.lifetime_budget ? `$${(c.lifetime_budget / 100).toFixed(2)} загалом` : 'бюджет на рівні груп';
+      log(`• ${c.name} — ${c.effective_status} (${c.objective}), ${budget}, створено ${String(c.created_time || '').slice(0, 16).replace('T', ' ')}`);
+      log(`    витрачено $${Number(ins.spend || 0).toFixed(2)}, покази ${ins.impressions || 0}, охоплення ${ins.reach || 0}, кліки за посиланням ${ins.inline_link_clicks || 0}, перегляди сторінки ${act(ins.actions, 'landing_page_view')}, CTR ${ins.ctr ? Number(ins.ctr).toFixed(2) + '%' : '—'}, CPC ${ins.cpc ? '$' + Number(ins.cpc).toFixed(2) : '—'}`);
+      const ads = (await g.get(`/${c.id}/ads`, { fields: 'id,name,effective_status,creative{id,object_story_spec,effective_instagram_media_id,link_url,url_tags,call_to_action_type},ad_review_feedback', limit: 50 })).data || [];
+      for (const ad of ads) {
+        const s = (ad.creative && ad.creative.object_story_spec) || {}, ld = s.link_data || {}, vd = s.video_data || {};
+        const link = (ad.creative && ad.creative.link_url) || ld.link || (vd.call_to_action && vd.call_to_action.value && vd.call_to_action.value.link) || (ld.call_to_action && ld.call_to_action.value && ld.call_to_action.value.link) || '';
+        const fb = ad.ad_review_feedback && ad.ad_review_feedback.global ? ' ⚠ ' + Object.values(ad.ad_review_feedback.global).join('; ') : '';
+        log(`    – ${ad.name}: ${ad.effective_status}${link ? ' → ' + link : ''}${ad.creative && ad.creative.url_tags ? ' + ' + ad.creative.url_tags : ''}${ad.creative && ad.creative.effective_instagram_media_id ? ' (пост Instagram)' : ''}${fb}`);
+      }
+      out.push({ account: a.id, ...c, insights: ins, ads });
+    }
+  }
+  return out;
+}
+
 export async function run({ mode = 'check', only = [], spec, token, ver, adAccount, pageId, igId, fetchImpl = fetch, log = console.log, sleep } = {}) {
   const g = graph({ token, ver, fetchImpl, log });
+  if (mode === 'report') return { report: await report(g, log, { adAccount }) };
   const d = await discover(g, spec, { adAccount, pageId, igId });
   log(`Токен: ${d.me.name || d.me.id}`);
   log(`Рекламний акаунт: ${d.acc.id}${d.acc.name ? ` (${d.acc.name}, ${d.acc.currency}, ${d.acc.timezone_name})` : ''}`);
