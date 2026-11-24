@@ -76,6 +76,7 @@ export async function readiness(env, { now = Date.now(), fetchImpl = fetch } = {
     const ps = await pubState(env), man = await loadManifest(fetchImpl, undefined, env), eff = effective(man, await getPlan(env));
     const left = eff.filter(p => !isComplete(ps, p, !!fbp)), soon = left.filter(p => p.at && p.at > now && p.at < now + 7 * DAY);
     add('Соцмережі', 'auto', 'Автопублікація увімкнена', ps.auto ? true : 'warn', ps.auto ? 'Пости виходять самі за календарем' : 'Увімкніть у «Публікації Instagram і Facebook»');
+    if (!ps.auto && ig && ig.connected) C[C.length - 1].action = 'auto_on';
     add('Соцмережі', 'queue', 'Пости заплановано на тиждень', soon.length >= 5 ? true : soon.length ? 'warn' : false, `Заплановано на 7 днів: ${soon.length}, у черзі без дати: ${left.filter(p => !p.at).length}`, 'Публікації Instagram і Facebook');
     if (ps.err) add('Соцмережі', 'puberr', 'Остання публікація без помилки', 'warn', String(ps.err.message || ps.err).slice(0, 160));
   } catch { add('Соцмережі', 'queue', 'План публікацій', 'warn', 'Не вдалося прочитати план (маніфест недоступний)'); }

@@ -374,10 +374,15 @@ function renderIgPlan(pb, ig) {
     const d0 = from + (wk * 7 + k) * DAY, d1 = d0 + DAY, dd = new Date(d0), items = dated.filter(x => x.at >= d0 && x.at < d1).sort((a, b) => a.at - b.at);
     cal += `<div class="pday ${d0 === today ? 'today' : ''} ${d0 < today ? 'past' : ''}" data-day="${d0}"><div class="pdh">${['пн', 'вт', 'ср', 'чт', 'пт', 'сб', 'нд'][k]} <b>${dd.getDate()}</b>${dd.getDate() === 1 || (wk === 0 && k === 0) ? ' ' + dd.toLocaleDateString('uk-UA', { month: 'short' }) : ''}</div>${items.map(chip).join('')}</div>`;
   }
-  host.innerHTML = `<h2>Публікації Instagram і Facebook</h2>
+  const conn = !!(ig && ig.connected), nextP = P.filter(x => !x.complete && x.at && x.at > now).sort((a, b) => a.at - b.at)[0];
+  const nextTxt = nextP ? `Наступна: ${esc(igKind(nextP))} «${esc(igTitle(nextP))}», ${new Date(nextP.at).toLocaleString('uk-UA', { weekday: 'short', day: 'numeric', month: 'long', hour: '2-digit', minute: '2-digit' })}.` : 'Запланованих публікацій немає: розставте їх у календарі нижче.';
+  const autoBar = pb.auto
+    ? `<div class="autobar" style="display:flex;gap:12px;align-items:center;flex-wrap:wrap;border:1px solid #58c58f66;background:#58c58f12;border-radius:12px;padding:12px 14px;margin:8px 0 12px"><b style="color:var(--ok)">● Автопублікація ввімкнена</b><span class="muted" style="flex:1;min-width:220px">Пости, Reels і сторіс виходять самі, коли настає їхній час (перевірка щогодини). ${nextTxt}</span><button type="button" class="btn ghost sm" id="igautooff">Вимкнути</button></div>`
+    : `<div class="autobar" style="display:flex;gap:12px;align-items:center;flex-wrap:wrap;border:1px solid #e3b04b77;background:#e3b04b12;border-radius:12px;padding:12px 14px;margin:8px 0 12px"><b style="color:var(--warn)">○ Автопублікація вимкнена</b><span class="muted" style="flex:1;min-width:220px">${conn ? 'Заплановані публікації самі не вийдуть: їх можна публікувати лише кнопкою «Опублікувати зараз».' : 'Щоб увімкнути, спершу підключіть Instagram у картці «Підключення: Instagram і Facebook» нижче.'}</span>${conn ? '<button type="button" class="btn" id="igautoon">Увімкнути автопублікацію</button>' : '<button type="button" class="btn ghost" id="igconngo">До підключення Instagram</button>'}</div>`;
+  host.innerHTML = `<h2>Публікації Instagram і Facebook</h2>${autoBar}
   <div class="muted">Календар публікацій (ваш місцевий час). <b>Перетягніть</b> пост на інший пост, щоб поміняти їх місцями разом із часом, або на порожній день, щоб перенести на цей день (час доби зберігається). На телефоні: оберіть пост і натисніть «Перемістити». Червоні ще не вийшли, хоча час минув; «⚠» означає повтор сцени чи формату поспіль.</div>
   <div class="row" style="gap:8px;flex-wrap:wrap">${tabBtn('post', 'Пости й Reels', nPost)}${nStory ? tabBtn('story', 'Сторіс', nStory) : ''}
-   <label class="muted" style="display:flex;gap:6px;align-items:center;margin-left:auto"><input type="checkbox" id="igauto" ${pb.auto ? 'checked' : ''}> Автопублікація ${ig && ig.connected ? '' : '(спершу підключіть Instagram)'}</label></div>
+</div>
   ${igMove ? `<div class="pmove">Переміщення «${esc(igTitle(list.find(x => x.id === igMove) || {}))}»: торкніться поста, з яким поміняти, або дня, куди перенести. <button type="button" class="btn ghost sm" id="igmovex">Скасувати</button></div>` : ''}
   ${pb.err ? `<div class="muted" style="color:#eb5757">Остання помилка (${esc(fdate(pb.err.at))}, ${esc(pb.err.id)}): ${esc(pb.err.error)}</div>` : ''}
   <div class="pcal"><div class="pwk">${['Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб', 'Нд'].map(x => `<div>${x}</div>`).join('')}</div><div class="pgrid">${cal}</div></div>
@@ -437,7 +442,10 @@ function renderIgPlan(pb, ig) {
   if ($('#igclear')) $('#igclear').onclick = () => post('plan', { id: p.id, at: null }, 'Дату знято');
   if ($('#igpub')) $('#igpub').onclick = async () => { if (!confirm(story ? 'Опублікувати цю сторіс зараз?' : 'Опублікувати цей пост зараз?')) return; const b = $('#igpub'); b.disabled = true; b.textContent = isVid(p) ? 'Публікуємо… (до 3 хв)' : 'Публікуємо…'; try { const s0 = await api('POST', '/api/admin/instagram/plan', { id: p.id, ...cap(), ...tg() }); Object.assign(pb, s0); const x = await api('POST', '/api/admin/instagram/publish', { id: p.id }); toast(x.ok ? 'Опубліковано ✅' : 'Не вийшло: ' + x.error); Object.assign(pb, x); } catch (e) { toast(errText(e)); } renderIgPlan(pb, ig); };
   $('#igspread').onclick = () => { const v = $('#igsp0').value; if (!v) return toast('Оберіть дату й час першої публікації'); post('plan', { spread: true, format: igTab, start: new Date(v).getTime(), everyDays: +$('#igspn').value || 1 }, 'Час призначено'); };
-  $('#igauto').onchange = async () => { try { const x = await api('POST', '/api/admin/instagram/auto', { on: $('#igauto').checked }); Object.assign(pb, x); toast($('#igauto').checked ? 'Автопублікацію ввімкнено' : 'Автопублікацію вимкнено'); } catch (e) { toast(errText(e)); } };
+  const setAuto = async on => { try { const x = await api('POST', '/api/admin/instagram/auto', { on }); apply(x); toast(on ? 'Автопублікацію ввімкнено' : 'Автопублікацію вимкнено'); } catch (e) { toast(errText(e)); } };
+  if ($('#igautoon')) $('#igautoon').onclick = () => setAuto(true);
+  if ($('#igautooff')) $('#igautooff').onclick = () => { if (confirm('Вимкнути автопублікацію? Заплановані пости перестануть виходити самі.')) setAuto(false); };
+  if ($('#igconngo')) $('#igconngo').onclick = () => { const c = $('#igconn'); if (c) c.scrollIntoView({ behavior: 'smooth', block: 'start' }); };
 }
 /* ---------- Реклама: ID трекінгу, UTM-посилання, витрати, результати за джерелами ---------- */
 const uah = kop => (kop / 100).toLocaleString('uk-UA', { maximumFractionDigits: 0 }) + ' ₴', usd = c => '$' + (c / 100).toLocaleString('en-US', { maximumFractionDigits: 2 });
@@ -527,7 +535,7 @@ async function social() {
   $('#main').innerHTML = `<div class="top"><div><h2>Маркетинг</h2><h1>Соцмережі й реклама</h1></div></div>
   <div class="card sec" id="agentcard" style="max-width:1000px"><h2>Агент росту</h2><div class="muted">Завантаження…</div></div>
   <div class="card sec" id="propcard" style="max-width:1000px;margin-top:14px"><h2>Пропозиції агента</h2><div class="muted">Завантаження…</div></div>
-  <div class="card sec" style="max-width:620px;margin-top:14px"><h2>Підключення: Instagram і Facebook</h2>
+  <div class="card sec" id="igconn" style="max-width:620px;margin-top:14px"><h2>Підключення: Instagram і Facebook</h2>
     ${ig.lastError ? `<div class="muted" style="color:#eb5757">Остання помилка Instagram (${esc(fdate(ig.lastError.at))}): ${esc(ig.lastError.error)}</div>` : ''}
     <div class="muted">${ig.connected ? `Підключено${ig.username ? ': <b>@' + esc(ig.username) + '</b>' : ''}${ig.viaSecret ? ' (через секрет середовища)' : ''}. ${ig.neverExpires ? 'Токен системного користувача: без терміну дії.' : ig.daysLeft != null ? `Токен діє ще ${ig.daysLeft} дн. і продовжується автоматично раз на тиждень.` : ''} Останні пости показуються на головній.` : 'Не підключено: на головній показується лише іконка й посилання на @reeadvent. Щоб показувати стрічку постів, додайте токен: або токен системного користувача (разом із числовим ID акаунта Instagram), або токен Instagram Login (ID не потрібен).'}</div>
     <label class="f">Токен доступу Instagram<input id="igt" type="password" autocomplete="off" placeholder="Вставте токен і натисніть «Підключити»"></label>
