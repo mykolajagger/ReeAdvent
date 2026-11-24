@@ -18,7 +18,7 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,400;0,500;0,600;1,400;1,500&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="/assets/base.css?v=11">
-<link rel="stylesheet" href="/assets/landing.css?v=13">
+<link rel="stylesheet" href="/assets/landing.css?v=14">
 </head>
 <body><!-- Google Tag Manager (noscript) --><noscript><iframe src="https://www.googletagmanager.com/ns.html?id=GTM-TTT3ZSPD" height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript><!-- End Google Tag Manager (noscript) -->
 <canvas id="fx" aria-hidden="true"></canvas>
@@ -26,36 +26,104 @@
   <nav class="nav"><a class="logo" href="/"><img class="logo-img" src="/assets/logo.png" alt="ReeAdvent" width="120" height="44"></a>
     <div class="navr"><div class="langsw" role="group" aria-label="Language"><button type="button" data-lang="uk">UA</button><button type="button" data-lang="en">EN</button></div><a class="btn ghost" href="/app/" data-i18n="nav_login">Увійти</a></div></nav>
 
-  <section class="lhero">
-    <div class="eyebrow" data-i18n="hero_eyebrow">Адвент-календар для двох</div>
-    <h1 data-i18n="hero_h1">24 дні <em>лише</em> для вас</h1>
-    <p data-i18n="hero_p">Щоранку нове вікно: питання одне одному, подарунок, романтична пригода і спільна активність у вашому місті. Підібрано під ваші вподобання, а що чекає — ви не знаєте.</p>
-    <div class="cta"><a class="btn" href="#order" data-i18n="cta_order">Замовити календар</a><a class="btn ghost" href="#how" data-i18n="cta_how">Як це працює</a></div>
+  <section class="lhero hero2">
+    <div class="hcopy">
+      <div class="eyebrow" data-i18n="hero_eyebrow">Адвент-календар для двох</div>
+      <h1 data-i18n="hero_h1">24 дні <em>лише</em> для вас</h1>
+      <p data-i18n="hero_p">Щоранку нове вікно: питання одне одному, подарунок, романтична пригода і спільна активність у вашому місті. Підібрано під ваші вподобання, а що чекає — ви не знаєте.</p>
+      <div class="cta"><a class="btn" href="#order" data-i18n="cta_order">Замовити календар</a><a class="btn ghost" href="#day" data-i18n="cta_how2">Як виглядає день</a></div>
+      <ul class="trust">
+        <li><b>24</b> <span data-i18n="tr1">вікна</span></li>
+        <li><b>4</b> <span data-i18n="tr2">сюрпризи у вікні</span></li>
+        <li><b>300+</b> <span data-i18n="tr3">ідей кожного виду</span></li>
+        <li><b>✦</b> <span data-i18n="tr4">будь-яке місто й дата старту</span></li>
+      </ul>
+    </div>
+    <div class="phone" aria-hidden="true"><div class="ph-scr">
+      <div class="ph-top"><span data-i18n="ph_win">Вікно 7</span><span class="ph-dots"><i></i><i></i><i></i></span></div>
+      <div class="ph-prog"><i style="width:29%"></i></div>
+      <div class="ph-card"><small data-i18n="ph_q">Питання дня</small><p data-i18n="ph_qt">Який наш спільний день варто прожити ще раз?</p><div class="ph-ans"><b data-i18n="ph_qn">Андрій:</b> <span data-i18n="ph_qa">Той вечір у Львові, коли раптом пішов сніг ❄</span></div></div>
+      <div class="ph-card"><small data-i18n="ph_g">Подарунок для неї</small><p data-i18n="ph_gt">Плед із рукавами та какао з маршмелоу</p><span class="ph-tag" data-i18n="ph_gs">до 800 ₴ · 3 магазини · у вашому місті</span></div>
+      <div class="ph-card"><small data-i18n="ph_a">Пригода для двох</small><p data-i18n="ph_at">Кіновечір у наметі з ковдр</p></div>
+      <div class="ph-card"><small data-i18n="ph_c">Спільна активність</small><p data-i18n="ph_ct">Ковзанка під відкритим небом</p><span class="ph-tag">★ 4.8 · <span data-i18n="ph_cs">нове місце</span></span></div>
+    </div></div>
   </section>
 
   <section class="sec" id="how">
-    <span class="eyebrow" data-i18n="how_eyebrow">Як це працює</span><h2 data-i18n="how_h2">Три кроки до сюрпризів</h2>
-    <div class="steps">
+    <span class="eyebrow" data-i18n="how_eyebrow">Як це працює</span><h2 data-i18n="how_h2">Від замовлення до вашої книги</h2>
+    <div class="steps steps4">
       <div class="step-c"><div class="n">1</div><h3 data-i18n="s1h">Замовляєте</h3><p data-i18n="s1p">Вказуєте імена, пошти обох і місто. Оплачуєте — і вже за кілька хвилин вам обом приходить лист.</p></div>
       <div class="step-c"><div class="n">2</div><h3 data-i18n="s2h">Заповнюєте анкети</h3><p data-i18n="s2p">Кожен окремо: бюджет і кількість подарунків, смаки, скільки разів на тиждень виходити з дому, рівень пікантності. Ваші відповіді не бачить навіть партнер.</p></div>
       <div class="step-c"><div class="n">3</div><h3 data-i18n="s3h">Відкриваєте щоранку</h3><p data-i18n="s3p">Кожного дня о 07:00 нове вікно. Спершу відповідаєте на питання для партнера (можна й фото чи відео), потім відкриваєте пригоду, активність і, в обрані дні, подарунок.</p></div>
+      <div class="step-c"><div class="n">4</div><h3 data-i18n="s4h">Зберігаєте спогади</h3><p data-i18n="s4p">Після 24-го вікна — фінал і ваша книга PDF: усі питання, відповіді обох, фото й подарунки.</p></div>
     </div>
   </section>
 
   <section class="sec">
     <span class="eyebrow" data-i18n="in_eyebrow">Що всередині</span><h2 data-i18n="in_h2">Спробуйте відкрити</h2>
     <div class="demo" id="demo"></div>
-    <div class="cats">
-      <div class="step-c"><svg class="ico sm" viewBox="0 0 48 48"><path d="M8 10h32a2 2 0 0 1 2 2v20a2 2 0 0 1-2 2H22l-9 8v-8H8a2 2 0 0 1-2-2V12a2 2 0 0 1 2-2z"/><path d="M17 19h14M17 25h8"/></svg><h3 data-i18n="c1h">Питання дня</h3><p data-i18n="c1p">«За що ти мене любиш?», «Наш найсмішніший спогад?» Кожен відповідає словами, фото чи коротким відео, і ви бачите відповіді одне одного.</p></div>
-      <div class="step-c"><svg class="ico sm" viewBox="0 0 48 48"><rect x="7" y="18" width="34" height="23" rx="2"/><rect x="5" y="12" width="38" height="6" rx="1"/><path d="M24 12v29M24 12c-3-7-11-7-11-3s6 3 11 3zm0 0c3-7 11-7 11-3s-6 3-11 3z"/></svg><h3 data-i18n="c2h">Подарунок</h3><p data-i18n="c2p">Ідея до вашого бюджету з посиланням, де шукати. Щодня, через день чи раз на тиждень: скільки подарунків, вирішуєте ви.</p></div>
-      <div class="step-c"><svg class="ico sm" viewBox="0 0 48 48"><path d="M24 40S7 29 7 18a9 9 0 0 1 17-4 9 9 0 0 1 17 4c0 11-17 22-17 22z"/></svg><h3 data-i18n="c3h">Пригода для двох</h3><p data-i18n="c3p">Від ніжних вечорів при свічках до сміливих ігор. Рівень задаєте ви: береться комфортний для обох.</p></div>
-      <div class="step-c"><svg class="ico sm" viewBox="0 0 48 48"><path d="M24 5l3.5 10.5H38l-8.5 6.2 3.3 10.3L24 25.8l-8.8 6.2 3.3-10.3L10 15.5h10.5z"/><path d="M24 33v10"/></svg><h3 data-i18n="c4h">Спільна активність</h3><p data-i18n="c4p">У дні виходу: кав’ярні, прогулянки, майстер-класи з пошуком у вашому місті. В інші вечори щось цікаве разом удома.</p></div>
+  </section>
+
+  <section class="sec" id="day">
+    <span class="eyebrow" data-i18n="dy_eyebrow">Один день</span><h2 data-i18n="dy_h2">Як минає день із ReeAdvent</h2>
+    <div class="day">
+      <figure class="day-img"><img src="/assets/l/dinner.webp" alt="" width="720" height="540" loading="lazy"></figure>
+      <ol class="tl">
+        <li><time>07:00</time><h3 data-i18n="t1h">Відкривається вікно</h3><p data-i18n="t1p">Нове вікно чекає на вас о 07:00 за вашим часом. Забули зайти — нагадаємо листом.</p></li>
+        <li><time data-i18n="t2t">Зранку</time><h3 data-i18n="t2h">Питання дня</h3><p data-i18n="t2p">Спершу відповідаєте самі: словами, фото чи коротким відео. Лише тоді відкривається відповідь партнера і решта вікна.</p></li>
+        <li><time data-i18n="t3t">Вдень</time><h3 data-i18n="t3h">Подарунок</h3><p data-i18n="t3p">В обрані дні: ідея під ваш бюджет і смаки того, кому даруєте, з 2–3 інтернет-магазинами й місцем у вашому місті. Бачите тільки ви.</p></li>
+        <li><time data-i18n="t4t">Ввечері</time><h3 data-i18n="t4h">Пригода й активність</h3><p data-i18n="t4p">У дні виходу — заклади з найвищим рейтингом, нові місця й події з афіші міста. В інші вечори — щось цікаве разом удома.</p></li>
+        <li><time data-i18n="t5t">Перед сном</time><h3 data-i18n="t5h">Завершуєте день</h3><p data-i18n="t5p">Позначаєте, що встигли, і ставите зірочки. Улюблене частіше потраплятиме в нові календарі.</p></li>
+      </ol>
+    </div>
+  </section>
+
+  <section class="sec">
+    <div class="duo">
+      <figure class="duo-img"><img src="/assets/l/couple.webp" alt="" width="720" height="508" loading="lazy"></figure>
+      <div class="duo-copy">
+        <span class="eyebrow" data-i18n="du_eyebrow">Він і Вона</span><h2 data-i18n="du_h2">Кожен відкриває вікно для іншого</h2>
+        <p data-i18n="du_p">Один календар на двох, але в кожного свій бік. Він бачить подарунок для неї, вона — для нього. Питання дня ви ставите одне одному, а пригода й активність — спільні.</p>
+        <div class="duo-two">
+          <div><b data-i18n="du_her">Для неї</b><span data-i18n="du_herp">Подарунки від нього підібрані під її смаки</span></div>
+          <div><b data-i18n="du_him">Для нього</b><span data-i18n="du_himp">А її подарунки — під його</span></div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="sec">
+    <span class="eyebrow" data-i18n="pz_eyebrow">Персонально</span><h2 data-i18n="pz_h2">Підібрано під вас двох</h2>
+    <p class="lead" data-i18n="pz_p">Після оплати кожен заповнює коротку анкету окремо. Партнер ваших відповідей не бачить.</p>
+    <ul class="chips">
+      <li data-i18n="pz1">Бюджет подарунків</li><li data-i18n="pz2">Скільки подарунків: 24, 12, 8 або 4</li><li data-i18n="pz3">Смаки й захоплення</li><li data-i18n="pz4">Скільки вечорів на тиждень виходити</li><li data-i18n="pz5">Романтика, Гра чи Смілива ніч</li><li data-i18n="pz6">Ваше місто</li>
+    </ul>
+    <div class="cards3">
+      <div class="step-c"><h3 data-i18n="pr1h">Без повторів</h3><p data-i18n="pr1p">Схожі активності не йдуть одна за одною, теми чергуються. Двох пікніків поспіль не буде.</p></div>
+      <div class="step-c"><h3 data-i18n="pr2h">Місця за змістом</h3><p data-i18n="pr2p">Якщо музей — то музеї вашого міста, якщо прогулянка лісом — ліс чи парк, а не центральна площа.</p></div>
+      <div class="step-c"><h3 data-i18n="pr3h">Вчиться на оцінках</h3><p data-i18n="pr3p">Зірочки пар піднімають найкращі ідеї вище. Замовите ще раз — отримане не повториться.</p></div>
+    </div>
+  </section>
+
+  <section class="sec">
+    <div class="duo rev">
+      <div class="book" aria-hidden="true"><div class="book-c"><span class="book-s">✦</span><span class="book-y" data-i18n="bk_y">Адвент 2026</span><span class="book-n" data-i18n="bk_n">Олена &amp; Андрій</span><span class="book-l">ReeAdvent</span></div></div>
+      <div class="duo-copy">
+        <span class="eyebrow" data-i18n="bk_eyebrow">Після 24-го дня</span><h2 data-i18n="bk_h2">Ваша історія — у книзі</h2>
+        <p data-i18n="bk_p">Останнє вікно закінчується святковою анімацією, а потім ви зберігаєте книгу PDF з вашими іменами на обкладинці.</p>
+        <ul class="ticks">
+          <li data-i18n="bk1">24 сторінки: питання дня й відповіді обох</li>
+          <li data-i18n="bk2">Фото з ваших відповідей</li>
+          <li data-i18n="bk3">Подарунки обох, пригоди й активності, які ви встигли</li>
+          <li data-i18n="bk4">Створюється на вашому пристрої: на сервер нічого не надсилається</li>
+        </ul>
+      </div>
     </div>
   </section>
 
   <section class="sec">
     <span class="eyebrow" data-i18n="pv_eyebrow">Приватність</span><h2 data-i18n="pv_h2">Тільки ви двоє</h2>
-    <ul class="priv">
+    <ul class="priv priv2">
       <li data-i18n="pv1">Доступ лише з двох пошт, які ви вкажете. Вхід за одноразовим кодом чи посиланням або через Google, без паролів.</li>
       <li data-i18n="pv2">Подарунок «від тебе до неї» бачите тільки ви. Сюрприз зберігається.</li>
       <li data-i18n="pv3">Відкриті вікна тільки в свій день: наперед підглянути неможливо.</li>
@@ -104,6 +172,8 @@
       <details><summary data-i18n="q4">Чи можна повернути кошти?</summary><p data-i18n="a4">Так, умови описані в публічній оферті. Коротко: повне повернення до відкриття першого вікна, за зверненням у підтримку.</p></details>
       <details><summary data-i18n="q5">Чи бачить партнер мої відповіді?</summary><p data-i18n="a5">Ні. Анкети бачить лише система для підбору. Подарунок, який ви даруєте, бачите тільки ви. Відповіді на «питання дня» партнер бачить: вони для нього.</p></details>
       <details><summary data-i18n="q6">У нас мало часу. Чи не забагато завдань щодня?</summary><p data-i18n="a6">Ні. В анкеті кожен обирає, скільки подарунків хоче за календар (24, 12, 8, 4 або свій варіант) і скільки днів на тиждень виходити з дому. Береться середнє з ваших двох відповідей, а в інші дні пропонуємо щось просте й цікаве вдома. Нічого не обов’язково: робіть те, що в радість.</p></details>
+      <details><summary data-i18n="q8">Чи треба встановлювати застосунок?</summary><p data-i18n="a8">Ні. Календар працює в браузері на телефоні й комп’ютері. За бажанням його можна додати на головний екран телефона, і він відкриватиметься як застосунок.</p></details>
+      <details><summary data-i18n="q9">Що залишиться після 24 днів?</summary><p data-i18n="a9">Святковий фінал і книга PDF «Адвент [рік] [ваші імена]»: усі питання, відповіді обох, фото, подарунки й те, що ви встигли зробити разом.</p></details>
       <details><summary data-i18n="q7">Наскільки різноманітні завдання?</summary><p data-i18n="a7">У базі понад 300 питань, 300 ідей подарунків, 300 пригод і 300 активностей, і вона поповнюється. Ви оцінюєте кожен пункт зірочками: улюблене частіше потрапляє в нові календарі, а якщо замовите ще раз, уже отримане не повториться.</p></details>
     </div>
   </section>
@@ -115,12 +185,13 @@
   </section>
 
   <footer><div>© ReeAdvent · ФОП Радченко М. А. <a href="#" id="ck-open" hidden style="margin-left:10px"></a></div><div style="margin-top:8px"><span data-i18n="ft_support">Підтримка</span>: <a href="mailto:support@reeadvent.fun">support@reeadvent.fun</a> · +38 099 562 66 87</div><div style="margin-top:8px"><a class="ig-link" href="https://www.instagram.com/reeadvent/" target="_blank" rel="noopener noreferrer" aria-label="Instagram @reeadvent"><svg class="ig-ico" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="3" width="18" height="18" rx="5" fill="none" stroke="currentColor" stroke-width="1.7"/><circle cx="12" cy="12" r="4.2" fill="none" stroke="currentColor" stroke-width="1.7"/><circle cx="17.2" cy="6.8" r="1.1" fill="currentColor"/></svg> <span>@reeadvent</span></a><a class="ig-link" style="margin-left:14px" href="https://www.threads.com/@reeadvent" target="_blank" rel="noopener noreferrer" aria-label="Threads @reeadvent"><svg class="ig-ico" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="3.6" fill="none" stroke="currentColor" stroke-width="1.7"/><path d="M15.6 12v1.4a2.6 2.6 0 0 0 5.2 0V12a8.8 8.8 0 1 0-3.5 7" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/></svg> <span>Threads</span></a></div><div style="margin-top:8px"><a href="/legal/offer.html" data-legal="offer" data-i18n="ft_offer">Публічна оферта</a><a href="/legal/privacy.html" data-legal="privacy" data-i18n="ft_privacy">Політика конфіденційності</a></div></footer>
+<div class="scta" id="scta" hidden><span><b id="sctap"></b> <span data-i18n="scta_sub">за календар для двох</span></span><a class="btn" href="#order" data-i18n="scta_btn">Замовити</a></div>
 </main>
 <div id="toast" role="status"></div>
-<script src="/assets/lang.js?v=12"></script>
+<script src="/assets/lang.js?v=13"></script>
 <script src="/assets/countries.js"></script>
 <script src="/assets/fx.js?v=2"></script>
 <script src="/assets/track.js?v=4" defer></script>
-<script src="/assets/landing.js?v=14"></script>
+<script src="/assets/landing.js?v=15"></script>
 </body>
 </html>

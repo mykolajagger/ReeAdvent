@@ -196,3 +196,15 @@ $('#of').addEventListener('submit', async e => {
     sec.hidden = false;
   } catch { /* стрічка необов'язкова */ }
 })();
+
+// Плаваюча кнопка «Замовити» на телефоні: з'являється після першого екрана, ховається біля форми замовлення
+(() => {
+  const bar = document.getElementById('scta'), price = document.getElementById('price'), out = document.getElementById('sctap'), order = document.getElementById('order');
+  if (!bar || !price || !order) return;
+  const sync = () => { out.textContent = price.textContent && price.textContent !== '—' ? price.textContent : ''; };
+  sync(); new MutationObserver(sync).observe(price, { childList: true, characterData: true, subtree: true });
+  let nearOrder = false;
+  const upd = () => { const show = scrollY > innerHeight * 0.9 && !nearOrder; bar.hidden = false; bar.classList.toggle('off', !show); };
+  if ('IntersectionObserver' in window) new IntersectionObserver(es => { nearOrder = es.some(e => e.isIntersecting); upd(); }, { rootMargin: '0px 0px -10% 0px' }).observe(order);
+  addEventListener('scroll', upd, { passive: true }); bar.classList.add('off'); bar.hidden = false; upd();
+})();
