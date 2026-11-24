@@ -2,7 +2,7 @@
 // Типи: IMAGE, CAROUSEL, REELS (пости) і STORY, STORY_VIDEO (сторіс: без підпису, текст уже на картинці).
 // Стан у settings: ig_pub = { done: { id: { at, media_id, link } }, err }, ig_auto = '1' (автопублікація раз на добу після 18:00 за Києвом).
 import { getToken } from './instagram.js';
-import { publishThreads, getThreadsToken } from './threads.js';
+import { publishThreads, getThreadsToken, threadsSince } from './threads.js';
 export const SITE = 'https://reeadvent.fun';
 const GRAPH = 'https://graph.instagram.com', FB = 'https://graph.facebook.com/v23.0', DAY = 864e5;
 const getSetting = async (env, k) => { const r = await env.DB.prepare('SELECT value FROM settings WHERE key = ?').bind(k).first(); return r ? r.value : null; };
@@ -21,7 +21,7 @@ export async function loadManifest(fetchImpl = fetch, site = SITE, env = null) {
   const ids = new Set(base.map(x => x.id)); return [...base, ...extra.filter(e => !ids.has(e.id))];
 }
 const fileUrl = (site, f) => (String(f).startsWith('/') ? site + f : `${site}/social/${f}`);
-export async function pubState(env) { const s = parse(await getSetting(env, 'ig_pub')) || {}; return { done: s.done || {}, fb: s.fb || {}, th: s.th || {}, hasTh: !!(await getThreadsToken(env)), err: s.err || null, auto: (await getSetting(env, 'ig_auto')) === '1' }; }
+export async function pubState(env) { const s = parse(await getSetting(env, 'ig_pub')) || {}; return { done: s.done || {}, fb: s.fb || {}, th: s.th || {}, hasTh: !!(await getThreadsToken(env)), thSince: await threadsSince(env), err: s.err || null, auto: (await getSetting(env, 'ig_auto')) === '1' }; }
 export const getFbPage = async env => parse(await getSetting(env, 'fb_page')) || null;   // { id, name }
 export const FB_LINE = 'https://reeadvent.fun';
 export const setAuto = (env, on) => setSetting(env, 'ig_auto', on ? '1' : '0');
@@ -35,7 +35,9 @@ export function effective(man, plan) {
 }
 export const MAX_CAPTION = 2200;
 /** Усі ввімкнені майданчики поста вже опубліковано? Facebook враховується лише якщо підключено сторінку. */
-export const isComplete = (st, p, hasFb) => { const thOn = !!(st.hasTh && p.th !== false && !isStory(p)), needIg = p.ig !== false && !st.done[p.id], needFb = hasFb && p.fb !== false && !st.fb[p.id], needTh = thOn && !(st.th || {})[p.id]; return !needIg && !needFb && !needTh && (p.ig !== false || (hasFb && p.fb !== false) || thOn); };   // Threads — якщо підключено (st.hasTh), без сторіс
+/** Чи має пост піти в Threads: Threads підключено, не сторіс, не вимкнено галочкою і пост не вийшов в Instagram/Facebook ще до підключення Threads (старі пости туди не дублюємо). */
+export const needsTh = (st, p) => { if (!st.hasTh || p.th === false || isStory(p)) return false; const was = [(st.done || {})[p.id], (st.fb || {})[p.id]].filter(Boolean).map(x => x.at || 0); return !(was.length && st.thSince && Math.min(...was) < st.thSince); };
+export const isComplete = (st, p, hasFb) => { const thOn = needsTh(st, p), needIg = p.ig !== false && !st.done[p.id], needFb = hasFb && p.fb !== false && !st.fb[p.id], needTh = thOn && !(st.th || {})[p.id]; return !needIg && !needFb && !needTh && (p.ig !== false || (hasFb && p.fb !== false) || thOn); };   // Threads — якщо підключено (st.hasTh), без сторіс
 /** Зберігає правки одного поста: caption (рядок або null = стандартний), at (мс або null). Опубліковані пости не змінюються. */
 export async function editPost(env, id, { caption, at, ig, fb, th } = {}, man) {
   const st = await pubState(env); if (!man.find(p => p.id === id)) return { ok: false, error: 'Немає такого поста' };
@@ -150,7 +152,7 @@ export async function publishNext(env, { only = null, fetchImpl = fetch, site = 
   const errors = [], link = {};
   if (post.ig !== false && !st.done[post.id]) { try { const r = await publishPost(env, post, { fetchImpl, site, delay }); st.done[post.id] = { at: now, ...r }; link.ig = r.link; await saveState(env, st); await setSetting(env, 'ig_cache', ''); } catch (e) { errors.push('Instagram: ' + String(e.message || e).slice(0, 200)); } }
   if (hasFb && post.fb !== false && !st.fb[post.id]) { try { const r = await publishFb(env, post, { fetchImpl, site }); st.fb[post.id] = { at: now, ...r }; link.fb = r.link; await saveState(env, st); } catch (e) { errors.push('Facebook: ' + String(e.message || e).slice(0, 200)); } }
-  if (st.hasTh && post.th !== false && !isStory(post) && !st.th[post.id]) { try { const r = await publishThreads(env, post, { fetchImpl, site }); if (r) { st.th[post.id] = { at: now, ...r }; link.th = r.link; await saveState(env, st); } } catch (e) { errors.push('Threads: ' + String(e.message || e).slice(0, 200)); } }
+  if (needsTh(st, post) && !st.th[post.id]) { try { const r = await publishThreads(env, post, { fetchImpl, site }); if (r) { st.th[post.id] = { at: now, ...r }; link.th = r.link; await saveState(env, st); } } catch (e) { errors.push('Threads: ' + String(e.message || e).slice(0, 200)); } }
   st.err = errors.length ? { at: now, id: post.id, error: errors.join(' · ').slice(0, 400) } : null; await saveState(env, st);
   return errors.length ? { ok: false, id: post.id, error: st.err.error } : { ok: true, id: post.id, link: link.ig || link.fb };
 }
@@ -184,7 +186,7 @@ export async function runAutoPublish(env, { now = Date.now(), ...rest } = {}) {
 }
 export async function publishStatus(env, fetchImpl = fetch, site = SITE) {
   const st = await pubState(env), fbp = await getFbPage(env); let man = []; try { man = await loadManifest(fetchImpl, site, env); } catch {}
-  return { auto: st.auto, err: st.err, now: Date.now(), fbPage: fbp, posts: effective(man, await getPlan(env)).map(p => ({ id: p.id, type: p.type, format: p.format, title: p.title || null, scene: p.scene || null, files: p.files, cover: p.cover || null, caption: p.caption, defaultCaption: p.defaultCaption, edited: p.caption !== p.defaultCaption, at: p.at, ig: p.ig, fb: p.fb, th: p.th, done: st.done[p.id] || null, fbDone: st.fb[p.id] || null, thDone: st.th[p.id] || null, complete: isComplete(st, p, !!fbp) })), threads: st.hasTh };
+  return { auto: st.auto, err: st.err, now: Date.now(), fbPage: fbp, posts: effective(man, await getPlan(env)).map(p => ({ id: p.id, type: p.type, format: p.format, title: p.title || null, scene: p.scene || null, files: p.files, cover: p.cover || null, caption: p.caption, defaultCaption: p.defaultCaption, edited: p.caption !== p.defaultCaption, at: p.at, ig: p.ig, fb: p.fb, th: p.th, done: st.done[p.id] || null, fbDone: st.fb[p.id] || null, thDone: st.th[p.id] || null, thNeeded: needsTh(st, p), complete: isComplete(st, p, !!fbp) })), threads: st.hasTh };
 }
 /** Зберігає сторінку Facebook: перевіряє токеном, що вона доступна, і запам'ятовує назву. */
 export async function saveFbPage(env, id, { fetchImpl = fetch } = {}) {

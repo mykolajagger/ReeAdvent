@@ -373,7 +373,7 @@ function renderIgPlan(pb, ig) {
   const list = P.filter(x => (x.format || 'post') === igTab);
   if (!list.find(x => x.id === igSel)) { igSel = (list.find(x => !x.complete) || list[0]).id; igSlide = 0; }
   const p = list.find(x => x.id === igSel), story = p.format === 'story';
-  const hasFb = !!pb.fbPage, hasTh = !!pb.threads, thOk = x => hasTh && (x.format || 'post') !== 'story', plat = (on, d, name) => on ? (d ? `<span style="color:#27ae60" title="${esc(fdate(d.at))}">${name} ✅</span>` : `<span class="muted">${name} ⏳</span>`) : `<span class="muted" style="text-decoration:line-through">${name}</span>`;
+  const hasFb = !!pb.fbPage, hasTh = !!pb.threads, thOk = x => hasTh && (x.format || 'post') !== 'story' && (x.thNeeded !== false || !!x.thDone), plat = (on, d, name) => on ? (d ? `<span style="color:#27ae60" title="${esc(fdate(d.at))}">${name} ✅</span>` : `<span class="muted">${name} ⏳</span>`) : `<span class="muted" style="text-decoration:line-through">${name}</span>`;
   const status = x => `${plat(x.ig, x.done, 'IG')}${hasFb ? ' ' + plat(x.fb, x.fbDone, 'FB') : ''}${thOk(x) ? ' ' + plat(x.th !== false, x.thDone, 'TH') : ''} · ${x.complete ? '<span style="color:#27ae60">готово</span>' : x.at ? `<span style="color:${x.at < now ? '#eb5757' : '#2f80ed'}">🕒 ${esc(fdate(x.at))}</span>` : '<span class="muted">без дати</span>'}`;
   const tabBtn = (k, label, n) => `<button type="button" class="btn ${igTab === k ? '' : 'ghost'} sm igtab" data-t="${k}">${label} (${n})</button>`;
   // ---- календар публікацій: тижні з понеділка, перетягування міняє пости місцями разом із часом ----

@@ -62,4 +62,11 @@ st = await publishStatus(env, f); assert.ok(st.posts.find(p => p.id === 'p2').co
 assert.equal(isComplete({ done: { x: 1 }, fb: {}, th: {}, hasTh: true }, { id: 'x', type: 'IMAGE' }, false), false, 'чекає Threads');
 // відключення: Threads більше не потрібен для завершення
 await disconnectThreads(env); s = await threadsStatus(env); assert.equal(s.connected, false); st = await publishStatus(env, f); assert.equal(st.threads, false);
+// пости, що вийшли в Instagram до підключення Threads, туди не дублюються
+await set('ig_pub', JSON.stringify({ done: { p1: { at: 500 } }, fb: {}, th: {} })); await set('ig_plan', '');
+await saveThreadsToken(env, 'T'.repeat(40), { fetchImpl: f, now: 1000 });
+st = await publishStatus(env, f); const old = st.posts.find(p => p.id === 'p1'); assert.equal(old.thNeeded, false); assert.ok(old.complete, 'старий пост завершений');
+calls = []; q = await publishNext(env, o); assert.equal(q.id, 's1', 'черга йде далі, а не до старого поста'); assert.ok(!calls.some(c => c.url.includes('graph.threads.net') && c.m === 'POST'));
+q = await publishNext(env, o); assert.equal(q.id, 'p2'); st = await publishStatus(env, f); assert.ok(st.posts.find(p => p.id === 'p2').thDone, 'новий пост іде в Threads');
+await refreshThreadsToken(env, { fetchImpl: f, now: 1000 + 8 * 864e5 }); st = await publishStatus(env, f); assert.equal(st.posts.find(p => p.id === 'p1').thNeeded, false, 'продовження токена не зсуває дату підключення');
 console.log('OK threads');

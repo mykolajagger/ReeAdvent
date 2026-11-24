@@ -30,9 +30,11 @@ export async function saveThreadsToken(env, token, { fetchImpl = fetch, now = Da
   let me; try { me = await call(fetchImpl, 'GET', `${TH}/me`, { fields: 'id,username', access_token: token }); } catch (e) { return { ok: false, error: 'Threads не прийняв токен: ' + e.message }; }
   let expires = now + 60 * DAY;
   if (env.THREADS_APP_SECRET) { try { const x = await call(fetchImpl, 'GET', 'https://graph.threads.net/access_token', { grant_type: 'th_exchange_token', client_secret: env.THREADS_APP_SECRET, access_token: token }); if (x.access_token) { token = x.access_token; expires = now + (Number(x.expires_in) || 60 * 86400) * 1000; } } catch {} }
-  await setSetting(env, 'th_token', token); await setSetting(env, 'th_meta', JSON.stringify({ id: me.id, username: me.username, saved_at: now, expires_at: expires })); await setSetting(env, 'th_err', '');
+  await setSetting(env, 'th_token', token); await setSetting(env, 'th_meta', JSON.stringify({ id: me.id, username: me.username, saved_at: now, connected_at: now, expires_at: expires })); await setSetting(env, 'th_err', '');
   return { ok: true, username: me.username };
 }
+/** Коли підключено Threads: пости, що вийшли раніше, туди не дублюються. */
+export async function threadsSince(env) { const m = parse(await getSetting(env, 'th_meta')) || {}; return m.connected_at || m.saved_at || null; }
 export async function disconnectThreads(env) { for (const k of ['th_token', 'th_meta', 'th_err']) await setSetting(env, k, ''); }
 /** Раз на 7 днів продовжує токен (діє 60 днів); викликається з cron щогодини, але працює лише коли настав час. */
 export async function refreshThreadsToken(env, { fetchImpl = fetch, now = Date.now() } = {}) {
@@ -40,7 +42,7 @@ export async function refreshThreadsToken(env, { fetchImpl = fetch, now = Date.n
   if (!token || (meta.saved_at && now - meta.saved_at < 7 * DAY)) return { skipped: true };
   const j = await call(fetchImpl, 'GET', 'https://graph.threads.net/refresh_access_token', { grant_type: 'th_refresh_token', access_token: token });
   if (!j.access_token) return { ok: false };
-  await setSetting(env, 'th_token', j.access_token); await setSetting(env, 'th_meta', JSON.stringify({ ...meta, saved_at: now, expires_at: now + (Number(j.expires_in) || 60 * 86400) * 1000 }));
+  await setSetting(env, 'th_token', j.access_token); await setSetting(env, 'th_meta', JSON.stringify({ ...meta, connected_at: meta.connected_at || meta.saved_at || now, saved_at: now, expires_at: now + (Number(j.expires_in) || 60 * 86400) * 1000 }));
   return { ok: true };
 }
 
