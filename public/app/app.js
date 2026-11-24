@@ -136,8 +136,7 @@ const budgetShown = () => { const c = budgetCfg(); return c.show(budgetVal ?? c.
 const STEPS = [
   () => `<h2>${L('Привіт', 'Hello')}</h2><p>${L('Кілька швидких питань, щоб календар був саме для вас. Свої відповіді бачиш тільки ти: партнер їх не побачить, як і ти його.', 'A few quick questions so the calendar fits the two of you. Only you can see your answers, just as you will not see your partner’s.')}</p>
     <div><label class="lbl" for="nm">${L('Як тебе називати?', 'What should we call you?')}</label><input id="nm" type="text" maxlength="30" value="${esc(ans.name)}" placeholder="${L('Ім’я', 'Name')}"></div>
-    <div><label class="lbl">${L('Я —', 'I am')}</label><p class="muted small">${L('Щоб партнер отримував подарунки, які пасують саме тобі.', 'So that your partner gets gift ideas that suit you.')}</p><div class="opts two">${[['f', 'вона', 'she'], ['m', 'він', 'he']].map(([v, uk, en]) => `<button type="button" class="opt ${ans.sex === v ? 'on' : ''}" data-sex="${v}"><b>${L(uk, en)}</b></button>`).join('')}</div>
-    <button type="button" class="btn ghost sm ${ans.sex === 'x' ? 'on' : ''}" data-sex="x" style="margin-top:6px">${L('Не вказувати', 'Prefer not to say')}</button></div>`,
+    <div><label class="lbl" for="sx">${L('Ваша стать', 'Your gender')}</label><select id="sx" style="width:100%">${[['', L('Оберіть…', 'Choose…')], ['f', L('Жіноча', 'Female')], ['m', L('Чоловіча', 'Male')], ['x', L('Не вказувати', 'Prefer not to say')]].map(([v, t]) => `<option value="${v}" ${ans.sex === v ? 'selected' : ''} ${v ? '' : 'disabled'}>${t}</option>`).join('')}</select></div>`,
   () => `<h2>${L('Подарунки', 'Gifts')}</h2>
     <div><label class="lbl">${L('Мій бюджет на один подарунок', 'My budget for one gift')}</label><div class="big" id="bv">${budgetShown()}</div>
     ${(() => { const c = budgetCfg(); return `<input class="range" id="bg" type="range" min="${c.min}" max="${c.max}" step="${c.step}" value="${budgetVal ?? c.def}">`; })()}</div>
@@ -164,11 +163,12 @@ function showSurvey() {
     <div class="nav"><button class="btn ghost" id="back" ${step === 0 ? 'style="visibility:hidden"' : ''}>${L('Назад', 'Back')}</button>
     <button class="btn" id="next">${step === STEPS.length - 1 ? L('Відправити', 'Send') : L('Далі', 'Next')}</button></div></div>`;
   const nm = $('#nm'); if (nm) nm.oninput = () => ans.name = nm.value;
+  const sx = $('#sx'); if (sx) sx.onchange = () => ans.sex = sx.value;
   const bg = $('#bg'); if (bg) bg.oninput = () => { budgetVal = +bg.value; ans.budget = budgetCfg().toUah(budgetVal); $('#bv').textContent = budgetShown(); };
   $('#back').onclick = () => { step--; showSurvey(); };
   $('#next').onclick = async () => {
     if (step === 0 && !ans.name.trim()) return toast(L('Напиши, як тебе називати', 'Tell us what to call you'));
-    if (step === 0 && !ans.sex) return toast(L('Обери «він», «вона» або «не вказувати»', 'Choose he, she or prefer not to say'));
+    if (step === 0 && !ans.sex) return toast(L('Оберіть стать або «Не вказувати»', 'Choose your gender or “Prefer not to say”'));
     if (step < STEPS.length - 1) { step++; showSurvey(); scrollTo({ top: 0, behavior: 'smooth' }); return; }
     $('#next').disabled = true;
     try { st = await api('POST', '/api/survey', { answers: ans }); confetti(); route(); }
@@ -179,7 +179,6 @@ app.addEventListener('click', e => {
   const c = e.target.closest('[data-chip]'); if (c) { const arr = ans[c.dataset.chip], v = c.dataset.v, i = arr.indexOf(v); i < 0 ? arr.push(v) : arr.splice(i, 1); c.classList.toggle('on'); return; }
   const l = e.target.closest('[data-level]'); if (l) { ans.level = +l.dataset.level; document.querySelectorAll('[data-level]').forEach(x => x.classList.toggle('on', x === l)); return; }
   const a = e.target.closest('[data-ab]'); if (a) { ans.actBudget = +a.dataset.ab; document.querySelectorAll('[data-ab]').forEach(x => x.classList.toggle('on', x === a)); return; }
-  const sx = e.target.closest('[data-sex]'); if (sx) { ans.sex = sx.dataset.sex; document.querySelectorAll('[data-sex]').forEach(x => x.classList.toggle('on', x === sx)); return; }
   const k = e.target.closest('[data-car]'); if (k) { ans.car = k.dataset.car === '1'; document.querySelectorAll('[data-car]').forEach(x => x.classList.toggle('on', x === k)); return; }
   const pc = e.target.closest('[data-pace]'); if (pc) {
     const key = pc.dataset.pace, custom = pc.dataset.v === 'c';
