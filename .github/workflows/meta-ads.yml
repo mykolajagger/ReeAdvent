@@ -1,0 +1,55 @@
+name: Meta Ads — кампанії через API (на паузі)
+
+# Створює кампанії з marketing/ads/meta-campaigns.json через Marketing API. Усе на паузі: вмикаєте в Ads Manager самі.
+# Секрет: META_ADS_TOKEN (токен системного користувача з ads_management, ads_read, pages_read_engagement, pages_show_list, instagram_basic, business_management).
+# Режим check нічого не створює: показує знайдений акаунт, сторінку, Instagram, аудиторії й перевіряє параметри.
+on:
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: 'check — лише перевірити; create — створити на паузі'
+        required: true
+        type: choice
+        options: [check, create]
+        default: check
+      campaigns:
+        description: 'Які кампанії (через кому; порожньо — усі)'
+        required: false
+        default: ''
+      ad_account:
+        description: 'ID рекламного акаунта (необов’язково, якщо доступний лише один)'
+        required: false
+        default: ''
+      page_id:
+        description: 'ID сторінки Facebook (необов’язково, якщо доступна лише одна)'
+        required: false
+        default: ''
+      ig_id:
+        description: 'ID акаунта Instagram (необов’язково)'
+        required: false
+        default: ''
+      api_version:
+        description: 'Версія Graph API'
+        required: false
+        default: 'v23.0'
+
+jobs:
+  run:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    concurrency: { group: meta-ads, cancel-in-progress: false }
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Meta Marketing API
+        env:
+          META_ADS_TOKEN: ${{ secrets.META_ADS_TOKEN }}
+          MODE: ${{ github.event.inputs.mode }}
+          ONLY: ${{ github.event.inputs.campaigns }}
+          AD_ACCOUNT: ${{ github.event.inputs.ad_account }}
+          PAGE_ID: ${{ github.event.inputs.page_id }}
+          IG_ID: ${{ github.event.inputs.ig_id }}
+          API_VERSION: ${{ github.event.inputs.api_version }}
+        run: node tools/meta-ads.mjs
