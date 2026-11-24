@@ -34,3 +34,7 @@ Workflow **«Meta Ads — кампанії через API (на паузі)»** 
 Якщо доступних рекламних акаунтів чи сторінок кілька, вкажіть ID у полях `ad_account` / `page_id`.
 
 Що змінити (бюджети, країни, тексти, креативи) — у `meta-campaigns.json`.
+
+## Майданчики (Threads)
+Нові групи оголошень створюються з майданчиками з `placements` у `meta-campaigns.json`: Facebook, Instagram, Messenger, Threads. Threads Meta дозволяє лише разом з Instagram.
+Для наявних груп: спершу **mode = placements-check** (лише перевірка), потім **mode = placements** (оновлює тільки майданчики; бюджет, статус і решта таргетингу не змінюються).
