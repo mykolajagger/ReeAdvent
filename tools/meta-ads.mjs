@@ -88,7 +88,7 @@ const EU = new Set(['AT', 'BE', 'BG', 'HR', 'CY', 'CZ', 'DK', 'EE', 'FI', 'FR', 
 export const dsaFor = (spec, c) => (c.countries || []).some(x => EU.has(x)) ? { dsa_beneficiary: spec.dsa_beneficiary || 'ReeAdvent', dsa_payor: spec.dsa_payor || spec.dsa_beneficiary || 'ReeAdvent' } : {};
 
 export function storySpec(spec, cr, d, link, media) {
-  const cta = { type: 'LEARN_MORE', value: { link } }, base = { page_id: d.page.id, ...(d.ig ? { instagram_user_id: d.ig.id } : {}) };
+  const cta = { type: cr.cta || 'LEARN_MORE', value: { link } }, base = { page_id: d.page.id, ...(d.ig ? { instagram_user_id: d.ig.id } : {}) };
   if (cr.type === 'video') return { ...base, video_data: { video_id: media.video[cr.video], image_url: spec.site + cr.thumb, message: cr.message, title: cr.headline, link_description: cr.description, call_to_action: cta } };
   if (cr.type === 'carousel') return { ...base, link_data: { link, message: cr.message, multi_share_end_card: false, multi_share_optimized: false, call_to_action: cta,
     child_attachments: cr.images.map(i => ({ link, image_hash: media.image[i], name: cr.headline, description: cr.description, call_to_action: cta })) } };

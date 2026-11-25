@@ -47,12 +47,13 @@ assert.equal(sets[0].body.optimization_goal, 'LANDING_PAGE_VIEWS'); assert.equal
 assert.equal(sets[0].body.dsa_beneficiary, undefined, 'Україна: без полів DSA'); assert.equal(sets[1].body.dsa_beneficiary, 'ReeAdvent'); assert.equal(sets[1].body.dsa_payor, 'ReeAdvent');
 assert.deepEqual(t0.geo_locations.countries, ['UA']); assert.equal(t0.age_min, 22); assert.equal(t0.age_max, 45); assert.ok(!t0.publisher_platforms.includes('audience_network'));
 assert.deepEqual(t0.excluded_custom_audiences, [{ id: 'aud9' }]); assert.equal(t0.locales, undefined); assert.deepEqual(t1.locales, [52]); assert.equal(t1.geo_locations.countries.length, 9);
-const crs = posts.filter(c => c.p === '/act_42/adcreatives'); assert.equal(crs.length, 6);
+const crs = posts.filter(c => c.p === '/act_42/adcreatives'); assert.equal(crs.length, 8);
 const reel = JSON.parse(crs[0].body.object_story_spec); assert.equal(reel.video_data.video_id, 'v1'); assert.equal(reel.instagram_user_id, 'ig1'); assert.equal(reel.video_data.call_to_action.value.link, 'https://reeadvent.fun/?utm_source=meta&utm_medium=paid&utm_campaign=ua_cold&utm_content=reel1');
 const car = JSON.parse(crs[1].body.object_story_spec); assert.equal(car.link_data.child_attachments.length, 5); assert.ok(car.link_data.child_attachments.every(a => a.image_hash));
-const eu = JSON.parse(crs[3].body.object_story_spec); assert.match(eu.video_data.call_to_action.value.link, /utm_campaign=eu_ua&utm_content=reel1/);
-assert.equal(posts.filter(c => c.p === '/act_42/advideos').length, 1, 'відео завантажується один раз на запуск'); assert.equal(posts.filter(c => c.p === '/act_42/adimages').length, 6, '5 слайдів + картка пари, один раз');
-const ads = posts.filter(c => c.p === '/act_42/ads'); assert.equal(ads.length, 6); assert.ok(ads.every(a => a.body.status === 'PAUSED')); assert.match(ads[0].body.tracking_specs, /2111183512849298/);
+const eu = JSON.parse(crs[4].body.object_story_spec); assert.match(eu.video_data.call_to_action.value.link, /utm_campaign=eu_ua&utm_content=reel1/);
+assert.equal(posts.filter(c => c.p === '/act_42/advideos').length, 2, 'кожне відео завантажується один раз на запуск'); assert.equal(posts.filter(c => c.p === '/act_42/adimages').length, 6, '5 слайдів + картка пари, один раз');
+const ads = posts.filter(c => c.p === '/act_42/ads'); assert.equal(ads.length, 8);
+const r2 = JSON.parse(crs[3].body.object_story_spec); assert.equal(r2.video_data.call_to_action.type, 'ORDER_NOW'); assert.match(r2.video_data.call_to_action.value.link, /utm_content=reel2/); assert.equal(r2.video_data.title, 'Старт 1 грудня'); assert.ok(ads.every(a => a.body.status === 'PAUSED')); assert.match(ads[0].body.tracking_specs, /2111183512849298/);
 // повторний запуск нічого не дублює
 calls.length = 0; r = await run({ mode: 'create', spec, token: 'TKN', fetchImpl: fake, log, sleep: async () => {} });
 assert.ok(r.report.every(x => x.skipped)); assert.equal(calls.filter(c => c.m === 'POST').length, 0);
@@ -63,8 +64,8 @@ await assert.rejects(run({ mode: 'create', spec, token: 'TKN', fetchImpl: fake, 
 assert.equal(existing.length, 1); assert.equal(adsets.length, 1); assert.equal(adsList.length, 0);
 failCreatives = false; calls.length = 0;
 r = await run({ mode: 'create', spec, token: 'TKN', fetchImpl: fake, log, sleep: async () => {} });
-assert.equal(existing.length, 2, 'ua_cold не дублюється, eu_ua створено'); assert.equal(adsets.length, 2, 'група ua_cold не дублюється'); assert.equal(adsList.length, 6);
-assert.equal(r.report[0].ads.length, 3); assert.equal(calls.filter(c => c.m === 'POST' && c.p === '/act_42/campaigns').length, 1);
+assert.equal(existing.length, 2, 'ua_cold не дублюється, eu_ua створено'); assert.equal(adsets.length, 2, 'група ua_cold не дублюється'); assert.equal(adsList.length, 8);
+assert.equal(r.report[0].ads.length, 4); assert.equal(calls.filter(c => c.m === 'POST' && c.p === '/act_42/campaigns').length, 1);
 // Threads: нові групи одразу з Threads; наявні — оновлення майданчиків, решта таргетингу не чіпається
 assert.deepEqual(t0.publisher_platforms, ['facebook', 'instagram', 'messenger', 'threads']); assert.deepEqual(t0.threads_positions, ['threads_stream']);
 for (const a of adsets) { a.targeting.publisher_platforms = ['facebook', 'instagram', 'messenger']; delete a.targeting.threads_positions; a.targeting.age_min = 25; }
