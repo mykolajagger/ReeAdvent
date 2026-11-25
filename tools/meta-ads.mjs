@@ -171,6 +171,20 @@ export async function run({ mode = 'check', only = [], spec, token, ver, adAccou
   for (const x of d.exclude) log(`Виключити аудиторію «${x.name}»: ${x.a ? x.a.id : 'не знайдено (створіть її в Ads Manager → Аудиторії), поки без виключення'}`);
   for (const [n, k] of Object.entries(d.locales)) log(`Мова «${n}»: key ${k}`);
   const camps = spec.campaigns.filter(c => !only.length || only.includes(c.name)), report = [], media = { video: {}, image: {} };   // медіа вантажимо один раз на запуск
+  if (mode === 'diag') {   // діагностика доступів: що саме Meta не дозволяє (креативи без оголошень нічого не коштують і не показуються)
+    const tryIt = async (label, fn) => { try { const r = await fn(); log(`✓ ${label}${r && r.id ? ' (' + r.id + ')' : ''}`); return r; } catch (e) { log(`✗ ${label}: ${e.message}`); return null; } };
+    await tryIt('дозволи токена', async () => { const p = (await g.get('/me/permissions')).data || []; log('   ' + p.map(x => x.permission + ':' + x.status).join(', ')); });
+    await tryIt('сторінка ' + d.page.id, async () => { const x = await g.get('/' + d.page.id, { fields: 'name,is_published' }); log('   ' + JSON.stringify(x)); });
+    if (d.ig) await tryIt('Instagram ' + d.ig.id, async () => { const x = await g.get('/' + d.ig.id, { fields: 'username' }); log('   ' + JSON.stringify(x)); });
+    await tryIt('Instagram-акаунти рекламного акаунта', async () => { const x = (await g.get(`/${d.acc.id}/instagram_accounts`, { fields: 'id,username' })).data || []; log('   ' + JSON.stringify(x)); });
+    const link = linkFor(spec, 'diag', 'diag'), img = spec.creatives.couple1.image;
+    const up = await g.post(`/${d.acc.id}/adimages`, { bytes: Buffer.from(await (await fetchImpl(spec.site + img)).arrayBuffer()).toString('base64') }); const hash = Object.values(up.images || {})[0].hash;
+    const ld = { link, message: 'diag', name: 'diag', image_hash: hash, call_to_action: { type: 'LEARN_MORE', value: { link } } };
+    await tryIt('креатив-картинка лише Facebook', () => g.post(`/${d.acc.id}/adcreatives`, { name: 'diag_fb', object_story_spec: { page_id: d.page.id, link_data: ld } }));
+    if (d.ig) await tryIt('креатив-картинка з instagram_user_id', () => g.post(`/${d.acc.id}/adcreatives`, { name: 'diag_ig', object_story_spec: { page_id: d.page.id, instagram_user_id: d.ig.id, link_data: ld } }));
+    if (d.ig) await tryIt('креатив-картинка з instagram_actor_id', () => g.post(`/${d.acc.id}/adcreatives`, { name: 'diag_ig2', object_story_spec: { page_id: d.page.id, instagram_actor_id: d.ig.id, link_data: ld } }));
+    return { discovered: d, report: [] };
+  }
   if (mode === 'placements' || mode === 'placements-check') return { discovered: d, report: await updatePlacements(g, spec, d, camps, { apply: mode === 'placements', log }) };
   for (const c of camps) {
     const ex = d.existing.find(x => x.name === c.name);
