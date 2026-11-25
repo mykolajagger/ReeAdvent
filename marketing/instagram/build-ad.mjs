@@ -8,7 +8,7 @@ const img = (n, extra = '') => `<img src="${SC[n]}" style="width:100%;height:100
 const full = (n, cls = 'zoom') => `<div class="fb ${cls}">${img(n)}</div><div class="shade"></div>`;
 const blur = n => `<div class="sbg" style="background-image:url(${BL[n]});filter:blur(14px)"></div><div class="veil"></div>`;
 const card = (n, eb, h, sub, k) => ({ d: 1.2, kind: 'card', html: `${full(n)}<div class="ct"><div class="eb">${eb}<span>${k}/4</span></div><div class="h">${h}</div><div class="sub">${sub}</div></div>` });
-const flash = (n, word) => ({ d: .6, kind: 'flash', html: `${full(n, 'zoom2')}<div class="word">${word}</div>` });
+const flash = (n, word) => ({ d: 1.2, kind: 'flash', html: `${full(n, 'zoom2')}<div class="word">${word}</div>` });
 const SCENES = [
   { d: 2.4, kind: 'hook', html: `${blur('wrap')}<div class="mid" style="top:250px"><div class="h1 slam">Ще одна річ<br>у подарунок?</div><div class="strike"><i></i></div></div>` },
   { d: 2.4, kind: 'doors', html: `${blur('tree')}<div class="arch">${img('tree')}<div class="door l"><b>1</b></div><div class="door r"></div><div class="glow"></div></div><div class="mid up" style="top:548px"><div class="h2">Подаруй <em>24 дні</em> уваги</div><div class="nm">для неї · для нього</div></div>` },
@@ -63,7 +63,7 @@ window.setT=t=>{
     const kin=s.k==='card'||s.k==='flash';
     el.style.opacity=i===0?1:(kin?1:E(R(lt,0,.14)));
     if(kin){const x=E(R(lt,0,.16));el.style.transform='translateX('+(100*(1-x))+'%)';el.style.zIndex=i+1;}
-    if(i>0&&lt<.08)fl=Math.max(fl,(s.k==='flash'?.22:.12)*(1-lt/.08));
+    if(i>0&&lt<.08)fl=Math.max(fl,(s.k==='flash'?.14:.1)*(1-lt/.08));
     const z=q(el,'.zoom img');if(z)z.style.transform='scale('+(1.04+.1*R(lt,0,s.d))+')';
     const z2=q(el,'.zoom2 img');if(z2)z2.style.transform='scale('+(1.18-.12*E(R(lt,0,s.d)))+')';
     const sl=q(el,'.slam');if(sl){const k=E(R(lt,0,.22));sl.style.transform='scale('+(1.35-.35*k)+')';sl.style.opacity=k;}
@@ -71,7 +71,7 @@ window.setT=t=>{
     if(s.k==='doors'){const o=E(R(lt,.3,.95));q(el,'.door.l').style.transform='rotateY('+(-105*o)+'deg)';q(el,'.door.r').style.transform='rotateY('+(105*o)+'deg)';q(el,'.glow').style.opacity=Math.sin(Math.PI*R(lt,.25,1.25))*.9;q(el,'.arch img').style.transform='scale('+(1.15-.15*E(R(lt,.1,1.6)))+')';}
     if(s.k==='count'){const c=Math.max(1,Math.min(24,Math.floor(1+23*E(R(lt,.25,1.4)))));document.getElementById('cnt').textContent=c;const w=q(el,'.win');w.style.transform='scale('+(.9+.1*B(R(lt,0,.3)))+')';}
     if(s.k==='card'){const c=q(el,'.ct');const k=E(R(lt,.1,.4));c.style.opacity=k;c.style.transform='translateY('+(30*(1-k))+'px)';}
-    if(s.k==='flash'){const w=q(el,'.word');const k=B(R(lt,.04,.24));w.style.transform='translateX(-50%) scale('+(.6+.4*k)+')';w.style.opacity=R(lt,.04,.14);}
+    if(s.k==='flash'){const w=q(el,'.word');const k=B(R(lt,.1,.42));w.style.transform='translateX(-50%) scale('+(.7+.3*k)+')';w.style.opacity=R(lt,.1,.26);}
     if(s.k==='book'){const b=q(el,'.bc');const k=E(R(lt,0,.8));b.style.transform='rotateY('+(70-82*k)+'deg) rotate('+(-2*k)+'deg) scale('+(.8+.2*k)+')';}
     el.querySelectorAll('.up').forEach((u,j)=>{const k=E(R(lt,.08+j*.12,.45+j*.12));u.style.opacity=k;u.style.transform='translateY('+(24*(1-k))+'px)';});
     if(s.k==='cta'){const b=q(el,'.btn');const p=lt>1.2?1+.045*Math.sin((lt-1.2)*6.5):1;b.style.transform='scale('+p+')';}
