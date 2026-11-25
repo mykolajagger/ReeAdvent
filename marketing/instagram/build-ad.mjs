@@ -13,11 +13,15 @@ const SCENES = [
   { d: 2.4, kind: 'hook', html: `${blur('wrap')}<div class="mid" style="top:250px"><div class="h1 slam">Ще одна річ<br>у подарунок?</div><div class="strike"><i></i></div></div>` },
   { d: 3.0, kind: 'doors', html: `${blur('tree')}<div class="arch">${img('tree')}<div class="door l"><b>1</b></div><div class="door r"></div><div class="glow"></div></div><div class="mid up" style="top:548px"><div class="h2">Подаруй <em>24 дні</em> уваги</div><div class="nm">для неї · для нього</div></div>` },
   { d: 4.2, kind: 'phone', html: `${blur('book')}<div class="mid" style="top:96px"><div class="clock up">щоранку о 07:00 — нове вікно</div></div>
-    <div class="phone"><div class="scr"><div class="pt"><span>Вікно 7</span><i></i></div><div class="pp"><i></i></div>
+    <div class="phone"><i class="sb l1"></i><i class="sb l2"></i><i class="sb l3"></i><i class="sb r1"></i><div class="scr">
+      <div class="isl"></div><div class="stat"><span>07:00</span><span class="ics"><b class="sig"><i></i><i></i><i></i><i></i></b><svg class="wf" viewBox="0 0 16 12" width="16" height="12"><path d="M8 11.2l2.2-2.6a3.2 3.2 0 0 0-4.4 0z" fill="#f3efe6"/><path d="M3.6 6.4a6.4 6.4 0 0 1 8.8 0" stroke="#f3efe6" stroke-width="1.7" fill="none" stroke-linecap="round"/><path d="M1.2 3.6a10 10 0 0 1 13.6 0" stroke="#f3efe6" stroke-width="1.7" fill="none" stroke-linecap="round"/></svg><b class="bat"><i></i></b></span></div>
+      <div class="app"><div class="ah"><img src="${LOGO}"><span>Вікно 7 з 24</span></div><div class="pp"><i></i></div>
       <div class="pc it"><small>Питання дня</small><p>Який наш день варто прожити ще раз?</p><div class="pa"><b>Він:</b> Той вечір, коли раптом пішов сніг ❄</div></div>
       <div class="pc it"><small>Подарунок для неї</small><p>Плед із рукавами та какао</p><span class="tg">до 800 ₴ · 3 магазини</span></div>
       <div class="pc it"><small>Пригода для двох</small><p>Кіновечір у наметі з ковдр</p></div>
-      <div class="pc it"><small>Активність у місті</small><p>Ковзанка під відкритим небом</p><span class="tg">★ 4.8 · нове місце</span></div></div></div>` },
+      <div class="pc it"><small>Активність у місті</small><p>Ковзанка під відкритим небом</p><span class="tg">★ 4.8 · нове місце</span></div>
+      <div class="done it">Завершити день ✓</div></div>
+      <div class="home"></div><div class="glass"></div></div></div>` },
   card('wrap', 'Подарунок', 'Ідея під<br><em>ваш бюджет</em>', '2–3 магазини онлайн і де купити у вашому місті', 1),
   card('market', 'Активність у місті', 'Найкращі <em>місця</em><br>і події дня', 'ярмарки, кав’ярні, концерти — з рейтингом і мапою', 2),
   card('stars', 'Пригода для двох', 'Вечори, що<br><em>запам’ятаються</em>', 'від затишного до сміливого — рівень обираєте ви', 3),
@@ -56,15 +60,25 @@ body{width:540px;height:960px}.toplogo{top:30px;width:104px;z-index:8}.stars{z-i
 .btn{display:inline-block;margin-top:26px;padding:17px 30px;border-radius:999px;background:linear-gradient(180deg,#f0d79a,#d6b46a);color:#14110a;font:700 19px Inter,sans-serif;letter-spacing:.03em;box-shadow:0 10px 40px rgba(214,180,106,.45)}
 .chips{display:flex;gap:8px;justify-content:center;margin-top:24px}.chips span{border:1px solid rgba(214,180,106,.5);border-radius:999px;padding:6px 12px;font:500 14px Inter,sans-serif;color:#e9dfc6;background:rgba(8,9,13,.45)}
 .flashw{position:absolute;inset:0;background:#fff;opacity:0;z-index:7;pointer-events:none}
-.phone{position:absolute;left:85px;top:150px;width:370px;border-radius:40px;padding:9px;background:linear-gradient(160deg,#2a2b36,#0d0e14);box-shadow:0 30px 70px -10px #000,0 0 0 1px #ffffff1a,0 0 70px -10px rgba(214,180,106,.45)}
-.scr{border-radius:32px;background:radial-gradient(300px 200px at 80% 0,#2a2340,transparent),#0b0c12;padding:16px 12px 14px;display:grid;gap:8px}
-.pt{display:flex;justify-content:space-between;align-items:center;font:500 28px 'Cormorant Garamond',serif;color:var(--cream)}.pt i{width:22px;height:5px;border-radius:3px;background:var(--gold)}
+.phone{position:absolute;left:100px;top:142px;width:340px;height:700px;border-radius:56px;padding:12px;background:linear-gradient(150deg,#5b5c67 0%,#24252d 18%,#121318 50%,#2a2b33 82%,#64656f 100%);box-shadow:0 0 0 1.5px #8a8b96 inset,0 0 0 3px #0b0c10 inset,0 40px 80px -20px #000,0 0 90px -10px rgba(214,180,106,.4)}
+.sb{position:absolute;width:4px;border-radius:3px;background:linear-gradient(90deg,#6d6e79,#2b2c33)}.sb.l1{left:-3px;top:118px;height:30px}.sb.l2{left:-3px;top:168px;height:56px}.sb.l3{left:-3px;top:236px;height:56px}.sb.r1{right:-3px;top:190px;height:86px}
+.scr{position:relative;height:100%;border-radius:45px;overflow:hidden;background:radial-gradient(320px 220px at 80% 0,#2c2442,transparent),#0a0b11}
+.isl{position:absolute;top:12px;left:50%;width:104px;height:30px;margin-left:-52px;border-radius:20px;background:#000;z-index:3;box-shadow:inset 0 0 0 1px #1a1a1f}
+.stat{position:absolute;top:16px;left:30px;right:24px;display:flex;justify-content:space-between;align-items:center;font:600 15px Inter,sans-serif;color:#f3efe6;z-index:2}
+.ics{display:flex;gap:6px;align-items:center}.sig{display:flex;gap:2px;align-items:flex-end;height:11px}.sig i{width:3px;background:#f3efe6;border-radius:1px}.sig i:nth-child(1){height:4px}.sig i:nth-child(2){height:6px}.sig i:nth-child(3){height:8px}.sig i:nth-child(4){height:11px}
+.wf{display:block}
+.bat{width:24px;height:12px;border:1.5px solid rgba(243,239,230,.7);border-radius:4px;padding:1.5px;position:relative}.bat i{display:block;height:100%;width:80%;background:#f3efe6;border-radius:2px}.bat::after{content:'';position:absolute;right:-4px;top:3px;width:2px;height:4px;background:rgba(243,239,230,.7);border-radius:0 2px 2px 0}
+.app{position:absolute;top:54px;left:12px;right:12px;bottom:20px;display:flex;flex-direction:column;gap:8px}
+.ah{display:flex;justify-content:space-between;align-items:center}.ah img{height:26px}.ah span{font:500 21px 'Cormorant Garamond',serif;color:var(--cream)}
 .pp{height:3px;border-radius:3px;background:rgba(255,255,255,.12)}.pp i{display:block;height:100%;width:29%;background:var(--gold)}
-.pc{border:1px solid rgba(255,255,255,.12);border-radius:14px;padding:9px 11px;background:rgba(255,255,255,.04)}
-.pc small{display:block;font:600 11.5px Inter,sans-serif;letter-spacing:.2em;text-transform:uppercase;color:var(--gold)}
-.pc p{margin:3px 0 0;font:500 23px/1.15 'Cormorant Garamond',serif;color:var(--cream)}
-.pa{margin-top:6px;padding:6px 8px;border-radius:9px;background:rgba(214,180,106,.12);font:400 14px/1.35 Inter,sans-serif;color:#e4dfd2}.pa b{color:var(--gold2,#f0d79a)}
-.tg{display:inline-block;margin-top:5px;font:400 13px Inter,sans-serif;color:var(--muted);border:1px solid rgba(255,255,255,.14);border-radius:99px;padding:2px 8px}
+.pc{border:1px solid rgba(255,255,255,.12);border-radius:14px;padding:9px 11px;background:rgba(255,255,255,.045)}
+.pc small{display:block;font:600 10.5px Inter,sans-serif;letter-spacing:.2em;text-transform:uppercase;color:var(--gold)}
+.pc p{margin:3px 0 0;font:500 21px/1.15 'Cormorant Garamond',serif;color:var(--cream)}
+.pa{margin-top:6px;padding:6px 8px;border-radius:9px;background:rgba(214,180,106,.12);font:400 13px/1.35 Inter,sans-serif;color:#e4dfd2}.pa b{color:#f0d79a}
+.tg{display:inline-block;margin-top:5px;font:400 12px Inter,sans-serif;color:var(--muted);border:1px solid rgba(255,255,255,.14);border-radius:99px;padding:2px 8px}
+.done{margin-top:auto;text-align:center;padding:12px;border-radius:999px;background:linear-gradient(180deg,#f0d79a,#d6b46a);color:#14110a;font:700 15px Inter,sans-serif}
+.home{position:absolute;bottom:8px;left:50%;width:124px;height:5px;margin-left:-62px;border-radius:3px;background:rgba(255,255,255,.6)}
+.glass{position:absolute;inset:0;pointer-events:none;background:linear-gradient(118deg,rgba(255,255,255,.13) 0%,rgba(255,255,255,0) 32%,rgba(255,255,255,0) 68%,rgba(255,255,255,.05) 100%)}
 .chips2{display:flex;flex-wrap:wrap;gap:10px;justify-content:center;margin:26px auto 0;max-width:440px}
 .chips2 span{border:1.5px solid rgba(214,180,106,.6);background:rgba(8,9,13,.55);border-radius:999px;padding:10px 18px;font:500 19px Inter,sans-serif;color:#efe3c4}
 
@@ -73,7 +87,7 @@ const html = `<!doctype html><meta charset="utf-8"><style>${CSS}${AD_CSS}</style
 const S=${JSON.stringify(SCENES.map(s => ({ at: s.at, d: s.d, k: s.kind })))},TOTAL=${TOTAL};
 const R=(t,a,b)=>Math.min(1,Math.max(0,(t-a)/(b-a))),E=x=>1-Math.pow(1-x,3),B=x=>{const c=1.70158;return 1+(c+1)*Math.pow(x-1,3)+c*Math.pow(x-1,2)},q=(el,s)=>el.querySelector(s);
 window.setT=t=>{
-  document.querySelector('.stars').style.opacity=.55+.3*Math.sin(t*2.4);
+  const phS=S.find(x=>x.k==='phone'),inPh=phS&&t>phS.at-.1&&t<phS.at+phS.d+.1;document.querySelector('.stars').style.opacity=inPh?0:.55+.3*Math.sin(t*2.4);
   let fl=0;
   S.forEach((s,i)=>{const el=document.getElementById('s'+i),lt=t-s.at,on=t>=s.at&&t<s.at+s.d+.12;el.style.display=on?'block':'none';if(!on)return;
     const kin=s.k==='card'||s.k==='flash';
@@ -91,7 +105,7 @@ window.setT=t=>{
     if(s.k==='book'){const b=q(el,'.bc');const k=E(R(lt,0,.8));b.style.transform='rotateY('+(70-82*k)+'deg) rotate('+(-2*k)+'deg) scale('+(.8+.2*k)+')';}
     el.querySelectorAll('.up').forEach((u,j)=>{const k=E(R(lt,.08+j*.12,.45+j*.12));u.style.opacity=k;u.style.transform='translateY('+(24*(1-k))+'px)';});
     el.querySelectorAll('.it').forEach((u,j)=>{const g=s.k==='phone'?.5:.35,o=s.k==='phone'?.4:.3,k=E(R(lt,o+j*g,o+.35+j*g));u.style.opacity=k;u.style.transform='translateY('+(18*(1-k))+'px) scale('+(.96+.04*k)+')';});
-    if(s.k==='phone'){const ph=q(el,'.phone');const k=E(R(lt,0,.4));ph.style.transform='translateY('+(40*(1-k))+'px)';ph.style.opacity=k;}
+    if(s.k==='phone'){const ph=q(el,'.phone');const k=E(R(lt,0,.45));ph.style.transform='perspective(1200px) translateY('+(60*(1-k)+4*Math.sin(lt*2))+'px) rotateX('+(8*(1-k))+'deg) rotate('+(-1.5+1.5*k)+'deg)';ph.style.opacity=k;}
     if(s.k==='cta'){const b=q(el,'.btn');const p=lt>1.2?1+.045*Math.sin((lt-1.2)*6.5):1;b.style.transform='scale('+p+')';}
   });
   document.getElementById('fw').style.opacity=fl;
