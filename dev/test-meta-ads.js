@@ -75,4 +75,9 @@ assert.equal(r.report.length, 2); assert.ok(adsets.every(a => a.targeting.publis
 calls.length = 0; r = await run({ mode: 'placements', spec, token: 'TKN', fetchImpl: fake, log }); assert.ok(r.report.every(x => x.unchanged)); assert.equal(calls.filter(c => c.m === 'POST').length, 0);
 assert.throws(() => placementsFor({ placements: ['facebook', 'threads'] }), /Instagram/);
 assert.deepEqual(placementsFor({ placements: ['facebook', 'instagram'] }), { publisher_platforms: ['facebook', 'instagram'] });
+// зупинка старих кампаній: лише активні, створені до 2026, ReeAdvent не чіпаємо
+{ const camps = [{ id: 'o1', name: 'Jagger old', status: 'ACTIVE', effective_status: 'ACTIVE', created_time: '2023-06-01T09:08:00+0000' }, { id: 'o2', name: 'Jagger paused', status: 'PAUSED', effective_status: 'PAUSED', created_time: '2021-09-13T08:18:00+0000' }, { id: 'n1', name: 'ua_cold', status: 'ACTIVE', effective_status: 'ACTIVE', created_time: '2026-11-24T03:43:00+0000' }, { id: 'n2', name: 'boost', status: 'ACTIVE', effective_status: 'ACTIVE', created_time: '2026-11-24T10:00:00+0000' }], posted = [];
+  const pf = async (url, init = {}) => { const u = new URL(String(url)), p = u.pathname.replace('/v23.0', ''); if (p === '/me/adaccounts') return J({ data: [{ id: 'act_42', name: 'A' }] }); if (p === '/act_42/campaigns') return J({ data: camps }); if ((init.method || 'GET') === 'POST') { posted.push([p, Object.fromEntries(new URLSearchParams(String(init.body))).status]); return J({ success: true }); } return J({}); };
+  let x = await run({ mode: 'pause-old-check', spec, token: 'TKN', fetchImpl: pf, log }); assert.deepEqual(x.report.map(c => c.id), ['o1']); assert.equal(posted.length, 0, 'check нічого не змінює');
+  x = await run({ mode: 'pause-old', spec, token: 'TKN', fetchImpl: pf, log }); assert.deepEqual(posted, [['/o1', 'PAUSED']]); }
 console.log('OK meta-ads');

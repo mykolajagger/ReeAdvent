@@ -114,6 +114,24 @@ async function uploadMedia(g, spec, d, keys, { fetchImpl = fetch, log, sleep = m
 }
 
 /** Лише читання: усі кампанії в доступних рекламних акаунтах зі статусом, бюджетом, результатами й посиланнями оголошень. */
+/** Ставить на паузу старі кампанії (створені до дати before), напр. попереднього бізнесу в тому самому рекламному акаунті.
+ *  Кампанії зі специфікації (ReeAdvent) і новіші не чіпає. apply=false — лише показати список. */
+export async function pauseOld(g, log, { adAccount, before = '2026-01-01', keep = [], apply = false } = {}) {
+  const accounts = (await g.get('/me/adaccounts', { fields: 'id,name', limit: 50 })).data || [];
+  const list = adAccount ? accounts.filter(a => a.id === 'act_' + String(adAccount).replace(/^act_/, '')) : accounts, cut = Date.parse(before + 'T00:00:00Z'), out = [];
+  for (const a of list) {
+    const camps = (await g.get(`/${a.id}/campaigns`, { fields: 'id,name,status,effective_status,created_time', limit: 200 })).data || [];
+    for (const c of camps) {
+      if (c.status !== 'ACTIVE' || keep.includes(c.name) || !(Date.parse(c.created_time) < cut)) continue;
+      if (apply) await g.post(`/${c.id}`, { status: 'PAUSED' });
+      log(`• ${c.name} (${c.id}, створено ${String(c.created_time).slice(0, 10)}, ${c.effective_status}) — ${apply ? 'на паузі ✓' : 'буде поставлено на паузу'}`);
+      out.push({ id: c.id, name: c.name, paused: apply });
+    }
+  }
+  if (!out.length) log('Активних кампаній, створених до ' + before + ', немає');
+  return out;
+}
+
 export async function listReport(g, log, { adAccount } = {}) {
   const accounts = (await g.get('/me/adaccounts', { fields: 'id,name,currency,timezone_name,account_status,amount_spent', limit: 50 })).data || [];
   const list = adAccount ? accounts.filter(a => a.id === 'act_' + String(adAccount).replace(/^act_/, '')) : accounts;
@@ -144,6 +162,7 @@ export async function listReport(g, log, { adAccount } = {}) {
 export async function run({ mode = 'check', only = [], spec, token, ver, adAccount, pageId, igId, fetchImpl = fetch, log = console.log, sleep } = {}) {
   const g = graph({ token, ver, fetchImpl, log });
   if (mode === 'report') return { report: await listReport(g, log, { adAccount }) };
+  if (mode === 'pause-old-check' || mode === 'pause-old') return { report: await pauseOld(g, log, { adAccount, keep: spec.campaigns.map(c => c.name), apply: mode === 'pause-old' }) };
   const d = await discover(g, spec, { adAccount, pageId, igId }); d.spec = spec;
   log(`Токен: ${d.me.name || d.me.id}`);
   log(`Рекламний акаунт: ${d.acc.id}${d.acc.name ? ` (${d.acc.name}, ${d.acc.currency}, ${d.acc.timezone_name})` : ''}`);
