@@ -208,3 +208,20 @@ $('#of').addEventListener('submit', async e => {
   if ('IntersectionObserver' in window) new IntersectionObserver(es => { nearOrder = es.some(e => e.isIntersecting); upd(); }, { rootMargin: '0px 0px -10% 0px' }).observe(order);
   addEventListener('scroll', upd, { passive: true }); bar.classList.add('off'); bar.hidden = false; upd();
 })();
+
+// Лічильник: щоб календар стартував 1 грудня, замовити треба до 30 листопада включно (старт — найраніше наступного дня). Після 30.11 ховається.
+(() => {
+  const els = document.querySelectorAll('[data-cd]'), short = document.querySelector('[data-cdshort]'); if (!els.length) return;
+  const kyiv = () => { const p = new Intl.DateTimeFormat('en-CA', { timeZone: 'Europe/Kyiv', year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date()).split('-').map(Number); return { y: p[0], m: p[1], d: p[2] }; };
+  const plural = n => { const a = n % 10, b = n % 100; return a === 1 && b !== 11 ? 'день' : a >= 2 && a <= 4 && (b < 12 || b > 14) ? 'дні' : 'днів'; };
+  const render = () => {
+    const { y, m, d } = kyiv(); const today = Date.UTC(y, m - 1, d), last = Date.UTC(y, 10, 30), left = Math.round((last - today) / 864e5) + 1;   // днів, включно з сьогодні
+    const on = m === 11 && left >= 1 && left <= 30, en = !!(window.LANG && window.LANG.get() === 'en');
+    els.forEach(el => { el.hidden = !on; if (!on) return;
+      el.innerHTML = left === 1
+        ? `<span class="cd-dot"></span>${en ? 'Last day to order for a <strong>December 1</strong> start' : 'Сьогодні останній день, щоб почати <strong>1 грудня</strong>'}`
+        : `<b>${left}</b><span>${en ? `days left to order for a December 1 start` : `${plural(left)}, щоб замовити зі стартом 1 грудня`}</span>`; });
+    if (short) { short.hidden = !on; if (on) short.textContent = left === 1 ? (en ? '⏳ last day for Dec 1 start' : '⏳ останній день до старту 1.12') : (en ? `⏳ ${left} days to Dec 1 start` : `⏳ ${left} ${plural(left)} до старту 1 грудня`); }
+  };
+  render(); addEventListener('langchange', render);
+})();
