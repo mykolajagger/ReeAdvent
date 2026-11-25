@@ -159,7 +159,7 @@ export async function listReport(g, log, { adAccount } = {}) {
   return out;
 }
 
-export async function run({ mode = 'check', only = [], spec, token, ver, adAccount, pageId, igId, fetchImpl = fetch, log = console.log, sleep } = {}) {
+export async function run({ mode = 'check', only = [], ads = [], spec, token, ver, adAccount, pageId, igId, fetchImpl = fetch, log = console.log, sleep } = {}) {
   const g = graph({ token, ver, fetchImpl, log });
   if (mode === 'report') return { report: await listReport(g, log, { adAccount }) };
   if (mode === 'pause-old-check' || mode === 'pause-old') return { report: await pauseOld(g, log, { adAccount, keep: spec.campaigns.map(c => c.name), apply: mode === 'pause-old' }) };
@@ -171,6 +171,20 @@ export async function run({ mode = 'check', only = [], spec, token, ver, adAccou
   for (const x of d.exclude) log(`Виключити аудиторію «${x.name}»: ${x.a ? x.a.id : 'не знайдено (створіть її в Ads Manager → Аудиторії), поки без виключення'}`);
   for (const [n, k] of Object.entries(d.locales)) log(`Мова «${n}»: key ${k}`);
   const camps = spec.campaigns.filter(c => !only.length || only.includes(c.name)), report = [], media = { video: {}, image: {} };   // медіа вантажимо один раз на запуск
+  if (mode === 'activate') {   // увімкнути вказані оголошення (за назвою) у групах <кампанія>_all; лише за проханням власника, бюджети не змінюються
+    if (!ads.length) throw new Error('Вкажіть назви оголошень у полі ads (через кому)');
+    const out = [];
+    for (const c of camps) {
+      const ex = d.existing.find(x => x.name === c.name); if (!ex) { log(`• ${c.name}: кампанії немає`); continue; }
+      const st = ((await g.get(`/${ex.id}/adsets`, { fields: 'id,name', limit: 50 })).data || []).find(x => x.name === c.name + '_all'); if (!st) { log(`• ${c.name}: групи немає`); continue; }
+      for (const ad of ((await g.get(`/${st.id}/ads`, { fields: 'id,name,status,effective_status', limit: 100 })).data || []).filter(a => ads.includes(a.name))) {
+        if (ad.status === 'ACTIVE') { log(`• ${c.name} / ${ad.name}: уже увімкнене (${ad.effective_status})`); continue; }
+        await g.post(`/${ad.id}`, { status: 'ACTIVE' }); const now = await g.get(`/${ad.id}`, { fields: 'status,effective_status' });
+        log(`• ${c.name} / ${ad.name} (${ad.id}): увімкнено ✓ — ${now.effective_status}`); out.push({ campaign: c.name, ad: ad.name, id: ad.id, status: now.effective_status });
+      }
+    }
+    return { discovered: d, report: out };
+  }
   if (mode === 'diag') {   // діагностика доступів: що саме Meta не дозволяє (креативи без оголошень нічого не коштують і не показуються)
     const tryIt = async (label, fn) => { try { const r = await fn(); log(`✓ ${label}${r && r.id ? ' (' + r.id + ')' : ''}`); return r; } catch (e) { log(`✗ ${label}: ${e.message}`); return null; } };
     await tryIt('дозволи токена', async () => { const p = (await g.get('/me/permissions')).data || []; log('   ' + p.map(x => x.permission + ':' + x.status).join(', ')); });
@@ -225,7 +239,7 @@ if (import.meta.url === `file://${process.argv[1]}`) {
   const spec = JSON.parse(fs.readFileSync(new URL('../marketing/ads/meta-campaigns.json', import.meta.url), 'utf8'));
   const out = []; const log = s => { console.log(s); out.push(s); };
   if (!env.META_ADS_TOKEN) { console.error('Немає секрету META_ADS_TOKEN (GitHub → Settings → Secrets and variables → Actions).'); process.exit(1); }
-  run({ mode: env.MODE || 'check', only: String(env.ONLY || '').split(',').map(s => s.trim()).filter(Boolean), spec, token: env.META_ADS_TOKEN, ver: env.API_VERSION || 'v23.0',
+  run({ mode: env.MODE || 'check', only: String(env.ONLY || '').split(',').map(s => s.trim()).filter(Boolean), ads: String(env.ADS || '').split(',').map(s => s.trim()).filter(Boolean), spec, token: env.META_ADS_TOKEN, ver: env.API_VERSION || 'v23.0',
     adAccount: env.AD_ACCOUNT || undefined, pageId: env.PAGE_ID || undefined, igId: env.IG_ID || undefined, log })
     .then(() => { if (env.GITHUB_STEP_SUMMARY) fs.appendFileSync(env.GITHUB_STEP_SUMMARY, '### Meta Ads (' + (env.MODE || 'check') + ')\n\n' + out.map(s => '- ' + s).join('\n') + '\n'); })
     .catch(e => { console.error('Помилка: ' + e.message); if (env.GITHUB_STEP_SUMMARY) fs.appendFileSync(env.GITHUB_STEP_SUMMARY, '### Meta Ads: помилка\n\n' + e.message + '\n'); process.exit(1); });

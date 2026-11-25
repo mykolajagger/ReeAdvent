@@ -81,4 +81,13 @@ assert.deepEqual(placementsFor({ placements: ['facebook', 'instagram'] }), { pub
   const pf = async (url, init = {}) => { const u = new URL(String(url)), p = u.pathname.replace('/v23.0', ''); if (p === '/me/adaccounts') return J({ data: [{ id: 'act_42', name: 'A' }] }); if (p === '/act_42/campaigns') return J({ data: camps }); if ((init.method || 'GET') === 'POST') { posted.push([p, Object.fromEntries(new URLSearchParams(String(init.body))).status]); return J({ success: true }); } return J({}); };
   let x = await run({ mode: 'pause-old-check', spec, token: 'TKN', fetchImpl: pf, log }); assert.deepEqual(x.report.map(c => c.id), ['o1']); assert.equal(posted.length, 0, 'check нічого не змінює');
   x = await run({ mode: 'pause-old', spec, token: 'TKN', fetchImpl: pf, log }); assert.deepEqual(posted, [['/o1', 'PAUSED']]); }
+// activate: лише вказані оголошення, без змін бюджетів
+{ const st = []; const af = async (url, init = {}) => { const u = new URL(String(url)), p = u.pathname.replace('/v23.0', ''), m = init.method || 'GET';
+    if (m === 'POST' && /^\/a\d+$/.test(p)) { st.push([p, Object.fromEntries(new URLSearchParams(String(init.body))).status]); return J({ success: true }); }
+    if (p.endsWith('/ads') && p.startsWith('/x')) return J({ data: [{ id: 'a1', name: 'reel2', status: 'PAUSED', effective_status: 'PAUSED' }, { id: 'a2', name: 'reel1', status: 'PAUSED', effective_status: 'PAUSED' }] });
+    if (/^\/a\d+$/.test(p) && m === 'GET') return J({ status: 'ACTIVE', effective_status: 'PENDING_REVIEW' });
+    return fake(url, init); };
+  const x = await run({ mode: 'activate', ads: ['reel2'], spec, token: 'TKN', fetchImpl: af, log });
+  assert.deepEqual(st, [['/a1', 'ACTIVE'], ['/a1', 'ACTIVE']], 'лише reel2 в обох кампаніях'); assert.equal(x.report.length, 2);
+  await assert.rejects(run({ mode: 'activate', spec, token: 'TKN', fetchImpl: af, log }), /назви оголошень/); }
 console.log('OK meta-ads');
