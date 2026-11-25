@@ -53,7 +53,7 @@ const car = JSON.parse(crs[1].body.object_story_spec); assert.equal(car.link_dat
 const eu = JSON.parse(crs[4].body.object_story_spec); assert.match(eu.video_data.call_to_action.value.link, /utm_campaign=eu_ua&utm_content=reel1/);
 assert.equal(posts.filter(c => c.p === '/act_42/advideos').length, 2, 'кожне відео завантажується один раз на запуск'); assert.equal(posts.filter(c => c.p === '/act_42/adimages').length, 6, '5 слайдів + картка пари, один раз');
 const ads = posts.filter(c => c.p === '/act_42/ads'); assert.equal(ads.length, 8);
-const r2 = JSON.parse(crs[3].body.object_story_spec); assert.equal(r2.video_data.call_to_action.type, 'ORDER_NOW'); assert.match(r2.video_data.call_to_action.value.link, /utm_content=reel2/); assert.equal(r2.video_data.title, 'Старт 1 грудня'); assert.ok(ads.every(a => a.body.status === 'PAUSED')); assert.match(ads[0].body.tracking_specs, /2111183512849298/);
+const r2 = JSON.parse(crs[3].body.object_story_spec); assert.equal(r2.video_data.call_to_action.type, 'LEARN_MORE'); assert.match(r2.video_data.call_to_action.value.link, /utm_content=reel2/); assert.equal(r2.video_data.title, 'Старт 1 грудня'); assert.ok(ads.every(a => a.body.status === 'PAUSED')); assert.match(ads[0].body.tracking_specs, /2111183512849298/);
 // повторний запуск нічого не дублює
 calls.length = 0; r = await run({ mode: 'create', spec, token: 'TKN', fetchImpl: fake, log, sleep: async () => {} });
 assert.ok(r.report.every(x => x.skipped)); assert.equal(calls.filter(c => c.m === 'POST').length, 0);
