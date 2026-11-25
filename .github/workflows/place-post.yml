@@ -8,10 +8,8 @@ on:
         description: 'ID публікації з social/posts.json'
         required: true
       mode:
-        description: 'best — найкраще місце; free — найближчий вільний день'
+        description: 'best — найкраще місце; free — найближчий вільний день; або точний час за Києвом, напр. 2026-11-28T18:00'
         required: true
-        type: choice
-        options: [best, free]
         default: best
 
 jobs:
