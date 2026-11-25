@@ -1,0 +1,30 @@
+name: Поставити публікацію в календар
+
+# Те саме, що кнопка «✦ Найкраще місце» в адмінці: агент обирає день (без повторів формату й сцени поспіль, з урахуванням теми) і показує розклад.
+on:
+  workflow_dispatch:
+    inputs:
+      id:
+        description: 'ID публікації з social/posts.json'
+        required: true
+      mode:
+        description: 'best — найкраще місце; free — найближчий вільний день'
+        required: true
+        type: choice
+        options: [best, free]
+        default: best
+
+jobs:
+  place:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          D1_DATABASE_ID: 8dd4d746-1746-4168-b724-1643f99925e6
+        run: node tools/place-post.mjs "${{ github.event.inputs.id }}" "${{ github.event.inputs.mode }}"
