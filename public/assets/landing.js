@@ -225,3 +225,20 @@ $('#of').addEventListener('submit', async e => {
   };
   render(); addEventListener('langchange', render);
 })();
+
+// Мультик: вмикається без звуку, коли в кадрі; кнопка «зі звуком». День: кадр змінюється за активним кроком.
+(() => {
+  const v = document.getElementById('film-v'), snd = document.getElementById('film-snd');
+  if (v && 'IntersectionObserver' in window) {
+    new IntersectionObserver(es => es.forEach(e => { if (e.isIntersecting) { v.preload = 'auto'; v.play().catch(() => {}); } else v.pause(); }), { threshold: .45 }).observe(v);
+  }
+  if (v && snd) snd.addEventListener('click', () => { v.muted = !v.muted; if (!v.muted) { v.currentTime = 0; v.play().catch(() => {}); } snd.textContent = v.muted ? (window.LANG && window.LANG.get() === 'en' ? '🔊 With sound' : '🔊 Зі звуком') : (window.LANG && window.LANG.get() === 'en' ? '🔇 Mute' : '🔇 Без звуку'); });
+  const tl = document.querySelector('#day .tl'), dps = document.querySelectorAll('#day .dp');
+  if (tl && dps.length && 'IntersectionObserver' in window) {
+    tl.classList.add('js'); const lis = tl.querySelectorAll('li[data-k]');
+    const set = k => { dps.forEach(d => d.classList.toggle('on', d.dataset.k === k)); lis.forEach(l => l.classList.toggle('on', l.dataset.k === k)); };
+    set('0');
+    const io = new IntersectionObserver(es => es.forEach(e => { if (e.isIntersecting) set(e.target.dataset.k); }), { rootMargin: '-45% 0px -45% 0px' });
+    lis.forEach(l => io.observe(l));
+  }
+})();
