@@ -14,6 +14,6 @@ jobs:
           for u in https://reeadvent.fun/ "https://reeadvent.fun/?lang=uk" https://www.reeadvent.fun/ https://reeadvent.pages.dev/; do
             echo "=== $u"; curl -sSL -D /tmp/h -o /tmp/b "$u" || true
             grep -iE '^(HTTP|cache-control|cf-cache-status|age|location|cf-ray)' /tmp/h || true
-            echo "hero2: $(grep -c 'hero2' /tmp/b)  versions: $(grep -oE '(landing|lang|base)\.(css|js)\?v=[0-9]+' /tmp/b | tr '\n' ' ')"
+            echo "phone: $(grep -c "562 66 87" /tmp/b)  hero2: $(grep -c hero2 /tmp/b)  versions: $(grep -oE '(landing|lang|base)\.(css|js)\?v=[0-9]+' /tmp/b | tr '\n' ' ')"
           done
           echo "=== landing.css"; curl -sSI "https://reeadvent.fun/assets/landing.css?v=14" | grep -iE '^(HTTP|cache-control|cf-cache-status|age)'
