@@ -1,0 +1,29 @@
+name: Великий файл у R2 (для завантаження)
+
+# Запускається пушем у гілку upload/**: склеює частини upload/<ім'я>.zip.part* і кладе файл у R2 як dl/<ім'я>.zip.
+# Файл стає доступним за адресою https://reeadvent.fun/api/dl/<ім'я>.zip. Гілку після цього видаляють.
+on:
+  push:
+    branches: ['upload/**']
+
+jobs:
+  put:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Склеїти й завантажити
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: |
+          set -euo pipefail
+          for base in $(ls upload/*.part* | sed 's/\.part[0-9]*$//' | sort -u); do
+            name=$(basename "$base"); cat $(ls "$base".part* | sort) > "/tmp/$name"
+            ls -la "/tmp/$name"; sha256sum "/tmp/$name"
+            npx -y wrangler@4 r2 object put "reeadvent-media/dl/$name" --file "/tmp/$name" --content-type application/zip --remote
+            echo "Готово: https://reeadvent.fun/api/dl/$name"
+          done

@@ -43,6 +43,7 @@ export async function handle(request, env) {
     if (m === 'POST' && path === '/api/orders') return await createOrder(request, env);
     if (m === 'POST' && path === '/api/promo/check') return await promoCheck(request, env);
     let r;
+    if ((m === 'GET' || m === 'HEAD') && (r = path.match(/^\/api\/dl\/([a-z0-9-]{8,80}\.zip)$/))) return await serveDownload(env, r[1], m === 'HEAD');
     if (m === 'GET' && (r = path.match(/^\/api\/media\/([\w-]{8,40}(?:\.(?:jpe?g|png|mp4))?)$/i))) return await serveMedia(env, r[1]);
     if (m === 'GET' && (r = path.match(/^\/api\/orders\/([\w-]+)\/resume$/))) return await resumeOrder(request, env, r[1]);
     if (m === 'GET' && (r = path.match(/^\/api\/orders\/([\w-]+)\/status$/))) return await orderStatus(env, r[1]);
@@ -573,4 +574,12 @@ async function placesFor(env, mem, d, kind) {
   if (!places.length) { places = await venuePicks(env, { country: mem.country, city: mem.city, cat: catOfQuery(act.q || act.title), seedKey: mem.id + ':' + d, lang: mem.lang }); // власна база (OpenStreetMap + оцінки користувачів)
     if (rule && rule.nature) places = places.filter(p => !/площ|майдан|сквер|ринок|square|plaza|market/i.test(p.name)); }
   return { ok: true, places };
+}
+
+/** Завантаження великих архівів (контент для команди) з R2: лише ключі dl/<ім'я>.zip, ім'я з випадковим суфіксом. */
+export async function serveDownload(env, name, head = false) {
+  if (!env.MEDIA || typeof env.MEDIA.get !== 'function') return new Response('not found', { status: 404 });
+  const o = head ? await env.MEDIA.head('dl/' + name) : await env.MEDIA.get('dl/' + name);
+  if (!o) return new Response('not found', { status: 404 });
+  return new Response(head ? null : o.body, { headers: { 'content-type': 'application/zip', 'content-length': String(o.size), 'content-disposition': `attachment; filename="${name}"`, 'cache-control': 'private, max-age=0', 'x-robots-tag': 'noindex' } });
 }
