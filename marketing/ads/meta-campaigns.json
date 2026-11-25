@@ -16,14 +16,17 @@
     "reel2": { "type": "video", "video": "/social/ad-dec1.mp4", "thumb": "/social/ad-dec1-cover.jpg",
       "message": "Не річ, а 24 дні уваги ✦\nЩоранку нове вікно: питання одне одному, подарунок під ваш бюджет, пригода й активність у вашому місті.\nСтарт 1 грудня — встигніть замовити до 30 листопада.",
       "headline": "Старт 1 грудня", "description": "Адвент-календар для двох" },
+    "story1": { "type": "video", "video": "/social/story-calendar.mp4", "thumb": "/social/story-calendar-cover.jpg",
+      "message": "Не річ, а 24 дні уваги ✦\nЩоранку нове вікно: питання одне одному, подарунок під ваш бюджет, пригода й активність у вашому місті.\nСтарт 1 грудня — встигніть замовити до 30 листопада.",
+      "headline": "Старт 1 грудня", "description": "Адвент-календар для двох" },
     "couple1": { "type": "image", "image": "/social/04-couple-illustration.jpg",
       "message": "Той самий вечір, але кожного дня інакше. ReeAdvent: 24 вікна для двох ✦",
       "headline": "Сюрприз на кожен день", "description": "Приватний календар для пар" }
   },
   "campaigns": [
     { "name": "ua_cold", "daily_budget_usd": 12, "countries": ["UA"], "age_min": 22, "age_max": 45, "locales": [],
-      "ads": ["reel1", "carousel1", "couple1", "reel2"] },
+      "ads": ["reel1", "carousel1", "couple1", "reel2", "story1"] },
     { "name": "eu_ua", "daily_budget_usd": 10, "countries": ["PL", "DE", "CZ", "SK", "IE", "NL", "IT", "ES", "LT"], "age_min": 22, "age_max": 45, "locales": ["Ukrainian"],
-      "ads": ["reel1", "carousel1", "couple1", "reel2"] }
+      "ads": ["reel1", "carousel1", "couple1", "reel2", "story1"] }
   ]
 }

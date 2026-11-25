@@ -171,16 +171,17 @@ export async function run({ mode = 'check', only = [], ads = [], spec, token, ve
   for (const x of d.exclude) log(`Виключити аудиторію «${x.name}»: ${x.a ? x.a.id : 'не знайдено (створіть її в Ads Manager → Аудиторії), поки без виключення'}`);
   for (const [n, k] of Object.entries(d.locales)) log(`Мова «${n}»: key ${k}`);
   const camps = spec.campaigns.filter(c => !only.length || only.includes(c.name)), report = [], media = { video: {}, image: {} };   // медіа вантажимо один раз на запуск
-  if (mode === 'activate') {   // увімкнути вказані оголошення (за назвою) у групах <кампанія>_all; лише за проханням власника, бюджети не змінюються
+  if (mode === 'activate' || mode === 'pause-ads') {   // activate — увімкнути, pause-ads — поставити на паузу вказані оголошення
+    const want = mode === 'activate' ? 'ACTIVE' : 'PAUSED';   // увімкнути вказані оголошення (за назвою) у групах <кампанія>_all; лише за проханням власника, бюджети не змінюються
     if (!ads.length) throw new Error('Вкажіть назви оголошень у полі ads (через кому)');
     const out = [];
     for (const c of camps) {
       const ex = d.existing.find(x => x.name === c.name); if (!ex) { log(`• ${c.name}: кампанії немає`); continue; }
       const st = ((await g.get(`/${ex.id}/adsets`, { fields: 'id,name', limit: 50 })).data || []).find(x => x.name === c.name + '_all'); if (!st) { log(`• ${c.name}: групи немає`); continue; }
       for (const ad of ((await g.get(`/${st.id}/ads`, { fields: 'id,name,status,effective_status', limit: 100 })).data || []).filter(a => ads.includes(a.name))) {
-        if (ad.status === 'ACTIVE') { log(`• ${c.name} / ${ad.name}: уже увімкнене (${ad.effective_status})`); continue; }
-        await g.post(`/${ad.id}`, { status: 'ACTIVE' }); const now = await g.get(`/${ad.id}`, { fields: 'status,effective_status' });
-        log(`• ${c.name} / ${ad.name} (${ad.id}): увімкнено ✓ — ${now.effective_status}`); out.push({ campaign: c.name, ad: ad.name, id: ad.id, status: now.effective_status });
+        if (ad.status === want) { log(`• ${c.name} / ${ad.name}: уже ${want === 'ACTIVE' ? 'увімкнене' : 'на паузі'} (${ad.effective_status})`); continue; }
+        await g.post(`/${ad.id}`, { status: want }); const now = await g.get(`/${ad.id}`, { fields: 'status,effective_status' });
+        log(`• ${c.name} / ${ad.name} (${ad.id}): ${want === 'ACTIVE' ? 'увімкнено' : 'на паузі'} ✓ — ${now.effective_status}`); out.push({ campaign: c.name, ad: ad.name, id: ad.id, status: now.effective_status });
       }
     }
     return { discovered: d, report: out };
