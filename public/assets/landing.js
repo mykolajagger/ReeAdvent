@@ -108,6 +108,7 @@ function showPrice(finalKop) {
   $('.price').classList.toggle('sale', !!ref);
   const u = $('#until'); u.hidden = !(saleUntil && was); if (saleUntil && was) { const [y, m, d] = saleUntil.split('-').map(Number), ds = new Date(Date.UTC(y, m - 1, d)).toLocaleDateString(LG() === 'en' ? 'en-GB' : 'uk-UA', { day: 'numeric', month: 'long', timeZone: 'UTC' }); u.textContent = LG() === 'en' ? `Offer valid until ${ds}` : `Ціна діє до ${ds}`; }
   $('#price').textContent = money(finalKop);
+  productLd(basePrice, cur.code, saleUntil);
   fxNote(finalKop);
   $('#ob').textContent = finalKop === 0 ? tl('f_free') : tl('f_pay');
 }
@@ -250,3 +251,14 @@ $('#of').addEventListener('submit', async e => {
   else ss.forEach(x => x.classList.add('in'));
   document.querySelectorAll('.say-t.swap').forEach(el => { const a = el.querySelectorAll('.sw'); let i = 0; setInterval(() => { a[i].classList.remove('on'); i = (i + 1) % a.length; a[i].classList.add('on'); }, 3200); });
 })();
+
+// Розмітка товару для Google: ціна й валюта з налаштувань (без вигаданих відгуків чи рейтингів)
+function productLd(basePrice, code, saleUntil) {
+  if (basePrice == null) return;
+  const d = { '@context': 'https://schema.org', '@type': 'Product', name: 'Адвент-календар для двох ReeAdvent', alternateName: 'Advent calendar for couples',
+    description: 'Онлайн адвент-календар для пари на 24 дні: питання одне одному, подарунок для неї чи для нього, романтична пригода й активність у вашому місті.',
+    image: ['https://reeadvent.fun/assets/og.png', 'https://reeadvent.fun/assets/l/v2-together.webp'], brand: { '@type': 'Brand', name: 'ReeAdvent' }, category: 'Подарунки для пар',
+    offers: { '@type': 'Offer', url: 'https://reeadvent.fun/#order', price: String(basePrice), priceCurrency: code || 'UAH', availability: 'https://schema.org/InStock', ...(saleUntil ? { priceValidUntil: saleUntil } : {}) } };
+  let el = document.getElementById('ld-product'); if (!el) { el = document.createElement('script'); el.type = 'application/ld+json'; el.id = 'ld-product'; document.head.appendChild(el); }
+  el.textContent = JSON.stringify(d);
+}
