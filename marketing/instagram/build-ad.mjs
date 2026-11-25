@@ -7,19 +7,23 @@ const { SC, BL } = kit(Object.keys(FOCUS));
 const img = (n, extra = '') => `<img src="${SC[n]}" style="width:100%;height:100%;object-fit:cover;object-position:${FOCUS[n]};display:block;${extra}">`;
 const full = (n, cls = 'zoom') => `<div class="fb ${cls}">${img(n)}</div><div class="shade"></div>`;
 const blur = n => `<div class="sbg" style="background-image:url(${BL[n]});filter:blur(14px)"></div><div class="veil"></div>`;
-const card = (n, eb, h, sub, k) => ({ d: 1.2, kind: 'card', html: `${full(n)}<div class="ct"><div class="eb">${eb}<span>${k}/4</span></div><div class="h">${h}</div><div class="sub">${sub}</div></div>` });
+const card = (n, eb, h, sub, k) => ({ d: 1.8, kind: 'card', html: `${full(n)}<div class="ct"><div class="eb">${eb}<span>${k}/3</span></div><div class="h">${h}</div><div class="sub">${sub}</div></div>` });
 const flash = (n, word) => ({ d: 1.2, kind: 'flash', html: `${full(n, 'zoom2')}<div class="word">${word}</div>` });
 const SCENES = [
-  { d: 2.4, kind: 'hook', html: `${blur('wrap')}<div class="mid" style="top:250px"><div class="h1 slam">Ще одна річ<br>у подарунок?</div><div class="strike"><i></i></div></div>` },
+  { d: 1.8, kind: 'hook', html: `${blur('wrap')}<div class="mid" style="top:250px"><div class="h1 slam">Ще одна річ<br>у подарунок?</div><div class="strike"><i></i></div></div>` },
   { d: 2.4, kind: 'doors', html: `${blur('tree')}<div class="arch">${img('tree')}<div class="door l"><b>1</b></div><div class="door r"></div><div class="glow"></div></div><div class="mid up" style="top:548px"><div class="h2">Подаруй <em>24 дні</em> уваги</div><div class="nm">для неї · для нього</div></div>` },
-  { d: 1.8, kind: 'count', html: `${blur('book')}<div class="mid" style="top:170px"><div class="clock up">щоранку о 07:00</div><div class="win"><span id="cnt">1</span></div><div class="h2 up">нове вікно-сюрприз</div></div>` },
-  card('book', 'Питання дня', 'Відповідаєте<br><em>одне одному</em>', '«Який наш день варто прожити ще раз?»', 1),
-  card('wrap', 'Подарунок', 'Ідея під<br><em>ваш бюджет</em>', 'з магазинами й місцем у вашому місті', 2),
-  card('stars', 'Пригода', 'Тільки<br><em>для двох</em>', 'від затишного вечора до сміливого', 3),
-  card('market', 'Активність', 'У вашому<br><em>місті</em>', 'найкращі місця й події дня', 4),
-  flash('pasta', 'під ваші <em>смаки</em>'), flash('game', 'ваш <em>темп</em>'), flash('spa', 'ваше <em>місто</em>'), flash('movie', 'без <em>повторів</em>'),
+  { d: 2.4, kind: 'phone', html: `${blur('book')}<div class="mid" style="top:96px"><div class="clock up">щоранку о 07:00 — нове вікно</div></div>
+    <div class="phone"><div class="scr"><div class="pt"><span>Вікно 7</span><i></i></div><div class="pp"><i></i></div>
+      <div class="pc it"><small>Питання дня</small><p>Який наш день варто прожити ще раз?</p><div class="pa"><b>Він:</b> Той вечір, коли раптом пішов сніг ❄</div></div>
+      <div class="pc it"><small>Подарунок для неї</small><p>Плед із рукавами та какао</p><span class="tg">до 800 ₴ · 3 магазини</span></div>
+      <div class="pc it"><small>Пригода для двох</small><p>Кіновечір у наметі з ковдр</p></div>
+      <div class="pc it"><small>Активність у місті</small><p>Ковзанка під відкритим небом</p><span class="tg">★ 4.8 · нове місце</span></div></div></div>` },
+  card('wrap', 'Подарунок', 'Ідея під<br><em>ваш бюджет</em>', '2–3 магазини онлайн і де купити у вашому місті', 1),
+  card('market', 'Активність у місті', 'Найкращі <em>місця</em><br>і події дня', 'ярмарки, кав’ярні, концерти — з рейтингом і мапою', 2),
+  card('stars', 'Пригода для двох', 'Вечори, що<br><em>запам’ятаються</em>', 'від затишного до сміливого — рівень обираєте ви', 3),
+  { d: 1.8, kind: 'pz', html: `${blur('pillow')}<div class="mid" style="top:150px"><div class="h2 up">Підібрано<br><em>під вас двох</em></div><div class="dl up" style="color:var(--muted)">кожен заповнює анкету окремо</div><div class="chips2"><span class="it">ваш бюджет</span><span class="it">ваші смаки</span><span class="it">ваше місто</span><span class="it">скільки вечорів виходити</span><span class="it">рівень пікантності</span></div></div>` },
   { d: 1.8, kind: 'book', html: `${blur('stars')}<div class="book"><div class="bc"><span class="bs">✦</span><span class="by">Адвент 2026</span><span class="bn">Він &amp; Вона</span><span class="bl">ReeAdvent</span></div></div><div class="mid up" style="top:520px"><div class="h2">А в кінці — <em>книга</em><br>вашої історії</div></div>` },
-  { d: 4.8, kind: 'cta', html: `${blur('tree')}<div class="mid" style="top:118px"><img class="up" src="${LOGO_FULL}" style="width:250px"><div class="h1 up" style="margin-top:14px">Старт<br><em>1 грудня</em></div><div class="dl up">встигніть замовити до 30 листопада</div><div class="btn up">Замовити на reeadvent.fun</div><div class="chips up"><span>24 вікна</span><span>для двох</span><span>будь-яке місто</span></div></div>` },
+  { d: 3.6, kind: 'cta', html: `${blur('tree')}<div class="mid" style="top:118px"><img class="up" src="${LOGO_FULL}" style="width:250px"><div class="h1 up" style="margin-top:14px">Старт<br><em>1 грудня</em></div><div class="dl up">встигніть замовити до 30 листопада</div><div class="btn up">Замовити на reeadvent.fun</div><div class="chips up"><span>24 вікна</span><span>для двох</span><span>будь-яке місто</span></div></div>` },
 ];
 let t0 = 0; for (const s of SCENES) { s.at = t0; t0 += s.d; }
 const TOTAL = Math.round(t0 * 100) / 100;
@@ -52,8 +56,20 @@ body{width:540px;height:960px}.toplogo{top:30px;width:104px;z-index:8}.stars{z-i
 .btn{display:inline-block;margin-top:26px;padding:17px 30px;border-radius:999px;background:linear-gradient(180deg,#f0d79a,#d6b46a);color:#14110a;font:700 19px Inter,sans-serif;letter-spacing:.03em;box-shadow:0 10px 40px rgba(214,180,106,.45)}
 .chips{display:flex;gap:8px;justify-content:center;margin-top:24px}.chips span{border:1px solid rgba(214,180,106,.5);border-radius:999px;padding:6px 12px;font:500 14px Inter,sans-serif;color:#e9dfc6;background:rgba(8,9,13,.45)}
 .flashw{position:absolute;inset:0;background:#fff;opacity:0;z-index:7;pointer-events:none}
+.phone{position:absolute;left:85px;top:150px;width:370px;border-radius:40px;padding:9px;background:linear-gradient(160deg,#2a2b36,#0d0e14);box-shadow:0 30px 70px -10px #000,0 0 0 1px #ffffff1a,0 0 70px -10px rgba(214,180,106,.45)}
+.scr{border-radius:32px;background:radial-gradient(300px 200px at 80% 0,#2a2340,transparent),#0b0c12;padding:16px 12px 14px;display:grid;gap:8px}
+.pt{display:flex;justify-content:space-between;align-items:center;font:500 28px 'Cormorant Garamond',serif;color:var(--cream)}.pt i{width:22px;height:5px;border-radius:3px;background:var(--gold)}
+.pp{height:3px;border-radius:3px;background:rgba(255,255,255,.12)}.pp i{display:block;height:100%;width:29%;background:var(--gold)}
+.pc{border:1px solid rgba(255,255,255,.12);border-radius:14px;padding:9px 11px;background:rgba(255,255,255,.04)}
+.pc small{display:block;font:600 11.5px Inter,sans-serif;letter-spacing:.2em;text-transform:uppercase;color:var(--gold)}
+.pc p{margin:3px 0 0;font:500 23px/1.15 'Cormorant Garamond',serif;color:var(--cream)}
+.pa{margin-top:6px;padding:6px 8px;border-radius:9px;background:rgba(214,180,106,.12);font:400 14px/1.35 Inter,sans-serif;color:#e4dfd2}.pa b{color:var(--gold2,#f0d79a)}
+.tg{display:inline-block;margin-top:5px;font:400 13px Inter,sans-serif;color:var(--muted);border:1px solid rgba(255,255,255,.14);border-radius:99px;padding:2px 8px}
+.chips2{display:flex;flex-wrap:wrap;gap:10px;justify-content:center;margin:26px auto 0;max-width:440px}
+.chips2 span{border:1.5px solid rgba(214,180,106,.6);background:rgba(8,9,13,.55);border-radius:999px;padding:10px 18px;font:500 19px Inter,sans-serif;color:#efe3c4}
+
 `;
-const html = `<!doctype html><meta charset="utf-8"><style>${CSS}${AD_CSS}</style><body><div class="bg"></div>${SCENES.map((s, i) => `<div class="sc ${s.kind}" id="s${i}">${s.html}</div>`).join('')}<div class="flashw" id="fw"></div><div class="stars"></div><img class="toplogo" src="${LOGO}"><script>${starsJS(540, 960, 45, 11)}
+const html = `<!doctype html><meta charset="utf-8"><style>${CSS}${AD_CSS}</style><body><div class="bg"></div>${SCENES.map((s, i) => `<div class="sc k-${s.kind}" id="s${i}">${s.html}</div>`).join('')}<div class="flashw" id="fw"></div><div class="stars"></div><img class="toplogo" src="${LOGO}"><script>${starsJS(540, 960, 45, 11)}
 const S=${JSON.stringify(SCENES.map(s => ({ at: s.at, d: s.d, k: s.kind })))},TOTAL=${TOTAL};
 const R=(t,a,b)=>Math.min(1,Math.max(0,(t-a)/(b-a))),E=x=>1-Math.pow(1-x,3),B=x=>{const c=1.70158;return 1+(c+1)*Math.pow(x-1,3)+c*Math.pow(x-1,2)},q=(el,s)=>el.querySelector(s);
 window.setT=t=>{
@@ -67,13 +83,15 @@ window.setT=t=>{
     const z=q(el,'.zoom img');if(z)z.style.transform='scale('+(1.04+.1*R(lt,0,s.d))+')';
     const z2=q(el,'.zoom2 img');if(z2)z2.style.transform='scale('+(1.18-.12*E(R(lt,0,s.d)))+')';
     const sl=q(el,'.slam');if(sl){const k=E(R(lt,0,.22));sl.style.transform='scale('+(1.35-.35*k)+')';sl.style.opacity=k;}
-    const st=q(el,'.strike i');if(st)st.style.width=(100*E(R(lt,1.2,1.6)))+'%';
+    const st=q(el,'.strike i');if(st)st.style.width=(100*E(R(lt,.8,1.15)))+'%';
     if(s.k==='doors'){const o=E(R(lt,.3,.95));q(el,'.door.l').style.transform='rotateY('+(-105*o)+'deg)';q(el,'.door.r').style.transform='rotateY('+(105*o)+'deg)';q(el,'.glow').style.opacity=Math.sin(Math.PI*R(lt,.25,1.25))*.9;q(el,'.arch img').style.transform='scale('+(1.15-.15*E(R(lt,.1,1.6)))+')';}
     if(s.k==='count'){const c=Math.max(1,Math.min(24,Math.floor(1+23*E(R(lt,.25,1.4)))));document.getElementById('cnt').textContent=c;const w=q(el,'.win');w.style.transform='scale('+(.9+.1*B(R(lt,0,.3)))+')';}
     if(s.k==='card'){const c=q(el,'.ct');const k=E(R(lt,.1,.4));c.style.opacity=k;c.style.transform='translateY('+(30*(1-k))+'px)';}
     if(s.k==='flash'){const w=q(el,'.word');const k=B(R(lt,.1,.42));w.style.transform='translateX(-50%) scale('+(.7+.3*k)+')';w.style.opacity=R(lt,.1,.26);}
     if(s.k==='book'){const b=q(el,'.bc');const k=E(R(lt,0,.8));b.style.transform='rotateY('+(70-82*k)+'deg) rotate('+(-2*k)+'deg) scale('+(.8+.2*k)+')';}
     el.querySelectorAll('.up').forEach((u,j)=>{const k=E(R(lt,.08+j*.12,.45+j*.12));u.style.opacity=k;u.style.transform='translateY('+(24*(1-k))+'px)';});
+    el.querySelectorAll('.it').forEach((u,j)=>{const k=E(R(lt,.25+j*.28,.6+j*.28));u.style.opacity=k;u.style.transform='translateY('+(18*(1-k))+'px) scale('+(.96+.04*k)+')';});
+    if(s.k==='phone'){const ph=q(el,'.phone');const k=E(R(lt,0,.4));ph.style.transform='translateY('+(40*(1-k))+'px)';ph.style.opacity=k;}
     if(s.k==='cta'){const b=q(el,'.btn');const p=lt>1.2?1+.045*Math.sin((lt-1.2)*6.5):1;b.style.transform='scale('+p+')';}
   });
   document.getElementById('fw').style.opacity=fl;
