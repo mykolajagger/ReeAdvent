@@ -58,7 +58,7 @@
     bk1: '24 pages: every question and both answers', bk2: 'Photos from your answers', bk3: 'Both partners’ gifts, the adventures and activities you did', bk4: 'Made on your device: nothing is sent to a server',
     q8: 'Do we need to install an app?', a8: 'No. The calendar works in the browser on your phone and computer. If you like, add it to your home screen and it will open like an app.',
     q9: 'What is left after 24 days?', a9: 'A festive finale and a PDF book “Advent [year] [your names]”: every question, both answers, photos, gifts and what you did together.',
-    scta_sub: 'for a calendar for two', scta_btn: 'Order',
+    scta_sub: 'for a calendar for two', scta_btn: 'Order now!',
     ft_offer: 'Public offer', ft_privacy: 'Privacy policy', ft_support: 'Support',
     e_names: 'Please enter both names.', e_email: 'Please check the email addresses.', e_same: 'The emails must be different: one for each of you.', e_city: 'Please enter a city.', e_region: 'Please choose a region.', e_consent: 'Please confirm your age and accept the terms.', e_many: 'Too many attempts. Try again in an hour.',
     e_date: 'Choose a start date: from tomorrow and not later than in 90 days.', e_captcha: 'We could not confirm you are not a bot. Please try again.', e_bot: 'Please confirm that you are not a bot (the widget above).', e_gen: 'Could not create the order. Please try again.',
