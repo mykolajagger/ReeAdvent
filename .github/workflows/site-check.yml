@@ -19,7 +19,7 @@ jobs:
           for u in https://reeadvent.fun/ "https://reeadvent.fun/?lang=uk" https://www.reeadvent.fun/ https://reeadvent.pages.dev/; do
             echo "=== $u"; curl -sSL -D /tmp/h -o /tmp/b "$u" || true
             grep -iE '^(HTTP|cache-control|cf-cache-status|age|location|cf-ray)' /tmp/h || true
-            echo "phone: $(grep -c "562 66 87" /tmp/b)  hero2: $(grep -c hero2 /tmp/b)  versions: $(grep -oE '(landing|lang|base)\.(css|js)\?v=[0-9]+' /tmp/b | tr '\n' ' ')"
+            echo "phone: $(grep -c "562 66 87" /tmp/b)  hero2: $(grep -c hero2 /tmp/b)  film: $(grep -c id=.film. /tmp/b)  say: $(grep -c "class=.say" /tmp/b)  versions: $(grep -oE '(landing|lang|base)\.(css|js)\?v=[0-9]+' /tmp/b | tr '\n' ' ')"
           done
           echo "=== ad video"; curl -sSI "https://reeadvent.fun/social/ad-dec1.mp4" | grep -iE "^(HTTP|content-type|content-length)"
           if [ -n "${{ github.event.inputs.url }}" ]; then echo "=== extra"; curl -sSI "${{ github.event.inputs.url }}" | grep -iE "^(HTTP|content-type|content-length|content-disposition)"; fi
