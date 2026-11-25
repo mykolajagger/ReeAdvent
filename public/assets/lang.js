@@ -53,7 +53,7 @@
     pr1h: 'No repeats', pr1p: 'Similar activities never come back to back, and themes alternate. No two picnics in a row.',
     pr2h: 'The right places', pr2p: 'A museum means your city’s museums; a walk in the woods means a forest or park, not the main square.',
     pr3h: 'Learns from ratings', pr3p: 'Couples’ stars lift the best ideas higher. Order again and nothing you already had will repeat.',
-    bk_eyebrow: 'After day 24', bk_h2: 'Your story, in a book', bk_y: 'Advent 2026', bk_n: 'Olena &amp; Andrew',
+    bk_eyebrow: 'After day 24', bk_h2: 'Your story, in a book', bk_y: 'Advent 2026', bk_n: 'M&amp;M',
     bk_p: 'The last window ends with a festive animation, and then you save a PDF book with your names on the cover.',
     bk1: '24 pages: every question and both answers', bk2: 'Photos from your answers', bk3: 'Both partners’ gifts, the adventures and activities you did', bk4: 'Made on your device: nothing is sent to a server',
     q8: 'Do we need to install an app?', a8: 'No. The calendar works in the browser on your phone and computer. If you like, add it to your home screen and it will open like an app.',
