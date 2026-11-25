@@ -93,12 +93,22 @@ async function waitReady(fetchImpl, base, id, token, { tries = 40, delay = 3000 
   }
   throw new Error('Instagram довго обробляє файл, спробуйте ще раз за кілька хвилин');
 }
+const norm = t => String(t || '').replace(/\s+/g, ' ').trim().slice(0, 120);
+/** Шукає серед останніх публікацій акаунта пост із таким самим підписом за останні 3 доби.
+ *  Instagram інколи відповідає помилкою («обмежуємо деяку активність»), хоча пост уже вийшов: тоді не публікуємо вдруге. */
+async function findPublished(fetchImpl, base, id, token, post, now = Date.now()) {
+  if (isStory(post) || !norm(post.caption)) return null;
+  let list = []; try { list = (await call(fetchImpl, 'GET', `${base}/${id}/media`, { fields: 'id,caption,permalink,timestamp', limit: '15', access_token: token })).data || []; } catch { return null; }
+  const want = norm(post.caption), hit = list.find(m => norm(m.caption) === want && (!m.timestamp || now - Date.parse(m.timestamp) < 3 * DAY));
+  return hit ? { media_id: hit.id, link: hit.permalink || '', recovered: true } : null;
+}
 /** Публікує один пост із маніфесту. Повертає { media_id, link }. */
 export async function publishPost(env, post, { fetchImpl = fetch, site = SITE, delay = 3000 } = {}) {
   const token = await getToken(env); if (!token) throw new Error('Instagram не підключено');
   const fb = (await getSetting(env, 'ig_mode')) === 'fb', id = fb ? await getSetting(env, 'ig_id') : 'me';
   if (!id) throw new Error('Не задано ID акаунта Instagram');
   const base = fb ? FB : GRAPH, url = f => fileUrl(site, f), opts = { delay };
+  const already = await findPublished(fetchImpl, base, id, token, post); if (already) return already;   // попередня «невдала» спроба насправді опублікувала пост
   let creation;
   if (post.type === 'IMAGE') creation = (await call(fetchImpl, 'POST', `${base}/${id}/media`, { image_url: url(post.files[0]), caption: post.caption, access_token: token })).id;
   else if (post.type === 'REELS') creation = (await call(fetchImpl, 'POST', `${base}/${id}/media`, { media_type: 'REELS', video_url: url(post.files[0]), caption: post.caption, share_to_feed: 'true', ...(post.cover ? { cover_url: url(post.cover) } : {}), access_token: token })).id;
@@ -111,7 +121,15 @@ export async function publishPost(env, post, { fetchImpl = fetch, site = SITE, d
   } else throw new Error('Невідомий тип поста');
   if (!creation) throw new Error('Instagram не повернув ID контейнера');
   await waitReady(fetchImpl, base, creation, token, { tries: post.type === 'REELS' || post.type === 'STORY_VIDEO' ? 60 : 20, ...opts });
-  const pub = await call(fetchImpl, 'POST', `${base}/${id}/media_publish`, { creation_id: creation, access_token: token });
+  let pub;
+  try { pub = await call(fetchImpl, 'POST', `${base}/${id}/media_publish`, { creation_id: creation, access_token: token }); }
+  catch (e) {   // помилка у відповіді, але пост міг вийти: перевіряємо контейнер і стрічку, щоб не публікувати повторно
+    let status = ''; try { status = (await call(fetchImpl, 'GET', `${base}/${creation}`, { fields: 'status_code', access_token: token })).status_code; } catch {}
+    const found = await findPublished(fetchImpl, base, id, token, post);
+    if (found) return found;
+    if (status === 'PUBLISHED') return { media_id: '', link: '', recovered: true };
+    throw e;
+  }
   let link = ''; try { link = (await call(fetchImpl, 'GET', `${base}/${pub.id}`, { fields: 'permalink', access_token: token })).permalink || ''; } catch {}
   return { media_id: pub.id, link };
 }
@@ -143,7 +161,19 @@ export async function publishFb(env, post, { fetchImpl = fetch, site = SITE } = 
 }
 
 /** Публікує наступний пост за чергою (або конкретний id) на всі ввімкнені майданчики, що ще не отримали його. */
-export async function publishNext(env, { only = null, fetchImpl = fetch, site = SITE, now = Date.now(), delay = 3000 } = {}) {
+/** Замок від одночасних публікацій (кнопка «Опублікувати зараз» і cron): 5 хвилин. */
+async function takeLock(env, now) {
+  await env.DB.prepare("INSERT INTO settings (key, value, updated_at) VALUES ('ig_lock', '0', 0) ON CONFLICT(key) DO NOTHING").run();
+  const r = await env.DB.prepare("UPDATE settings SET value = ?, updated_at = ? WHERE key = 'ig_lock' AND CAST(value AS INTEGER) < ?").bind(String(now), now, now - 5 * 6e4).run();
+  return !!(r.meta && r.meta.changes);
+}
+const freeLock = env => env.DB.prepare("UPDATE settings SET value = '0' WHERE key = 'ig_lock'").run();
+export async function publishNext(env, opts = {}) {
+  const now = opts.now || Date.now();
+  if (!(await takeLock(env, now))) return { ok: false, error: 'Публікація вже йде, зачекайте хвилину й оновіть сторінку' };
+  try { return await publishNextUnlocked(env, { ...opts, now }); } finally { await freeLock(env); }
+}
+async function publishNextUnlocked(env, { only = null, fetchImpl = fetch, site = SITE, now = Date.now(), delay = 3000 } = {}) {
   const st = await pubState(env); let man;
   try { man = await loadManifest(fetchImpl, site, env); } catch (e) { return { ok: false, error: 'Не вдалося прочитати список постів: ' + e.message }; }
   const fbp = await getFbPage(env), hasFb = !!fbp, eff = effective(man, await getPlan(env)), post = only ? eff.find(p => p.id === only) : eff.find(p => !isComplete(st, p, hasFb));
