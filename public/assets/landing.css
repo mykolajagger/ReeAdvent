@@ -214,3 +214,16 @@ footer a{color:var(--muted);margin:0 10px}
 .dp[data-k="2"] img,li[data-k="2"] .tl-pic{object-position:50% 38%}
 .dp[data-k="3"] img,li[data-k="3"] .tl-pic{object-position:50% 40%}
 .dp[data-k="4"] img,li[data-k="4"] .tl-pic{object-position:50% 45%}
+
+/* великі фрази між блоками */
+.say{position:relative;padding:11vh 0 10vh;text-align:center;border-top:1px solid var(--line)}
+.say-t{margin:0 auto;max-width:15ch;font:500 clamp(42px,7.4vw,96px)/1.04 var(--head);letter-spacing:-.01em;color:var(--ink);text-wrap:balance}
+.say-t em{color:var(--gold);font-style:italic}
+.say-s{margin:22px 0 0;font:600 12px var(--body);letter-spacing:.3em;text-transform:uppercase;color:var(--muted)}
+.say::before{content:"✦";display:block;color:var(--gold);font-size:18px;margin-bottom:22px;opacity:.85}
+.say.glow::after{content:"";position:absolute;left:50%;top:50%;width:min(780px,90vw);height:360px;transform:translate(-50%,-50%);background:radial-gradient(closest-side,#d6b46a26,transparent);pointer-events:none;z-index:-1}
+.say .say-t,.say .say-s{opacity:0;transform:translateY(26px);transition:opacity .9s ease,transform .9s cubic-bezier(.2,.8,.2,1)}
+.say.in .say-t,.say.in .say-s{opacity:1;transform:none}.say.in .say-s{transition-delay:.25s}
+.say-t.swap{display:grid;max-width:16ch}.say-t.swap .sw{grid-area:1/1;opacity:0;transform:translateY(12px);transition:opacity .7s,transform .7s}.say-t.swap .sw.on{opacity:1;transform:none}
+@media (prefers-reduced-motion:reduce){.say .say-t,.say .say-s{opacity:1;transform:none;transition:none}}
+@media(min-width:900px){.say-t{max-width:19ch}.say-t.swap{max-width:22ch}}

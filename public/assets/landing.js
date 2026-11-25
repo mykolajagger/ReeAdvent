@@ -242,3 +242,11 @@ $('#of').addEventListener('submit', async e => {
     lis.forEach(l => io.observe(l));
   }
 })();
+
+// Великі фрази: з'являються при гортанні; «коханій / коханому» чергуються
+(() => {
+  const ss = document.querySelectorAll('.say'); if (!ss.length) return;
+  if ('IntersectionObserver' in window) { const io = new IntersectionObserver(es => es.forEach(e => { if (e.isIntersecting) { e.target.classList.add('in'); io.unobserve(e.target); } }), { threshold: .35 }); ss.forEach(x => io.observe(x)); }
+  else ss.forEach(x => x.classList.add('in'));
+  document.querySelectorAll('.say-t.swap').forEach(el => { const a = el.querySelectorAll('.sw'); let i = 0; setInterval(() => { a[i].classList.remove('on'); i = (i + 1) % a.length; a[i].classList.add('on'); }, 3200); });
+})();
