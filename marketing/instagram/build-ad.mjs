@@ -7,12 +7,12 @@ const { SC, BL } = kit(Object.keys(FOCUS));
 const img = (n, extra = '') => `<img src="${SC[n]}" style="width:100%;height:100%;object-fit:cover;object-position:${FOCUS[n]};display:block;${extra}">`;
 const full = (n, cls = 'zoom') => `<div class="fb ${cls}">${img(n)}</div><div class="shade"></div>`;
 const blur = n => `<div class="sbg" style="background-image:url(${BL[n]});filter:blur(14px)"></div><div class="veil"></div>`;
-const card = (n, eb, h, sub, k) => ({ d: 1.8, kind: 'card', html: `${full(n)}<div class="ct"><div class="eb">${eb}<span>${k}/3</span></div><div class="h">${h}</div><div class="sub">${sub}</div></div>` });
+const card = (n, eb, h, sub, k) => ({ d: 3.0, kind: 'card', html: `${full(n)}<div class="ct"><div class="eb">${eb}<span>${k}/3</span></div><div class="h">${h}</div><div class="sub">${sub}</div></div>` });
 const flash = (n, word) => ({ d: 1.2, kind: 'flash', html: `${full(n, 'zoom2')}<div class="word">${word}</div>` });
 const SCENES = [
-  { d: 1.8, kind: 'hook', html: `${blur('wrap')}<div class="mid" style="top:250px"><div class="h1 slam">Ще одна річ<br>у подарунок?</div><div class="strike"><i></i></div></div>` },
-  { d: 2.4, kind: 'doors', html: `${blur('tree')}<div class="arch">${img('tree')}<div class="door l"><b>1</b></div><div class="door r"></div><div class="glow"></div></div><div class="mid up" style="top:548px"><div class="h2">Подаруй <em>24 дні</em> уваги</div><div class="nm">для неї · для нього</div></div>` },
-  { d: 2.4, kind: 'phone', html: `${blur('book')}<div class="mid" style="top:96px"><div class="clock up">щоранку о 07:00 — нове вікно</div></div>
+  { d: 2.4, kind: 'hook', html: `${blur('wrap')}<div class="mid" style="top:250px"><div class="h1 slam">Ще одна річ<br>у подарунок?</div><div class="strike"><i></i></div></div>` },
+  { d: 3.0, kind: 'doors', html: `${blur('tree')}<div class="arch">${img('tree')}<div class="door l"><b>1</b></div><div class="door r"></div><div class="glow"></div></div><div class="mid up" style="top:548px"><div class="h2">Подаруй <em>24 дні</em> уваги</div><div class="nm">для неї · для нього</div></div>` },
+  { d: 4.2, kind: 'phone', html: `${blur('book')}<div class="mid" style="top:96px"><div class="clock up">щоранку о 07:00 — нове вікно</div></div>
     <div class="phone"><div class="scr"><div class="pt"><span>Вікно 7</span><i></i></div><div class="pp"><i></i></div>
       <div class="pc it"><small>Питання дня</small><p>Який наш день варто прожити ще раз?</p><div class="pa"><b>Він:</b> Той вечір, коли раптом пішов сніг ❄</div></div>
       <div class="pc it"><small>Подарунок для неї</small><p>Плед із рукавами та какао</p><span class="tg">до 800 ₴ · 3 магазини</span></div>
@@ -21,9 +21,9 @@ const SCENES = [
   card('wrap', 'Подарунок', 'Ідея під<br><em>ваш бюджет</em>', '2–3 магазини онлайн і де купити у вашому місті', 1),
   card('market', 'Активність у місті', 'Найкращі <em>місця</em><br>і події дня', 'ярмарки, кав’ярні, концерти — з рейтингом і мапою', 2),
   card('stars', 'Пригода для двох', 'Вечори, що<br><em>запам’ятаються</em>', 'від затишного до сміливого — рівень обираєте ви', 3),
-  { d: 1.8, kind: 'pz', html: `${blur('pillow')}<div class="mid" style="top:150px"><div class="h2 up">Підібрано<br><em>під вас двох</em></div><div class="dl up" style="color:var(--muted)">кожен заповнює анкету окремо</div><div class="chips2"><span class="it">ваш бюджет</span><span class="it">ваші смаки</span><span class="it">ваше місто</span><span class="it">скільки вечорів виходити</span><span class="it">рівень пікантності</span></div></div>` },
-  { d: 1.8, kind: 'book', html: `${blur('stars')}<div class="book"><div class="bc"><span class="bs">✦</span><span class="by">Адвент 2026</span><span class="bn">Він &amp; Вона</span><span class="bl">ReeAdvent</span></div></div><div class="mid up" style="top:520px"><div class="h2">А в кінці — <em>книга</em><br>вашої історії</div></div>` },
-  { d: 3.6, kind: 'cta', html: `${blur('tree')}<div class="mid" style="top:118px"><img class="up" src="${LOGO_FULL}" style="width:250px"><div class="h1 up" style="margin-top:14px">Старт<br><em>1 грудня</em></div><div class="dl up">встигніть замовити до 30 листопада</div><div class="btn up">Замовити на reeadvent.fun</div><div class="chips up"><span>24 вікна</span><span>для двох</span><span>будь-яке місто</span></div></div>` },
+  { d: 3.0, kind: 'pz', html: `${blur('pillow')}<div class="mid" style="top:150px"><div class="h2 up">Підібрано<br><em>під вас двох</em></div><div class="dl up" style="color:var(--muted)">кожен заповнює анкету окремо</div><div class="chips2"><span class="it">ваш бюджет</span><span class="it">ваші смаки</span><span class="it">ваше місто</span><span class="it">скільки вечорів виходити</span><span class="it">рівень пікантності</span></div></div>` },
+  { d: 2.4, kind: 'book', html: `${blur('stars')}<div class="book"><div class="bc"><span class="bs">✦</span><span class="by">Адвент 2026</span><span class="bn">Він &amp; Вона</span><span class="bl">ReeAdvent</span></div></div><div class="mid up" style="top:520px"><div class="h2">А в кінці — <em>книга</em><br>вашої історії</div></div>` },
+  { d: 4.2, kind: 'cta', html: `${blur('tree')}<div class="mid" style="top:118px"><img class="up" src="${LOGO_FULL}" style="width:250px"><div class="h1 up" style="margin-top:14px">Старт<br><em>1 грудня</em></div><div class="dl up">встигніть замовити до 30 листопада</div><div class="btn up">Замовити на reeadvent.fun</div><div class="chips up"><span>24 вікна</span><span>для двох</span><span>будь-яке місто</span></div></div>` },
 ];
 let t0 = 0; for (const s of SCENES) { s.at = t0; t0 += s.d; }
 const TOTAL = Math.round(t0 * 100) / 100;
@@ -83,14 +83,14 @@ window.setT=t=>{
     const z=q(el,'.zoom img');if(z)z.style.transform='scale('+(1.04+.1*R(lt,0,s.d))+')';
     const z2=q(el,'.zoom2 img');if(z2)z2.style.transform='scale('+(1.18-.12*E(R(lt,0,s.d)))+')';
     const sl=q(el,'.slam');if(sl){const k=E(R(lt,0,.22));sl.style.transform='scale('+(1.35-.35*k)+')';sl.style.opacity=k;}
-    const st=q(el,'.strike i');if(st)st.style.width=(100*E(R(lt,.8,1.15)))+'%';
+    const st=q(el,'.strike i');if(st)st.style.width=(100*E(R(lt,1.1,1.5)))+'%';
     if(s.k==='doors'){const o=E(R(lt,.3,.95));q(el,'.door.l').style.transform='rotateY('+(-105*o)+'deg)';q(el,'.door.r').style.transform='rotateY('+(105*o)+'deg)';q(el,'.glow').style.opacity=Math.sin(Math.PI*R(lt,.25,1.25))*.9;q(el,'.arch img').style.transform='scale('+(1.15-.15*E(R(lt,.1,1.6)))+')';}
     if(s.k==='count'){const c=Math.max(1,Math.min(24,Math.floor(1+23*E(R(lt,.25,1.4)))));document.getElementById('cnt').textContent=c;const w=q(el,'.win');w.style.transform='scale('+(.9+.1*B(R(lt,0,.3)))+')';}
     if(s.k==='card'){const c=q(el,'.ct');const k=E(R(lt,.1,.4));c.style.opacity=k;c.style.transform='translateY('+(30*(1-k))+'px)';}
     if(s.k==='flash'){const w=q(el,'.word');const k=B(R(lt,.1,.42));w.style.transform='translateX(-50%) scale('+(.7+.3*k)+')';w.style.opacity=R(lt,.1,.26);}
     if(s.k==='book'){const b=q(el,'.bc');const k=E(R(lt,0,.8));b.style.transform='rotateY('+(70-82*k)+'deg) rotate('+(-2*k)+'deg) scale('+(.8+.2*k)+')';}
     el.querySelectorAll('.up').forEach((u,j)=>{const k=E(R(lt,.08+j*.12,.45+j*.12));u.style.opacity=k;u.style.transform='translateY('+(24*(1-k))+'px)';});
-    el.querySelectorAll('.it').forEach((u,j)=>{const k=E(R(lt,.25+j*.28,.6+j*.28));u.style.opacity=k;u.style.transform='translateY('+(18*(1-k))+'px) scale('+(.96+.04*k)+')';});
+    el.querySelectorAll('.it').forEach((u,j)=>{const g=s.k==='phone'?.5:.35,o=s.k==='phone'?.4:.3,k=E(R(lt,o+j*g,o+.35+j*g));u.style.opacity=k;u.style.transform='translateY('+(18*(1-k))+'px) scale('+(.96+.04*k)+')';});
     if(s.k==='phone'){const ph=q(el,'.phone');const k=E(R(lt,0,.4));ph.style.transform='translateY('+(40*(1-k))+'px)';ph.style.opacity=k;}
     if(s.k==='cta'){const b=q(el,'.btn');const p=lt>1.2?1+.045*Math.sin((lt-1.2)*6.5):1;b.style.transform='scale('+p+')';}
   });
