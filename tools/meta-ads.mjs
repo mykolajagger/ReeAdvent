@@ -132,6 +132,42 @@ export async function pauseOld(g, log, { adAccount, before = '2026-01-01', keep 
   return out;
 }
 
+/** Детальний звіт по кампаніях зі специфікації: разом, по днях, майданчиках, оголошеннях, віку/статі, країнах. Лише читання. */
+export async function detailReport(g, spec, log, { adAccount } = {}) {
+  const accounts = (await g.get('/me/adaccounts', { fields: 'id,name,currency,timezone_name', limit: 50 })).data || [];
+  const acc = adAccount ? { id: 'act_' + String(adAccount).replace(/^act_/, '') } : accounts[0];
+  const F = 'spend,impressions,reach,frequency,inline_link_clicks,inline_link_click_ctr,cost_per_inline_link_click,cpm,actions,video_thruplay_watched_actions,video_p100_watched_actions';
+  const act = (a, t) => { const x = (a || []).find(y => y.action_type === t); return x ? Number(x.value) : 0; };
+  const money = v => '$' + Number(v || 0).toFixed(2);
+  const fmt = i => [money(i.spend), 'покази ' + (i.impressions || 0), 'охоплення ' + (i.reach || 0), 'частота ' + Number(i.frequency || 0).toFixed(2),
+    'кліки ' + (i.inline_link_clicks || 0), 'CTR ' + Number(i.inline_link_click_ctr || 0).toFixed(2) + '%', 'CPC $' + Number(i.cost_per_inline_link_click || 0).toFixed(3),
+    'CPM ' + money(i.cpm), 'перегляди сторінки ' + act(i.actions, 'landing_page_view'),
+    'оформлення ' + (act(i.actions, 'offsite_conversion.fb_pixel_initiate_checkout') || act(i.actions, 'initiate_checkout')),
+    'покупки ' + (act(i.actions, 'offsite_conversion.fb_pixel_purchase') || act(i.actions, 'purchase'))].join(' · ');
+  const names = spec.campaigns.map(c => c.name);
+  const camps = ((await g.get(`/${acc.id}/campaigns`, { fields: 'id,name,effective_status,daily_budget', limit: 200 })).data || []).filter(c => names.includes(c.name));
+  const out = [];
+  for (const c of camps) {
+    const tot = ((await g.get(`/${c.id}/insights`, { fields: F, date_preset: 'maximum' })).data || [])[0] || {};
+    log(`## ${c.name} — ${c.effective_status}, ${money((c.daily_budget || 0) / 100)}/день`);
+    log('РАЗОМ: ' + fmt(tot));
+    for (const d of (await g.get(`/${c.id}/insights`, { fields: F, date_preset: 'maximum', time_increment: 1 })).data || []) log(`  день ${d.date_start}: ${fmt(d)}`);
+    for (const d of (await g.get(`/${c.id}/insights`, { fields: 'spend,impressions,inline_link_clicks,inline_link_click_ctr,cost_per_inline_link_click', date_preset: 'maximum', breakdowns: 'publisher_platform' })).data || [])
+      log(`  майданчик ${d.publisher_platform}: ${money(d.spend)} · покази ${d.impressions} · кліки ${d.inline_link_clicks || 0} · CTR ${Number(d.inline_link_click_ctr || 0).toFixed(2)}% · CPC $${Number(d.cost_per_inline_link_click || 0).toFixed(3)}`);
+    for (const a of (await g.get(`/${c.id}/ads`, { fields: 'id,name,effective_status,ad_review_feedback', limit: 50 })).data || []) {
+      const ai = ((await g.get(`/${a.id}/insights`, { fields: F, date_preset: 'maximum' })).data || [])[0] || {};
+      const fb = a.ad_review_feedback && a.ad_review_feedback.global ? ' ⚠ ' + Object.values(a.ad_review_feedback.global).join('; ') : '';
+      const vid = ai.video_thruplay_watched_actions ? ` · ThruPlay ${act(ai.video_thruplay_watched_actions, 'video_view')} · до кінця ${act(ai.video_p100_watched_actions, 'video_view')}` : '';
+      log(`  оголошення ${a.name} (${a.effective_status})${fb}: ${fmt(ai)}${vid}`);
+    }
+    for (const d of ((await g.get(`/${c.id}/insights`, { fields: 'spend,inline_link_clicks,inline_link_click_ctr', date_preset: 'maximum', breakdowns: 'age,gender' })).data || []).filter(x => Number(x.spend) > 0.3))
+      log(`  ${d.gender} ${d.age}: ${money(d.spend)} · кліки ${d.inline_link_clicks || 0} · CTR ${Number(d.inline_link_click_ctr || 0).toFixed(2)}%`);
+    if (c.name === 'eu_ua') for (const d of (await g.get(`/${c.id}/insights`, { fields: 'spend,inline_link_clicks', date_preset: 'maximum', breakdowns: 'country' })).data || []) log(`  країна ${d.country}: ${money(d.spend)} · кліки ${d.inline_link_clicks || 0}`);
+    out.push({ campaign: c.name, total: tot });
+  }
+  return out;
+}
+
 export async function listReport(g, log, { adAccount } = {}) {
   const accounts = (await g.get('/me/adaccounts', { fields: 'id,name,currency,timezone_name,account_status,amount_spent', limit: 50 })).data || [];
   const list = adAccount ? accounts.filter(a => a.id === 'act_' + String(adAccount).replace(/^act_/, '')) : accounts;
@@ -162,6 +198,7 @@ export async function listReport(g, log, { adAccount } = {}) {
 export async function run({ mode = 'check', only = [], ads = [], spec, token, ver, adAccount, pageId, igId, fetchImpl = fetch, log = console.log, sleep } = {}) {
   const g = graph({ token, ver, fetchImpl, log });
   if (mode === 'report') return { report: await listReport(g, log, { adAccount }) };
+  if (mode === 'report-detail') return { report: await detailReport(g, spec, log, { adAccount }) };
   if (mode === 'pause-old-check' || mode === 'pause-old') return { report: await pauseOld(g, log, { adAccount, keep: spec.campaigns.map(c => c.name), apply: mode === 'pause-old' }) };
   const d = await discover(g, spec, { adAccount, pageId, igId }); d.spec = spec;
   log(`Токен: ${d.me.name || d.me.id}`);
