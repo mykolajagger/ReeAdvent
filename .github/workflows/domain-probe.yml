@@ -1,0 +1,25 @@
+name: Перевірка чужого домену (лише читання)
+
+# Коли зареєстровано домен, перший сертифікат, перші знімки в архіві, заголовок сторінки. Нічого не змінює.
+on:
+  workflow_dispatch:
+    inputs:
+      domain:
+        description: 'Домен, напр. example.com.ua'
+        required: true
+
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: WHOIS, сертифікати, архів, сторінка
+        env:
+          D: ${{ github.event.inputs.domain }}
+        run: |
+          echo "$D" | grep -Eq '^[a-z0-9.-]+$' || { echo "bad domain"; exit 1; }
+          sudo apt-get -qq install -y whois >/dev/null 2>&1 || true
+          echo "=== WHOIS"; whois "$D" | grep -iE "created|registered|modified|expires|registrar|status|org" | head -20 || true
+          echo "=== CERTS"; curl -s -m 40 "https://crt.sh/?q=$D&output=json" | python3 -c "import sys,json; d=json.load(sys.stdin); d=sorted(d,key=lambda x:x['not_before']); [print(x['not_before'], x['issuer_name'][:60]) for x in d[:5]]; print('total', len(d))" || echo "crt.sh unavailable"
+          echo "=== ARCHIVE"; curl -s -m 40 "https://web.archive.org/cdx/search/cdx?url=$D&output=json&limit=5&fl=timestamp,statuscode" || true; echo
+          echo "=== PAGE"; curl -sL -m 20 "https://$D/" -o /tmp/p.html -D /tmp/h.txt; grep -iE "^(HTTP|server|last-modified):" /tmp/h.txt | head; grep -oiE "<title>[^<]*</title>" /tmp/p.html | head -1; grep -oiE "(©|&copy;)[^<]{0,40}" /tmp/p.html | head -3; grep -oiE "<meta[^>]+(description|generator)[^>]*>" /tmp/p.html | head -3
