@@ -2,31 +2,141 @@
   "_comment": "Кампанії Meta для tools/meta-ads.mjs. Усе створюється на паузі; вмикаєте в Ads Manager самі. Бюджет у доларах на день (рекламний акаунт у USD).",
   "site": "https://reeadvent.fun",
   "pixel_id": "2111183512849298",
-  "exclude_audiences": ["Купили"],
+  "exclude_audiences": [
+    "Купили"
+  ],
   "dsa_beneficiary": "ReeAdvent",
   "dsa_payor": "ReeAdvent",
-  "placements": ["facebook", "instagram", "messenger", "threads"],
+  "placements": [
+    "facebook",
+    "instagram",
+    "messenger",
+    "threads"
+  ],
   "creatives": {
-    "reel1": { "type": "video", "video": "/social/02-reel.mp4", "thumb": "/social/02-reel-cover.jpg",
+    "reel1": {
+      "type": "video",
+      "video": "/social/02-reel.mp4",
+      "thumb": "/social/02-reel-cover.jpg",
       "message": "Подаруй їй не річ, а 24 дні уваги ✦\nReeAdvent: щодня нове вікно з питанням одне одному, подарунком, пригодою й спільною активністю у вашому місті. Підбираємо за вашими смаками, а що всередині — сюрприз.\nСтарт 1 грудня або з будь-якого дня.",
-      "headline": "Адвент-календар для двох", "description": "Приватний календар для пар" },
-    "carousel1": { "type": "carousel", "images": ["/social/03-carousel-how-1.jpg", "/social/03-carousel-how-2.jpg", "/social/03-carousel-how-3.jpg", "/social/03-carousel-how-4.jpg", "/social/03-carousel-how-5.jpg"],
+      "headline": "Адвент-календар для двох",
+      "description": "Приватний календар для пар"
+    },
+    "carousel1": {
+      "type": "carousel",
+      "images": [
+        "/social/03-carousel-how-1.jpg",
+        "/social/03-carousel-how-2.jpg",
+        "/social/03-carousel-how-3.jpg",
+        "/social/03-carousel-how-4.jpg",
+        "/social/03-carousel-how-5.jpg"
+      ],
       "message": "Він відкриває вікно для неї. Вона — для нього. 24 дні лише для вас двох.\nПриватний адвент-календар для пар: питання, подарунок, пригода й активність щодня.",
-      "headline": "24 вікна для вас двох", "description": "Приватний календар для пар" },
-    "reel2": { "type": "video", "video": "/social/ad-dec1.mp4", "thumb": "/social/ad-dec1-cover.jpg",
+      "headline": "24 вікна для вас двох",
+      "description": "Приватний календар для пар"
+    },
+    "reel2": {
+      "type": "video",
+      "video": "/social/ad-dec1.mp4",
+      "thumb": "/social/ad-dec1-cover.jpg",
       "message": "Не річ, а 24 дні уваги ✦\nЩоранку нове вікно: питання одне одному, подарунок під ваш бюджет, пригода й активність у вашому місті.\nСтарт 1 грудня — встигніть замовити до 30 листопада.",
-      "headline": "Старт 1 грудня", "description": "Адвент-календар для двох" },
-    "story1": { "type": "video", "video": "/social/story-calendar.mp4", "thumb": "/social/story-calendar-cover.jpg",
+      "headline": "Старт 1 грудня",
+      "description": "Адвент-календар для двох"
+    },
+    "story1": {
+      "type": "video",
+      "video": "/social/story-calendar.mp4",
+      "thumb": "/social/story-calendar-cover.jpg",
       "message": "Не річ, а 24 дні уваги ✦\nЩоранку нове вікно: питання одне одному, подарунок під ваш бюджет, пригода й активність у вашому місті.\nСтарт 1 грудня — встигніть замовити до 30 листопада.",
-      "headline": "Старт 1 грудня", "description": "Адвент-календар для двох" },
-    "couple1": { "type": "image", "image": "/social/04-couple-illustration.jpg",
+      "headline": "Старт 1 грудня",
+      "description": "Адвент-календар для двох"
+    },
+    "rt1": {
+      "type": "video",
+      "video": "/social/story-calendar.mp4",
+      "thumb": "/social/story-calendar-cover.jpg",
+      "message": "Ви вже дивились ReeAdvent ✦ Лишилось кілька днів, щоб почати 1 грудня.\n24 вікна для двох: питання одне одному, подарунок під ваш бюджет, пригода й побачення у вашому місті.\nАкційна ціна діє до 30 листопада.",
+      "headline": "Встигніть до 1 грудня",
+      "description": "Акційна ціна до 30.11"
+    },
+    "couple1": {
+      "type": "image",
+      "image": "/social/04-couple-illustration.jpg",
       "message": "Той самий вечір, але кожного дня інакше. ReeAdvent: 24 вікна для двох ✦",
-      "headline": "Сюрприз на кожен день", "description": "Приватний календар для пар" }
+      "headline": "Сюрприз на кожен день",
+      "description": "Приватний календар для пар"
+    }
   },
   "campaigns": [
-    { "name": "ua_cold", "daily_budget_usd": 12, "countries": ["UA"], "age_min": 22, "age_max": 45, "locales": [],
-      "ads": ["reel1", "carousel1", "couple1", "reel2", "story1"] },
-    { "name": "eu_ua", "daily_budget_usd": 10, "countries": ["PL", "DE", "CZ", "SK", "IE", "NL", "IT", "ES", "LT"], "age_min": 22, "age_max": 45, "locales": ["Ukrainian"],
-      "ads": ["reel1", "carousel1", "couple1", "reel2", "story1"] }
+    {
+      "name": "ua_cold",
+      "daily_budget_usd": 12,
+      "countries": [
+        "UA"
+      ],
+      "age_min": 22,
+      "age_max": 45,
+      "locales": [],
+      "ads": [
+        "reel1",
+        "carousel1",
+        "couple1",
+        "reel2",
+        "story1"
+      ]
+    },
+    {
+      "name": "eu_ua",
+      "daily_budget_usd": 10,
+      "countries": [
+        "PL",
+        "DE",
+        "CZ",
+        "SK",
+        "IE",
+        "NL",
+        "IT",
+        "ES",
+        "LT"
+      ],
+      "age_min": 22,
+      "age_max": 45,
+      "locales": [
+        "Ukrainian"
+      ],
+      "ads": [
+        "reel1",
+        "carousel1",
+        "couple1",
+        "reel2",
+        "story1"
+      ]
+    },
+    {
+      "name": "rt_deadline",
+      "daily_budget_usd": 5,
+      "countries": [
+        "UA",
+        "PL",
+        "DE",
+        "CZ",
+        "SK",
+        "IE",
+        "NL",
+        "IT",
+        "ES",
+        "LT"
+      ],
+      "age_min": 18,
+      "age_max": 60,
+      "locales": [],
+      "include_audiences": [
+        "Відвідувачі сайту 14 днів",
+        "Взаємодія з Instagram 30 днів"
+      ],
+      "ads": [
+        "rt1"
+      ]
+    }
   ]
 }

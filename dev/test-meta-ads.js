@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import { run, adsetTargeting, linkFor, placementsFor } from '../tools/meta-ads.mjs';
 const spec = JSON.parse(fs.readFileSync(new URL('../marketing/ads/meta-campaigns.json', import.meta.url), 'utf8'));
+const rtSpec = spec.campaigns.find(c => c.name === 'rt_deadline'); spec.campaigns = spec.campaigns.filter(c => ['ua_cold', 'eu_ua'].includes(c.name));
 const calls = []; let n = 100, videoPolls = 0, failCreatives = false; const existing = [], adsets = [], adsList = [];
 const J = (o, s = 200) => new Response(JSON.stringify(o), { status: s, headers: { 'content-type': 'application/json' } });
 const fake = async (url, init = {}) => {
@@ -91,4 +92,8 @@ assert.deepEqual(placementsFor({ placements: ['facebook', 'instagram'] }), { pub
   assert.deepEqual(st, [['/a1', 'ACTIVE'], ['/a1', 'ACTIVE']], 'лише reel2 в обох кампаніях'); assert.equal(x.report.length, 2);
   await assert.rejects(run({ mode: 'activate', spec, token: 'TKN', fetchImpl: af, log }), /назви оголошень/);
   st.length = 0; cur = 'ACTIVE'; await run({ mode: 'pause-ads', ads: ['reel2'], spec, token: 'TKN', fetchImpl: af, log }); assert.deepEqual(st, [['/a1', 'PAUSED'], ['/a1', 'PAUSED']]); }
+// ретаргетинг: показ лише своїм аудиторіям, без покупців; без аудиторії — помилка
+{ const d = { locales: {}, exclude: [{ name: 'Купили', a: { id: 'aud9' } }], include: { 'Відвідувачі сайту 14 днів': { id: 'aud8' }, 'Взаємодія з Instagram 30 днів': { id: 'aud7' } }, spec };
+  const t = adsetTargeting(rtSpec, d); assert.deepEqual(t.custom_audiences, [{ id: 'aud8' }, { id: 'aud7' }]); assert.deepEqual(t.excluded_custom_audiences, [{ id: 'aud9' }]);
+  assert.throws(() => adsetTargeting(rtSpec, { ...d, include: {} }), /не знайдено/); }
 console.log('OK meta-ads');
