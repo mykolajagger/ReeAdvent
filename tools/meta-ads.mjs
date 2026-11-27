@@ -212,6 +212,22 @@ export async function run({ mode = 'check', only = [], ads = [], spec, token, ve
   log('Аудиторії в акаунті: ' + ((d.audiences || []).map(x => `«${x.name}»`).join(', ') || 'немає'));
   for (const [n, a] of Object.entries(d.include || {})) log(`Показувати аудиторії «${n}»: ${a ? a.id : 'НЕ ЗНАЙДЕНО'}`);
   const camps = spec.campaigns.filter(c => !only.length || only.includes(c.name)), report = [], media = { video: {}, image: {} };   // медіа вантажимо один раз на запуск
+  if (mode === 'launch') {   // увімкнути кампанію цілком (кампанія, група «_all», її оголошення зі специфікації) — лише на прохання власника, лише кампанії з поля campaigns
+    if (!only.length) throw new Error('Вкажіть кампанію в полі campaigns');
+    const out = [];
+    for (const c of camps) {
+      const ex = d.existing.find(x => x.name === c.name); if (!ex) { log(`• ${c.name}: кампанії немає — спершу create`); continue; }
+      const st = ((await g.get(`/${ex.id}/adsets`, { fields: 'id,name', limit: 50 })).data || []).find(x => x.name === c.name + '_all');
+      const list = st ? ((await g.get(`/${st.id}/ads`, { fields: 'id,name,status', limit: 100 })).data || []).filter(a => c.ads.includes(a.name)) : [];
+      for (const ad of list) await g.post(`/${ad.id}`, { status: 'ACTIVE' });
+      if (st) await g.post(`/${st.id}`, { status: 'ACTIVE' });
+      await g.post(`/${ex.id}`, { status: 'ACTIVE' });
+      const now = await g.get(`/${ex.id}`, { fields: 'status,effective_status,daily_budget' });
+      log(`• ${c.name} (${ex.id}): увімкнено ✓ — ${now.effective_status}, $${(now.daily_budget / 100).toFixed(2)}/день, оголошень ${list.length}`);
+      out.push({ campaign: c.name, status: now.effective_status });
+    }
+    return { discovered: d, report: out };
+  }
   if (mode === 'activate' || mode === 'pause-ads') {   // activate — увімкнути, pause-ads — поставити на паузу вказані оголошення
     const want = mode === 'activate' ? 'ACTIVE' : 'PAUSED';   // увімкнути вказані оголошення (за назвою) у групах <кампанія>_all; лише за проханням власника, бюджети не змінюються
     if (!ads.length) throw new Error('Вкажіть назви оголошень у полі ads (через кому)');
