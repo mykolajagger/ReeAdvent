@@ -421,5 +421,16 @@
   "files": [
    "story-calendar.mp4"
   ]
+ },
+ {
+  "id": "today-27",
+  "type": "STORY_VIDEO",
+  "title": "Сторіс «Твій адвент на сьогодні: 27 листопада»",
+  "caption": "",
+  "cover": "today-27-cover.jpg",
+  "scene": "story",
+  "files": [
+   "today-27.mp4"
+  ]
  }
 ]
