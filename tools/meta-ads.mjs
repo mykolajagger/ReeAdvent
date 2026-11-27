@@ -37,13 +37,14 @@ export async function discover(g, spec, { adAccount, pageId, igId } = {}) {
   if (!ig) { try { const a = (await g.get(`/${acc.id}/instagram_accounts`, { fields: 'id,username' })).data || []; ig = a[0] || null; } catch {} }
   const audiences = (await g.get(`/${acc.id}/customaudiences`, { fields: 'id,name', limit: 200 })).data || [];
   const exclude = (spec.exclude_audiences || []).map(n => ({ name: n, a: audiences.find(x => x.name === n) }));
+  const include = {}; for (const n of [...new Set(spec.campaigns.flatMap(c => c.include_audiences || []))]) include[n] = audiences.find(x => x.name === n) || null;
   const locales = {};
   for (const name of [...new Set(spec.campaigns.flatMap(c => c.locales || []))]) {
     const r = (await g.get('/search', { type: 'adlocale', q: name })).data || [];
     const hit = r.find(x => String(x.name).toLowerCase() === name.toLowerCase()) || r[0]; if (hit) locales[name] = hit.key;
   }
   const existing = (await g.get(`/${acc.id}/campaigns`, { fields: 'id,name,status', limit: 200 })).data || [];
-  return { me, acc, page, ig, exclude, locales, existing };
+  return { me, acc, page, ig, exclude, include, audiences, locales, existing };
 }
 
 export const linkFor = (spec, camp, key) => `${spec.site}/?utm_source=meta&utm_medium=paid&utm_campaign=${encodeURIComponent(camp)}&utm_content=${encodeURIComponent(key)}`;
@@ -80,6 +81,7 @@ export function adsetTargeting(c, d) {
     targeting_automation: { advantage_audience: 0 } };                     // вік і країни — жорсткі межі
   const loc = (c.locales || []).map(n => d.locales[n]).filter(Boolean); if (loc.length) t.locales = loc;
   const ex = d.exclude.filter(x => x.a).map(x => ({ id: x.a.id })); if (ex.length) t.excluded_custom_audiences = ex;
+  const inc = (c.include_audiences || []).map(n => d.include && d.include[n]).filter(Boolean).map(a => ({ id: a.id })); if ((c.include_audiences || []).length) { if (!inc.length) throw new Error(`Аудиторію «${c.include_audiences.join(', ')}» не знайдено: створіть її в Ads Manager → Аудиторії`); t.custom_audiences = inc; }
   return t;
 }
 
@@ -207,6 +209,8 @@ export async function run({ mode = 'check', only = [], ads = [], spec, token, ve
   log(`Сторінка: ${d.page.id}${d.page.name ? ` (${d.page.name})` : ''}; Instagram: ${d.ig ? d.ig.id + (d.ig.username ? ' @' + d.ig.username : '') : 'НЕ ЗНАЙДЕНО — оголошення підуть лише від сторінки Facebook'}`);
   for (const x of d.exclude) log(`Виключити аудиторію «${x.name}»: ${x.a ? x.a.id : 'не знайдено (створіть її в Ads Manager → Аудиторії), поки без виключення'}`);
   for (const [n, k] of Object.entries(d.locales)) log(`Мова «${n}»: key ${k}`);
+  log('Аудиторії в акаунті: ' + ((d.audiences || []).map(x => `«${x.name}»`).join(', ') || 'немає'));
+  for (const [n, a] of Object.entries(d.include || {})) log(`Показувати аудиторії «${n}»: ${a ? a.id : 'НЕ ЗНАЙДЕНО'}`);
   const camps = spec.campaigns.filter(c => !only.length || only.includes(c.name)), report = [], media = { video: {}, image: {} };   // медіа вантажимо один раз на запуск
   if (mode === 'activate' || mode === 'pause-ads') {   // activate — увімкнути, pause-ads — поставити на паузу вказані оголошення
     const want = mode === 'activate' ? 'ACTIVE' : 'PAUSED';   // увімкнути вказані оголошення (за назвою) у групах <кампанія>_all; лише за проханням власника, бюджети не змінюються
