@@ -233,3 +233,7 @@ footer a{color:var(--muted);margin:0 10px}
 @media(max-width:480px){.scta [data-i18n="scta_sub"]{display:none}.scta .btn{padding:12px 18px}}
 /* H1 з ключовою фразою: зовні як раніше (надзаголовок + великий заголовок) */
 .h1-kw{display:block;margin-bottom:24px;line-height:1.4}.h1-main{display:block}
+
+/* плаваюча кнопка над банером cookies */
+.scta{bottom:calc(12px + env(safe-area-inset-bottom) + var(--ck-h, 0px))}
+@media(min-width:900px){.scta{bottom:calc(28px + var(--ck-h, 0px))}}

@@ -19,7 +19,7 @@
   document.addEventListener('focusin', e => { if (e.target && e.target.closest && e.target.closest('form')) once('ra_f', 'form'); });
   // --- завантаження постачальників
   let cfg = null, loaded = false; const queue = [];
-  const T = { uk: { t: 'Cookies і реклама', p: 'Ми використовуємо технічні cookies, а за вашої згоди ще й рекламні та аналітичні (Meta, Google), щоб вимірювати ефективність реклами.', a: 'Прийняти всі', n: 'Лише необхідні', m: 'Докладніше', open: 'Налаштування cookies' }, en: { t: 'Cookies and advertising', p: 'We use essential cookies and, with your consent, advertising and analytics cookies (Meta, Google) to measure how our ads perform.', a: 'Accept all', n: 'Essential only', m: 'Learn more', open: 'Cookie settings' } };
+  const T = { uk: { t: 'Cookies і реклама', s: 'Рекламні й аналітичні — лише за згодою.', p: 'Ми використовуємо технічні cookies, а за вашої згоди ще й рекламні та аналітичні (Meta, Google), щоб вимірювати ефективність реклами.', a: 'Прийняти всі', n: 'Лише необхідні', m: 'Докладніше', open: 'Налаштування cookies' }, en: { t: 'Cookies and advertising', s: 'Ads and analytics cookies only with your consent.', p: 'We use essential cookies and, with your consent, advertising and analytics cookies (Meta, Google) to measure how our ads perform.', a: 'Accept all', n: 'Essential only', m: 'Learn more', open: 'Cookie settings' } };
   function load() {
     if (loaded || !cfg) return; loaded = true;
     if (cfg.meta) { !function (f, b, e, v, n, t, s) { if (f.fbq) return; n = f.fbq = function () { n.callMethod ? n.callMethod.apply(n, arguments) : n.queue.push(arguments); }; if (!f._fbq) f._fbq = n; n.push = n; n.loaded = !0; n.version = '2.0'; n.queue = []; t = b.createElement(e); t.async = !0; t.src = v; s = b.getElementsByTagName(e)[0]; s.parentNode.insertBefore(t, s); }(window, document, 'script', 'https://connect.facebook.net/en_US/fbevents.js'); fbq('init', cfg.meta); fbq('track', 'PageView'); }
@@ -46,11 +46,17 @@
   function banner() {
     const L = T[lang()]; document.getElementById('ra-ck')?.remove();
     const el = document.createElement('div'); el.id = 'ra-ck'; el.setAttribute('role', 'dialog'); el.setAttribute('aria-label', L.t);
-    el.style.cssText = 'position:fixed;left:12px;right:12px;bottom:12px;z-index:99999;max-width:560px;margin:0 auto;background:#12131a;color:#f3efe6;border:1px solid #d6b46a;border-radius:14px;padding:14px 16px;font:14px/1.45 Inter,system-ui,sans-serif;box-shadow:0 10px 40px #000a';
-    const priv = lang() === 'en' ? '/legal/privacy.en.html#cookies' : '/legal/privacy.html#cookies', btn = 'border-radius:10px;padding:8px 14px;font:600 13px Inter,sans-serif;cursor:pointer;border:1px solid #d6b46a;';
-    el.innerHTML = `<b>${L.t}</b><div style="color:#b8bac6;margin:4px 0 10px">${L.p} <a href="${priv}" style="color:#d6b46a">${L.m}</a></div><div style="display:flex;gap:8px;flex-wrap:wrap"><button type="button" data-v="all" style="${btn}background:#d6b46a;color:#17130a">${L.a}</button><button type="button" data-v="necessary" style="${btn}background:transparent;color:#f3efe6">${L.n}</button></div>`;
+    const narrow = innerWidth < 560;
+    el.style.cssText = 'position:fixed;left:10px;right:10px;bottom:calc(10px + env(safe-area-inset-bottom,0px));z-index:99999;max-width:560px;margin:0 auto;background:#12131a;color:#f3efe6;border:1px solid #d6b46a;border-radius:14px;box-shadow:0 10px 40px #000a;font:' + (narrow ? '12px/1.35' : '14px/1.45') + ' Inter,system-ui,sans-serif;padding:' + (narrow ? '10px 12px' : '14px 16px');
+    const priv = lang() === 'en' ? '/legal/privacy.en.html#cookies' : '/legal/privacy.html#cookies', btn = 'border-radius:10px;padding:' + (innerWidth < 560 ? '7px 12px;font:600 12px' : '8px 14px;font:600 13px') + ' Inter,sans-serif;cursor:pointer;border:1px solid #d6b46a;white-space:nowrap;';
+    const btns = `<button type="button" data-v="all" style="${btn}background:#d6b46a;color:#17130a">${L.a}</button><button type="button" data-v="necessary" style="${btn}background:transparent;color:#f3efe6">${L.n}</button>`;
+    el.innerHTML = narrow
+      ? `<div style="display:flex;gap:10px;align-items:center"><div style="flex:1;min-width:0;color:#b8bac6"><b style="color:#f3efe6">Cookies.</b> ${L.s || L.p} <a href="${priv}" style="color:#d6b46a">${L.m}</a></div><div style="display:flex;flex-direction:column;gap:6px;flex:none">${btns}</div></div>`
+      : `<b>${L.t}</b><div style="color:#b8bac6;margin:4px 0 10px">${L.p} <a href="${priv}" style="color:#d6b46a">${L.m}</a></div><div style="display:flex;gap:8px;flex-wrap:wrap">${btns}</div>`;
     el.querySelectorAll('button').forEach(b => b.onclick = () => { ls.set('ra_consent', b.dataset.v); el.remove(); consent(b.dataset.v === 'all'); if (b.dataset.v === 'all') { const u2 = ss.get('ra_utm'); if (u2) ls.set('ra_utm', u2); load(); if (/^\/(index\.html)?$/.test(location.pathname)) window.raTrack('view'); } });
     document.body.appendChild(el);
+    const lift = () => document.documentElement.style.setProperty('--ck-h', document.getElementById('ra-ck') ? (el.offsetHeight + 10) + 'px' : '0px');
+    lift(); el.querySelectorAll('button').forEach(b => b.addEventListener('click', () => document.documentElement.style.setProperty('--ck-h', '0px')));
   }
   function init() {
     if (!cfg || !(cfg.meta || cfg.ga4 || cfg.gads || window.RA_GTM)) return;   // нічого не підключено: банер не потрібен
