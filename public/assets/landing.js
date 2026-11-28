@@ -157,6 +157,12 @@ fetch('/api/config').then(r => r.json()).then(async c => {
   cCombo.set({ code: cc, label: dn().of(cc) || cc }); await selectCountry(cc);
   if (c.turnstileSiteKey) initTurnstile(c.turnstileSiteKey);
   showPrice(Math.round(basePrice * 100));
+  // Посилання з сертифіката/розсилки: ?promo=КОД — код підставляється й застосовується, сторінка відкривається на формі
+  const pc = new URLSearchParams(location.search).get('promo');
+  if (pc && /^[A-Za-z0-9_-]{3,32}$/.test(pc.trim())) {
+    $('#promo').value = pc.trim().toUpperCase(); await applyPromo();
+    const o = document.getElementById('order'); if (o) setTimeout(() => o.scrollIntoView({ behavior: 'smooth', block: 'start' }), 300);
+  }
 }).catch(() => { $('#price').textContent = '—'; });
 
 /* ---------- Відправка ---------- */
